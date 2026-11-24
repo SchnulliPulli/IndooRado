@@ -1,6 +1,7 @@
 // Dauerhafte Speicherung im Browser (IndexedDB)
 // Stores: kv (Einstellungen, Profil, Fortschritt), rides, shots (Screenshots), routes, workouts
-const NAME = 'trittwerk', VER = 1;
+import { bus } from './util.js';
+const NAME = 'trittwerk', VER = 1; // interner Name bleibt, damit vorhandene Daten erhalten bleiben
 let dbp = null;
 
 function open() {
@@ -30,10 +31,11 @@ async function tx(store, mode, fn) {
   return v;
 }
 
+const changed = (s, k) => bus.emit('dbchange', { s, k });
 export const db = {
   get: (s, k) => tx(s, 'readonly', o => o.get(k)),
-  put: (s, v, k) => tx(s, 'readwrite', o => k === undefined ? o.put(v) : o.put(v, k)),
-  del: (s, k) => tx(s, 'readwrite', o => o.delete(k)),
+  put: (s, v, k) => tx(s, 'readwrite', o => k === undefined ? o.put(v) : o.put(v, k)).then(r => { changed(s, k); return r; }),
+  del: (s, k) => tx(s, 'readwrite', o => o.delete(k)).then(r => { changed(s, k); return r; }),
   all: (s) => tx(s, 'readonly', o => o.getAll()),
   keys: (s) => tx(s, 'readonly', o => o.getAllKeys()),
   clear: (s) => tx(s, 'readwrite', o => o.clear()),
@@ -61,7 +63,8 @@ export async function usage() {
 // Komplette Sicherung als JSON (Screenshots als Data-URL)
 export async function backup() {
   const out = { app: 'trittwerk', version: 1, date: new Date().toISOString(), kv: {}, rides: [], shots: [], routes: [], workouts: [] };
-  for (const k of await db.keys('kv')) out.kv[k] = await db.get('kv', k);
+  // Zugangsdaten (NAS-Passwort, Strava-Schlüssel) gehören nicht in die Sicherungsdatei
+  for (const k of await db.keys('kv')) if (!['sync', 'strava', 'syncMeta'].includes(k)) out.kv[k] = await db.get('kv', k);
   out.rides = await db.all('rides');
   out.routes = await db.all('routes');
   out.workouts = await db.all('workouts');
@@ -70,7 +73,7 @@ export async function backup() {
 }
 export async function restore(text) {
   const d = JSON.parse(text);
-  if (d.app !== 'trittwerk') throw new Error('Keine Trittwerk-Sicherung');
+  if (d.app !== 'trittwerk') throw new Error('Keine Windschatten-Sicherung');
   for (const k in d.kv) await db.put('kv', d.kv[k], k);
   for (const s of ['rides', 'routes', 'workouts']) for (const v of d[s] || []) await db.put(s, v);
   for (const s of d.shots || []) await db.put('shots', { ...s, blob: await (await fetch(s.blob)).blob() });

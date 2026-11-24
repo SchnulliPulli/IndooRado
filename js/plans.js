@@ -11,13 +11,15 @@ const cad = (seg, c) => ({ ...seg, cad: c });
 // Bausteine, alle Ziele relativ zur FTP (passen sich also immer an)
 const B = {
   endurance: (min, k = .66) => [...warm(8, .62), ...rep(Math.max(1, Math.round((min - 14) / 15)), ss(780, k), cad(ss(120, k + .06, 'Kadenz 100+'), 100)), ...cool()],
-  longRide: (min) => [...warm(10, .62), ...rep(Math.max(1, Math.round((min - 16) / 20)), ss(960, .68), ss(180, .78, 'Leicht anziehen'), ss(60, .6)), ...cool()],
-  tempo: (n, len) => [...warm(10, .72), ...rep(n, ss(len * 60, .82, 'Tempo halten'), ss(180, .55)), ...cool()],
-  sweet: (n, len) => [...warm(10, .75), ss(60, .95, 'Öffner'), ss(120, .55), ...rep(n, ss(len * 60, .9, 'Sweet Spot'), ss(240, .55)), ...cool()],
-  thr: (n, len) => [...warm(12, .78), ...rep(n, ss(len * 60, .98, 'An der Schwelle'), ss(300, .55)), ...cool()],
-  overUnder: (n, sets) => [...warm(12, .78), ...rep(sets, ...rep(n, ss(120, .92, 'Unter'), ss(60, 1.07, 'Über')), ss(300, .55)), ...cool()],
-  vo2: (n, len, k = 1.15) => [...warm(12, .75), ss(60, 1, 'Öffner'), ss(120, .5), ...rep(n, ss(len, k, 'VO2max'), ss(len, .5)), ...cool()],
-  micro: (sets, k = 1.25) => [...warm(10, .75), ...rep(sets, ...rep(8, ss(30, k, 'Hart'), ss(30, .5)), ss(240, .55)), ...cool()],
+  longRide: (min) => [...warm(10, .62), ...Array.from({ length: Math.max(1, Math.round((min - 16) / 20)) }, (_, i) => [ss(960, .68), cad(ss(180, .78, i % 2 ? 'Anziehen, Kadenz 65' : 'Anziehen, Kadenz 100'), i % 2 ? 65 : 100), ss(60, .6)]).flat(), ...cool()],
+  // Tempo abwechselnd mit niedriger und normaler Kadenz
+  tempo: (n, len) => [...warm(10, .72), ...Array.from({ length: n }, (_, i) => [cad(ss(len * 60, .82, i % 2 ? 'Tempo, Kadenz 70' : 'Tempo, Kadenz 90'), i % 2 ? 70 : 90), ss(180, .55)]).flat(), ...cool()],
+  // Sweet Spot: Blöcke mit 90, 70 und 100 U/min für Kraft und Trittökonomie
+  sweet: (n, len) => [...warm(10, .75), cad(ss(60, .95, 'Öffner, Kadenz 100'), 100), ss(120, .55), ...Array.from({ length: n }, (_, i) => { const c = [90, 70, 100][i % 3]; return [cad(ss(len * 60, .9, `Sweet Spot, Kadenz ${c}`), c), ss(240, .55)]; }).flat(), ...cool()],
+  thr: (n, len) => [...warm(12, .78), ...rep(n, cad(ss(len * 60, .98, 'An der Schwelle, Kadenz 95'), 95), ss(300, .55)), ...cool()],
+  overUnder: (n, sets) => [...warm(12, .78), ...rep(sets, ...rep(n, cad(ss(120, .92, 'Unter, Kadenz 90'), 90), cad(ss(60, 1.07, 'Über, Kadenz 100'), 100)), ss(300, .55)), ...cool()],
+  vo2: (n, len, k = 1.15) => [...warm(12, .75), cad(ss(60, 1, 'Öffner'), 100), ss(120, .5), ...rep(n, cad(ss(len, k, 'VO2max, Kadenz 100+'), 102), ss(len, .5)), ...cool()],
+  micro: (sets, k = 1.25) => [...warm(10, .75), ...rep(sets, ...rep(8, cad(ss(30, k, 'Hart, Kadenz 105'), 105), ss(30, .5)), ss(240, .55)), ...cool()],
   climb: (n, len) => [...warm(10, .75), ...rep(n, cad(ss(len * 60, .88, 'Bergauf, Kadenz 65'), 65), ss(240, .55)), ...cool()],
   cadence: () => [...warm(8, .62), ...rep(6, cad(ss(60, .65, 'Kadenz 105'), 105), ss(60, .62), cad(ss(30, .7, 'Kadenz 115'), 115), ss(90, .6)), ss(600, .7), ...cool()],
   recovery: (min = 35) => [ramp(300, .4, .55), ss((min - 10) * 60, .52, 'Ganz locker'), ramp(300, .52, .4)],
@@ -78,11 +80,38 @@ export const PLANS = PLAN_DEF.map(p => {
   const tss = all.reduce((s, w) => s + stats(w).tss, 0), dur = all.reduce((s, w) => s + stats(w).dur, 0);
   return { id: p.id, name: p.name, level: p.level, color: p.color, desc: p.desc, weeks, perWeek: p.perWeek, all, tss, dur };
 });
-export const getPlan = id => PLANS.find(p => p.id === id);
+// Eigene Pläne aus importierten .zwo-Dateien: { id, name, perWeek, created, wos: [{ name, desc, segs }] }
+export const CUSTOM = [];
+function registerCustom(c) {
+  const weeks = [];
+  c.wos.forEach((w, k) => {
+    const wk = Math.floor(k / c.perWeek) + 1, n = k % c.perWeek + 1, id = `p-${c.id}-${wk}-${n}`;
+    const wo = { id, name: w.name, cat: 'Plan: ' + c.name, desc: w.desc || `${c.name}, Woche ${wk}, Einheit ${n}.`, segs: w.segs, builtin: true, planId: c.id, week: wk, n };
+    EXTRA_W.set(id, wo); (weeks[wk - 1] = weeks[wk - 1] || []).push(wo);
+  });
+  const all = weeks.flat();
+  return { id: c.id, name: c.name, level: 'Eigener Plan', color: '#b06cf0', desc: `${all.length} importierte Workouts, ${c.perWeek} pro Woche.`, weeks, perWeek: c.perWeek, all, custom: true,
+    tss: all.reduce((s, w) => s + stats(w).tss, 0), dur: all.reduce((s, w) => s + stats(w).dur, 0) };
+}
+export async function addCustomPlan(name, perWeek, wos) {
+  const list = await kv.get('customPlans', []);
+  const c = { id: 'cp' + Date.now().toString(36), name: name || 'Eigener Plan', perWeek: Math.max(1, perWeek | 0), created: new Date().toISOString(), wos: wos.map(w => ({ name: w.name, desc: w.desc, segs: w.segs })) };
+  list.push(c); await kv.set('customPlans', list); CUSTOM.push(registerCustom(c)); return c.id;
+}
+export async function deleteCustomPlan(id) {
+  await kv.set('customPlans', (await kv.get('customPlans', [])).filter(c => c.id !== id));
+  const i = CUSTOM.findIndex(p => p.id === id); if (i >= 0) CUSTOM.splice(i, 1);
+  if (plan.active?.id === id) stopPlan();
+}
+export const getPlan = id => PLANS.find(p => p.id === id) || CUSTOM.find(p => p.id === id);
 
 // Aktiver Plan: { id, start, done: { workoutId: { rideId, date, skipped? } } }
 export const plan = { active: null };
-export async function loadPlan() { plan.active = await kv.get('plan', null); }
+export async function loadPlan() {
+  CUSTOM.length = 0; for (const c of await kv.get('customPlans', [])) CUSTOM.push(registerCustom(c));
+  plan.active = await kv.get('plan', null);
+  if (plan.active && !getPlan(plan.active.id)) plan.active = null;
+}
 const savePlan = () => { kv.set('plan', plan.active ? JSON.parse(JSON.stringify(plan.active)) : null); bus.emit('plan'); };
 
 export function startPlan(id) { plan.active = { id, start: new Date().toISOString(), done: {} }; savePlan(); }

@@ -50,6 +50,12 @@ export function dialog({ title, html, buttons }) {
   });
 }
 
+// Vollbild für die ganze App: bleibt beim Wechsel zwischen den Seiten erhalten
+export function toggleFullscreen() {
+  const d = document;
+  if (d.fullscreenElement || d.webkitFullscreenElement) (d.exitFullscreen || d.webkitExitFullscreen).call(d)?.catch?.(() => { });
+  else { const e = d.documentElement; (e.requestFullscreen || e.webkitRequestFullscreen)?.call(e, { navigationUI: 'hide' })?.catch?.(() => { }); }
+}
 export function download(name, data, type = 'application/octet-stream') {
   const blob = data instanceof Blob ? data : new Blob([data], { type });
   const a = document.createElement('a');

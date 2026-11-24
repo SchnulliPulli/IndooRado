@@ -1,8 +1,8 @@
 // Trainingspläne: auswählen, Woche für Woche verfolgen
 import { $, esc, fmtDur, dialog, toast } from '../util.js';
 import { profile, sel, saveSel } from '../state.js';
-import { PLANS, getPlan, plan, startPlan, stopPlan, planProgress, skip, unskip } from '../plans.js';
-import { stats, drawWorkout } from '../workouts.js';
+import { PLANS, CUSTOM, getPlan, plan, startPlan, stopPlan, planProgress, skip, unskip, addCustomPlan, deleteCustomPlan } from '../plans.js';
+import { stats, drawWorkout, parseZwo } from '../workouts.js';
 
 export async function render(el) {
   const pr = planProgress();
@@ -10,16 +10,31 @@ export async function render(el) {
   <section class="pagehead"><h1>Trainingspläne</h1></section>
   <p class="muted">Jeder Plan ist eine Folge von Workouts, Woche für Woche. Alle Ziele hängen an deiner FTP (${profile.ftp} W) und passen sich automatisch an, wenn sie sich ändert. Eine Einheit zählt als erledigt, wenn du mindestens 90 % davon fährst.</p>
   ${pr ? active(pr) : ''}
-  <section class="pgrid">${PLANS.map(p => `
+  <section class="card form"><h2>Eigenen Plan aus Workout-Dateien erstellen</h2>
+    <p class="small muted">Lade mehrere Workouts als .zwo-Datei herunter (z. B. die Einheiten eines Plans von einer Workout-Sammlung, die du nutzen darfst) und wähle sie hier zusammen aus. Die Reihenfolge folgt dem Dateinamen, also am besten nummerieren (01_…, 02_…). Die Ziele werden aus deiner FTP berechnet.</p>
+    <div class="grid2 tight"><label class="f">Name des Plans<input class="inp" id="cpName" placeholder="z. B. Mein Gran Fondo"></label><label class="f">Einheiten pro Woche<input class="inp" id="cpPer" type="number" min="1" max="7" value="3"></label></div>
+    <div class="row"><label class="btn pri">.zwo-Dateien wählen und Plan anlegen<input type="file" id="cpFiles" accept=".zwo,.xml" multiple hidden></label></div>
+  </section>
+  <section class="pgrid">${[...PLANS, ...CUSTOM].map(p => `
     <article class="pcard ${pr?.p.id === p.id ? 'on' : ''}" style="--pc:${p.color}">
       <div class="row between"><span class="tag">${esc(p.level)}</span><span class="small muted num">${p.weeks.length} Wochen · ${p.perWeek}× pro Woche</span></div>
       <h3>${esc(p.name)}</h3>
       <p class="small muted">${esc(p.desc)}</p>
       <div class="pweeks">${p.weeks.map((w, i) => `<i style="height:${Math.round(18 + 42 * w.reduce((s, x) => s + stats(x).tss, 0) / Math.max(...p.weeks.map(ww => ww.reduce((s, x) => s + stats(x).tss, 0))))}px" title="Woche ${i + 1}"></i>`).join('')}</div>
       <div class="row between small muted num"><span>${fmtDur(p.dur)} gesamt</span><span>${p.all.length} Einheiten · TSS ${p.tss}</span></div>
-      <div class="row end">${pr?.p.id === p.id ? '<span class="small" style="color:var(--ok)">Aktiv</span>' : `<button class="btn sm pri" data-start="${p.id}">Plan starten</button>`}</div>
+      <div class="row end">${p.custom ? `<button class="btn sm ghost danger" data-delplan="${p.id}">Löschen</button>` : ''}${pr?.p.id === p.id ? '<span class="small" style="color:var(--ok)">Aktiv</span>' : `<button class="btn sm pri" data-start="${p.id}">Plan starten</button>`}</div>
     </article>`).join('')}</section>`;
 
+  $('#cpFiles', el).onchange = async e => {
+    const files = [...e.target.files].sort((a, b) => a.name.localeCompare(b.name, 'de', { numeric: true }));
+    const wos = [];
+    for (const f of files) { try { wos.push(parseZwo(await f.text(), f.name.replace(/\.\w+$/, ''))); } catch (err) { toast(f.name + ': ' + err.message, 5000); } }
+    if (!wos.length) return;
+    const id = await addCustomPlan($('#cpName', el).value.trim() || 'Eigener Plan', +$('#cpPer', el).value || 3, wos);
+    toast(`Plan mit ${wos.length} Workouts angelegt`);
+    if (!plan.active && await dialog({ title: 'Plan gleich starten?', buttons: [{ label: 'Später', value: false }, { label: 'Starten', value: true, cls: 'pri' }] })) startPlan(id);
+    render(el);
+  };
   el.querySelectorAll('canvas.pwc').forEach(c => { const w = pr.p.all.find(x => x.id === c.dataset.id); drawWorkout(c, w); });
   el.onclick = async e => {
     const b = e.target.closest('button'); if (!b) return;
@@ -28,6 +43,7 @@ export async function render(el) {
       if (plan.active) stopPlan();
       startPlan(b.dataset.start); toast('Plan gestartet. Viel Erfolg!'); render(el); window.scrollTo(0, 0);
     }
+    if (b.dataset.delplan) { if (await dialog({ title: 'Eigenen Plan löschen?', buttons: [{ label: 'Abbrechen', value: false }, { label: 'Löschen', value: true, cls: 'danger' }] })) { await deleteCustomPlan(b.dataset.delplan); render(el); } return; }
     if (b.dataset.go) { sel.workoutId = b.dataset.go; saveSel(); location.hash = '#/ride'; }
     if (b.dataset.pick) { sel.workoutId = b.dataset.pick; saveSel(); toast('Für die nächste Fahrt ausgewählt'); }
     if (b.dataset.skip) { skip(b.dataset.skip); render(el); }

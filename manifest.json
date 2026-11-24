@@ -1,9 +1,9 @@
 {
-  "name": "Trittwerk",
-  "short_name": "Trittwerk",
+  "name": "Windschatten",
+  "short_name": "Windschatten",
   "description": "Indoor-Radtraining im Browser",
   "start_url": "./index.html",
-  "display": "standalone",
+  "display": "fullscreen",
   "orientation": "any",
   "background_color": "#14181c",
   "theme_color": "#14181c",

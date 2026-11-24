@@ -6,6 +6,7 @@ export const profile = {
   name: 'Fahrer', ftp: 200, kg: 75, bike: 8.5, cda: 0.32, circ: 2105, maxW: 600, hrMax: 190, hrRest: 55,
   simDiff: 60, gearDiff: 100, jersey: '#ff6a3d', bikeColor: '#e9eef2', helmet: '#f2f4f6', skin: '#e3b18c',
   quality: 'auto', autoPause: true, autoShots: true, shotEvery: 10, units: 'metric', ftpHistory: [],
+  soundOn: true, volMaster: .7, volAmb: .6, volFx: .8, tips: true, drinkTips: true, tripleSkip: true,
 };
 export const sel = { routeId: 'b-hills', workoutId: null, mode: 'gear', ergW: 150, pacer: 0, adaptive: true, npcs: true };
 export const progress = { xp: 0, badges: {}, climbBest: {}, routeBest: {}, sprintBest: {}, missions: {}, pb: {} };

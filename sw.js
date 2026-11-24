@@ -1,5 +1,5 @@
 // Offline-Cache für die App-Dateien (nur über https aktiv)
-const CACHE = 'trittwerk-v1';
+const CACHE = 'trittwerk-v3'; // neue Version räumt alte Caches beim Aktivieren weg
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', e => {

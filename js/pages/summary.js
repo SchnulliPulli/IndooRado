@@ -8,6 +8,9 @@ import { toFit, toTcx, fileBase } from '../export.js';
 import { deleteRide, applyFtp } from '../ridesave.js';
 import { statTiles, levelBar, ICON } from '../components.js';
 import { drawWorkout } from '../workouts.js';
+import { sound } from '../sound.js';
+import { stravaTitle, stravaText, overviewImage, bestShot } from '../share.js';
+import { strava, connected as stravaConnected, uploadRide, activityUrl } from '../strava.js';
 
 let urls = [];
 export async function render(el, [id], query) {
@@ -84,9 +87,33 @@ export async function render(el, [id], query) {
 
   // Aktionen
   $('#eFit', el).onclick = () => download(fileBase(ride) + '.fit', new Blob([toFit(ride)], { type: 'application/vnd.ant.fit' }));
+  if (isNew) setTimeout(() => ride.lvAfter > ride.lvBefore ? sound.levelUp() : ride.newBadges.length || ride.plan ? sound.fanfare() : null, 300);
+  // Direkter Upload, wenn mit Strava verbunden
+  const direct = async (manual) => {
+    const b = $('#eStrava', el); b.disabled = true;
+    try {
+      const r = await uploadRide(ride, t => b.textContent = t);
+      ride.stravaId = r.id; await db.put('rides', ride);
+      b.textContent = 'Auf Strava ansehen'; b.disabled = false; b.onclick = () => window.open(activityUrl(r.id), '_blank', 'noopener');
+      toast(r.duplicate ? 'Diese Fahrt ist schon auf Strava' : 'Auf Strava hochgeladen ✅');
+      if (manual) { const base = fileBase(ride), ov = await overviewImage(ride, ride.ftpUsed || profile.ftp); if (ov) download(base + '-strecke.jpg', ov); const bs = bestShot(shots); if (bs) setTimeout(() => download(base + '-foto.jpg', bs.blob), 500); }
+    } catch (e) { b.disabled = false; b.textContent = 'Zu Strava'; toast('Strava: ' + e.message, 6000); }
+  };
+  if (ride.stravaId) { $('#eStrava', el).textContent = 'Auf Strava ansehen'; }
+  else if (isNew && stravaConnected() && strava.cfg.auto) direct(false);
   $('#eStrava', el).onclick = async () => {
-    download(fileBase(ride) + '.fit', new Blob([toFit(ride)], { type: 'application/vnd.ant.fit' }));
-    await dialog({ title: 'Bei Strava hochladen', html: '<p>Die FIT-Datei wurde gespeichert. Auf der Strava-Seite „Datei auswählen“ klicken und die Datei aus den Downloads wählen. Leistung, Puls, Kadenz und Strecke werden übernommen.</p>', buttons: [{ label: 'Strava öffnen', value: true, cls: 'pri' }] });
+    if (ride.stravaId) { window.open(activityUrl(ride.stravaId), '_blank', 'noopener'); return; }
+    if (stravaConnected()) return direct(true);
+    const title = stravaTitle(ride), text = stravaText(ride), base = fileBase(ride);
+    download(base + '.fit', new Blob([toFit(ride)], { type: 'application/vnd.ant.fit' }));
+    const ov = await overviewImage(ride, ride.ftpUsed || profile.ftp); if (ov) setTimeout(() => download(base + '-strecke.jpg', ov), 400);
+    const bs = bestShot(shots); if (bs) setTimeout(() => download(base + '-foto.jpg', bs.blob), 800);
+    let copied = false; try { await navigator.clipboard.writeText(title + '\n\n' + text); copied = true; } catch (e) { }
+    await dialog({ title: 'Bei Strava hochladen', html: `
+      <p>Gespeichert: die FIT-Datei, ein Übersichtsbild der Strecke${bs ? ' und das beste Foto der Fahrt' : ''}.</p>
+      <ol class="tips small"><li>Auf Strava „Datei auswählen“ und die <b>.fit</b>-Datei wählen.</li><li>Den Titel einsetzen${copied ? ' (Titel und Beschreibung sind schon in der Zwischenablage)' : ''}.</li><li>Unter „Fotos hinzufügen“ die beiden Bilder auswählen und speichern.</li></ol>
+      <p class="small muted">Titel:</p><input class="inp" readonly value="${esc(title)}" onclick="this.select()">
+      <p class="small muted">Beschreibung:</p><textarea class="inp" rows="5" readonly onclick="this.select()">${esc(text)}</textarea>`, buttons: [{ label: 'Strava öffnen', value: true, cls: 'pri' }] });
     window.open('https://www.strava.com/upload/select', '_blank', 'noopener');
   };
   $('#eTcx', el).onclick = () => download(fileBase(ride) + '.tcx', toTcx(ride), 'application/vnd.garmin.tcx+xml');

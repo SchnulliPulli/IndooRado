@@ -203,8 +203,9 @@ export class World {
       fragmentShader: 'uniform vec3 top; uniform vec3 hor; uniform vec3 sun; varying vec3 vP; void main(){ float h = clamp(vP.y,0.0,1.0); vec3 c = mix(hor, top, pow(h,0.55)); float s = max(dot(vP, sun),0.0); c += vec3(1.0,0.92,0.75)*(pow(s,600.0)*2.5 + pow(s,12.0)*0.18); if(vP.y<0.0) c = hor; gl_FragColor = vec4(c,1.0); }',
     });
     this.sky = new THREE.Mesh(new THREE.SphereGeometry(6000, 32, 16), skyMat); this.sky.renderOrder = -10; this.scene.add(this.sky);
+    this.skyMat = skyMat;
     // Licht
-    this.scene.add(new THREE.HemisphereLight(0xdfefff, 0x4a5a3a, 1.15));
+    this.hemi = new THREE.HemisphereLight(0xdfefff, 0x4a5a3a, 1.15); this.scene.add(this.hemi);
     const sun = this.sun = new THREE.DirectionalLight(0xfff1dc, 2.4);
     this.sunDir = new THREE.Vector3(.45, .55, -.7).normalize();
     if (Q.shadow) { sun.castShadow = true; sun.shadow.mapSize.set(Q.shadow, Q.shadow); const sc = sun.shadow.camera; sc.left = -45; sc.right = 45; sc.top = 45; sc.bottom = -45; sc.near = 1; sc.far = 400; sun.shadow.bias = -.0004; sun.shadow.normalBias = .04; }
@@ -221,6 +222,11 @@ export class World {
       this.water = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), wm); this.water.rotation.x = -Math.PI / 2; this.water.position.y = route.water; this.water.receiveShadow = true; this.scene.add(this.water);
     }
     this.rider = new Rider(profile); this.scene.add(this.rider.root);
+    // Fahrradlicht für die Nacht
+    this.lamp = new THREE.SpotLight(0xfff2d0, 0, 60, .5, .6, 1.2); this.lamp.position.set(0, 1.1, -.6); this.lamp.target.position.set(0, 0, -14);
+    this.rider.root.add(this.lamp, this.lamp.target);
+    this.expoBase = 1.05; this.baseTheme = { sky: th.sky.map(col) };
+    this.buildStars(); this.buildRain();
     this.pacer = null;
     this.view = 0; this.camPos = new THREE.Vector3(); this.camLook = new THREE.Vector3(); this.camInit = false;
     this.lastInst = 0; this.instDirty = true;
@@ -579,6 +585,49 @@ export class World {
       return { rider, lab };
     });
   }
+  buildStars() {
+    const r = rng(31), pos = [];
+    for (let i = 0; i < 1500; i++) { const a = r() * Math.PI * 2, e = Math.asin(r() * .95 + .05), R = 5000; pos.push(Math.cos(a) * Math.cos(e) * R, Math.sin(e) * R, Math.sin(a) * Math.cos(e) * R); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    this.stars = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 2, sizeAttenuation: false, fog: false, transparent: true, opacity: 0, depthWrite: false }));
+    this.stars.renderOrder = -9; this.scene.add(this.stars);
+  }
+  buildRain() {
+    const n = 2500, pos = new Float32Array(n * 6), r = rng(13);
+    for (let i = 0; i < n; i++) { const x = (r() - .5) * 80, y = r() * 30, z = (r() - .5) * 80; pos.set([x, y, z, x + .05, y - .7, z], i * 6); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    this.rain = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xaab8c6, transparent: true, opacity: .45 }));
+    this.rain.visible = false; this.rain.frustumCulled = false; this.scene.add(this.rain);
+  }
+  /* Tageszeit und Wetter. time: morning|day|evening|night, weather: clear|cloudy|rain|fog */
+  setEnv({ time = 'day', weather = 'clear' } = {}) {
+    this.env = { time, weather };
+    const T = {
+      morning: { top: '#5b8fd0', hor: '#f6c9a0', sun: [.75, .16, -.4], sunC: 0xffc89a, sunI: 1.6, hemi: .8, expo: 1.0 },
+      day: { top: null, hor: null, sun: [.45, .55, -.7], sunC: 0xfff1dc, sunI: 2.4, hemi: 1.15, expo: 1.05 },
+      evening: { top: '#3b4e8a', hor: '#ff9a62', sun: [-.7, .12, -.5], sunC: 0xff9a5a, sunI: 1.5, hemi: .7, expo: .95 },
+      night: { top: '#050914', hor: '#1a2540', sun: [-.3, .6, .5], sunC: 0x9fb4ff, sunI: .28, hemi: .22, expo: .9 },
+    }[time] || {};
+    const top = T.top ? col(T.top) : this.baseTheme.sky[0].clone(), hor = T.hor ? col(T.hor) : this.baseTheme.sky[1].clone();
+    const grey = col('#9aa3ad'), wet = weather === 'rain', cloudy = weather === 'cloudy' || wet, fog = weather === 'fog';
+    if (cloudy || fog) { const k = fog ? .75 : wet ? .7 : .45; top.lerp(grey.clone().multiplyScalar(time === 'night' ? .12 : 1), k); hor.lerp(grey.clone().multiplyScalar(time === 'night' ? .2 : 1.05), k); }
+    this.sunDir.set(...T.sun).normalize();
+    this.skyMat.uniforms.top.value.copy(top); this.skyMat.uniforms.hor.value.copy(hor); this.skyMat.uniforms.sun.value.copy(this.sunDir).multiplyScalar(cloudy || fog ? 0 : 1);
+    this.scene.background.copy(hor); this.scene.fog.color.copy(hor);
+    const viewR = (this.Q.radius + .5) * CHUNK;
+    this.scene.fog.near = fog ? 20 : wet ? viewR * .15 : viewR * .35; this.scene.fog.far = fog ? 260 : wet ? viewR * .7 : viewR * .98;
+    this.sun.color.setHex(T.sunC); this.sun.intensity = T.sunI * (cloudy ? .45 : fog ? .5 : 1);
+    this.hemi.intensity = T.hemi * (cloudy ? 1.1 : 1);
+    this.hemi.color.copy(time === 'night' ? col('#6b7da8') : col('#dfefff'));
+    this.expoBase = T.expo; this.renderer.toneMappingExposure = T.expo;
+    this.stars.material.opacity = time === 'night' && !cloudy && !fog ? .9 : 0;
+    for (const c of this.clouds) { c.material.opacity = cloudy ? .95 : time === 'night' ? .25 : .85; c.material.color.copy(cloudy ? col('#b9c0c8') : time === 'evening' ? col('#ffd2b0') : col('#ffffff')).multiplyScalar(time === 'night' ? .25 : 1); }
+    this.far.material.color.setScalar(time === 'night' ? .25 : time === 'evening' || time === 'morning' ? .8 : 1);
+    this.rain.visible = wet;
+    this.roadMeshes[2].material.color.setScalar(time === 'night' ? .4 : time === 'day' ? 1 : .75);
+    this.lamp.intensity = time === 'night' ? 30 : time === 'evening' && (cloudy || fog) ? 10 : 0;
+    if (this.water) this.water.material.color.setHex(time === 'night' ? 0x0a1c2c : cloudy ? 0x2f4f63 : 0x1f5f8f);
+  }
   setColors(p) { this.rider.setColors(p); }
   cycleView() { this.view = (this.view + 1) % 5; this.camInit = false; return this.view; }
   // Kurzer Kameraschwenk (z. B. am Zieltor), danach zurück zur gewählten Ansicht
@@ -595,13 +644,24 @@ export class World {
     this.place(this.rider.root, d, 1.5); this.rider.root.visible = this.view !== 4;
     this.rider.update(st.crank, st.v, dt, R.gradeAt(d));
     if (this.pacer && st.pacerDist != null) { this.place(this.pacer.root, st.pacerDist, .6); this.pacer.update(st.pacerCrank, st.pacerV, dt, R.gradeAt(st.pacerDist)); }
-    // Mitfahrer
+    // Dynamische Auflösung: bei Rucklern Pixeldichte senken, bei Luft wieder anheben
+    this.frameAvg = (this.frameAvg ?? 16) * .95 + dt * 1000 * .05; this.frameN = (this.frameN || 0) + 1;
+    if (this.frameN % 90 === 0) {
+      const max = Math.min(window.devicePixelRatio || 1, this.Q.pr), cur = this.renderer.getPixelRatio();
+      let next = cur;
+      if (this.frameAvg > 24 && cur > .6) next = Math.max(.6, cur - .15);
+      else if (this.frameAvg < 15 && cur < max) next = Math.min(max, cur + .1);
+      if (next !== cur) { this.renderer.setPixelRatio(next); this.resize(); }
+    }
+    // Mitfahrer (weit entfernte nur jedes dritte Bild animieren)
     if (st.npcs) st.npcs.forEach((n, i) => {
       const o = this.npcs[i]; if (!o) return;
       let gap = n.d - d; if (R.loop) { if (gap > R.total / 2) gap -= R.total; if (gap < -R.total / 2) gap += R.total; }
       const vis = Math.abs(gap) < (this.qKey === 'low' ? 90 : 170);
       o.rider.root.visible = vis; if (!vis) return;
-      this.place(o.rider.root, n.d, n.lat); o.rider.update(n.crank, n.v, dt, R.gradeAt(n.d));
+      this.place(o.rider.root, n.d, n.lat);
+      o.acc = (o.acc || 0) + dt;
+      if (Math.abs(gap) < 35 || (this.frameN + i) % 3 === 0) { o.rider.update(n.crank, n.v, o.acc, R.gradeAt(n.d)); o.acc = 0; }
       o.lab.visible = gap > 7 && gap < 45 && this.view !== 3;
     });
     // Boote schaukeln
@@ -609,7 +669,9 @@ export class World {
     if (this.gate?.visible) this.gateRing.material.opacity = .55 + .4 * Math.sin(performance.now() / 160);
     // Im Tunnel: dunkler, Kamera bleibt hinter dem Fahrer
     const inTun = !!R.tunnelAt(d, 25);
-    const expo = inTun ? .62 : 1.05; this.renderer.toneMappingExposure += (expo - this.renderer.toneMappingExposure) * Math.min(1, dt * 2.5);
+    if (this.rain.visible) { this.rain.position.set(this.camPos.x, this.camPos.y - 8 - ((performance.now() / 40) % 1) * 2.8, this.camPos.z); this.rain.visible = !inTun; }
+    else if (this.env?.weather === 'rain' && !inTun) this.rain.visible = true;
+    const expo = inTun ? .62 : this.expoBase; this.renderer.toneMappingExposure += (expo - this.renderer.toneMappingExposure) * Math.min(1, dt * 2.5);
     if (this.cine && performance.now() > this.cine.until) { this.cine = null; this.camInit = false; }
     let view = this.cine ? this.cine.view : this.view;
     if (inTun && view !== 4) view = 0;
@@ -633,7 +695,7 @@ export class World {
     this.camera.position.copy(this.camPos); this.camera.lookAt(this.camLook);
     // Umgebung mitführen
     const cx = this.camPos.x, cz = this.camPos.z;
-    this.sky.position.set(cx, this.camPos.y, cz); this.far.position.set(cx, R.minE - 60, cz);
+    this.sky.position.set(cx, this.camPos.y, cz); this.far.position.set(cx, R.minE - 60, cz); this.stars.position.set(cx, this.camPos.y, cz);
     if (this.water) this.water.position.set(cx, R.water, cz);
     for (const cl of this.clouds) { const u = cl.userData; let ox = ((u.ox - cx * .15) % 6000 + 9000) % 6000 - 3000, oz = ((u.oz - cz * .15) % 6000 + 9000) % 6000 - 3000; cl.position.set(cx + ox, R.maxE + u.y, cz + oz); }
     this.sun.position.copy(rp).addScaledVector(this.sunDir, 200); this.sun.target.position.copy(rp);
@@ -655,8 +717,15 @@ export class World {
     const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(src, 0, 0, w, h);
     return c;
   }
+  // Alles freigeben: Geometrien, Texturen, Materialien, GPU-Kontext
   dispose() {
+    for (const c of this.chunks.values()) c.mesh.geometry.dispose();
+    this.chunks.clear();
+    this.scene.traverse(o => { o.geometry?.dispose?.(); o.dispose?.(); const m = o.material; if (m) (Array.isArray(m) ? m : [m]).forEach(x => { x.map?.dispose?.(); x.dispose?.(); }); });
+    this.scene.clear();
+    this.renderer.renderLists?.dispose?.();
     this.renderer.dispose();
-    this.scene.traverse(o => { o.geometry?.dispose?.(); const m = o.material; if (m) (Array.isArray(m) ? m : [m]).forEach(x => { x.map?.dispose?.(); x.dispose?.(); }); });
+    try { this.renderer.forceContextLoss(); } catch (e) { }
+    this.npcs = []; this.boats = null;
   }
 }

@@ -27,7 +27,7 @@ export async function saveRide(S) {
   progress.sprintBest = progress.sprintBest || {};
   for (const c of S.sprintLog || []) { const k = S.route.id + ':' + c.id; if (c.pr) progress.sprintBest[k] = { time: c.time, date: start, rideId: id }; }
   let routePr = null;
-  if (!S.route.loop && S.finished) { const k = S.route.id, b = progress.routeBest[k]; routePr = { time: S.t, best: b?.time ?? null, pr: !b || S.t < b.time }; if (routePr.pr) progress.routeBest[k] = { time: S.t, date: start, rideId: id }; }
+  if (!S.route.loop && S.finished && !S.beamed) { const k = S.route.id, b = progress.routeBest[k]; routePr = { time: S.t, best: b?.time ?? null, pr: !b || S.t < b.time }; if (routePr.pr) progress.routeBest[k] = { time: S.t, date: start, rideId: id }; }
 
   // Trainingsplan: Einheit gilt ab 90 % der Dauer als erledigt
   let planInfo = null;
@@ -38,7 +38,7 @@ export async function saveRide(S) {
     workoutId: S.wo?.id || null, workoutName: S.wo?.name || null, workout: S.wo ? { name: S.wo.name, segs: S.wo.segs } : null, workoutDone,
     planId: S.wo?.planId || null, planWeek: S.wo?.week || null,
     mode: S.mode, sum, samples: S.samples, climbs: S.climbLog, sprints: S.sprintLog || [], intervals: intervals(S.samples, S.wo), prs, laps: S.lap, test, routePr,
-    overtakes: S.overtakes || 0, ftpUsed: profile.ftp, shots: S.shots.length, newBadges: [], missionsDone: [],
+    overtakes: S.overtakes || 0, beamed: !!S.beamed, env: S.env || null, ftpUsed: profile.ftp, shots: S.shots.length, newBadges: [], missionsDone: [],
   };
 
   // XP: Basis + Serienbonus + Plan + Missionen

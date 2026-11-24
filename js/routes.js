@@ -64,6 +64,8 @@ const EXTRAS = {
 export const BUILTIN = BUILTIN_DEF.map(r => ({ id: r.id, name: r.name, theme: r.theme, desc: r.desc, loop: r.loop, builtin: true, climbNames: r.climbNames, _make: r.make, ...EXTRAS[r.id] }));
 
 let cache = new Map();
+// Aufbereitete Strecken freigeben (nach der Fahrt)
+export function clearRouteCache() { cache.clear(); }
 export async function listRoutes() {
   const own = (await db.all('routes')).sort((a, b) => (b.created || '').localeCompare(a.created || ''));
   return [...BUILTIN, ...own];

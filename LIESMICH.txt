@@ -1,4 +1,4 @@
-TRITTWERK – Indoor-Radtraining im Browser
+WINDSCHATTEN – Indoor-Radtraining im Browser
 ==========================================
 
 Den ganzen Ordner auf einen Webserver legen, index.html ist der Einstieg.

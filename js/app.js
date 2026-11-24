@@ -1,10 +1,12 @@
 // Einstieg: Zustand laden, Router, Navigation
-import { $, bus, toast, dialog } from './util.js';
+import { $, bus, toast, dialog, toggleFullscreen } from './util.js';
 import { loadState } from './state.js';
 import { loadClickMap, setDemo, status, support, reconnectKnown } from './ble.js';
 import { kv, persist } from './db.js';
 import { ICON } from './components.js';
 import { loadPlan } from './plans.js';
+import { loadSync, autoSync, sync } from './sync.js';
+import { loadStrava, handleRedirect } from './strava.js';
 
 const PAGES = {
   '': () => import('./pages/start.js'), ride: () => import('./pages/ride.js'), summary: () => import('./pages/summary.js'),
@@ -19,6 +21,10 @@ function nav() {
   $('#chips').innerHTML = ['trainer', 'hr', 'cad', 'click'].map(k => `<a class="chip" href="#/devices" data-d="${k}" title="${k}">${ICON[k]}</a>`).join('');
   const upd = () => { for (const c of document.querySelectorAll('#chips .chip')) c.dataset.st = status[c.dataset.d]; };
   bus.on('dev', upd); upd();
+  // Vollbild-Knopf in der Kopfleiste
+  const fs = $('#fsBtn'), fsUpd = () => { const on = !!(document.fullscreenElement || document.webkitFullscreenElement); fs.innerHTML = on ? '<svg viewBox="0 0 24 24"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>' : ICON.full; fs.title = on ? 'Vollbild beenden' : 'Vollbild'; fs.dataset.st = on ? 'on' : 'off'; };
+  fs.onclick = toggleFullscreen; document.addEventListener('fullscreenchange', fsUpd); document.addEventListener('webkitfullscreenchange', fsUpd); fsUpd();
+  if (!document.documentElement.requestFullscreen && !document.documentElement.webkitRequestFullscreen) fs.hidden = true;
 }
 async function route() {
   const raw = location.hash.replace(/^#\/?/, '');
@@ -56,9 +62,18 @@ async function init() {
   bus.on('toast', m => toast(m));
   if (await kv.get('demo', !support().ok)) setDemo(true);
   persist();
+  await loadStrava();
+  try { const who = await handleRedirect(); if (who) toast('Mit Strava verbunden' + (typeof who === 'string' && who ? ': ' + who : '')); }
+  catch (e) { toast(e.message, 6000); }
   window.addEventListener('hashchange', route);
   await route();
   reconnectKnown().catch(() => { });
+  // NAS-Abgleich: neuerer Stand vom NAS wird übernommen, danach Seite neu aufbauen
+  loadSync().then(autoSync).then(async pulled => {
+    if (!pulled) return;
+    await loadState(); await loadPlan(); await loadClickMap(); toast('Daten vom NAS übernommen');
+    if (currentKey !== 'ride') route();
+  }).catch(e => toast('NAS-Abgleich: ' + (sync.error || e.message), 5000));
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => { });
 }
 init();

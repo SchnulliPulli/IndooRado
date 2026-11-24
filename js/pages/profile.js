@@ -1,12 +1,77 @@
-// Profil, Avatar, Grafik und Datensicherung
-import { $, esc, toast, dialog, download } from '../util.js';
+// Profil, Avatar, Grafik, Ton, Datensicherung, NAS und Strava
+import { $, esc, toast, dialog, download, fmtDate, bus } from '../util.js';
 import { profile, saveProfile, progress, levelOf } from '../state.js';
 import { UNLOCKS } from '../game.js';
 import { backup, restore, wipe, usage, persist } from '../db.js';
 import { autoQuality } from '../world.js';
+import { sync, saveSyncCfg, testConnection, pushNow, pullNow } from '../sync.js';
+import { sound } from '../sound.js';
+import { strava, connected as stravaConnected, setApp as setStravaApp, setAuto as setStravaAuto, authorize as stravaAuthorize, disconnect as stravaDisconnect } from '../strava.js';
 
 const F = (id, label, type, extra = '', hint = '') => `<label class="f">${label}<input class="inp" id="${id}" type="${type}" ${extra} value="${esc(profile[id])}">${hint ? `<span class="small muted">${hint}</span>` : ''}</label>`;
 const SW = (id, label) => `<label class="switch"><input type="checkbox" id="${id}" ${profile[id] ? 'checked' : ''}><span></span> ${label}</label>`;
+
+// Strava: eigene API-App, Schlüssel bleiben nur in diesem Browser
+function stravaCard(box) {
+  const c = strava.cfg || {}, con = stravaConnected();
+  box.innerHTML = `<h2>Strava</h2>
+    ${con ? `<p>✅ Verbunden${c.athlete ? ' als <b>' + esc(c.athlete) + '</b>' : ''}. Fahrten werden mit passendem Titel und Beschreibung direkt hochgeladen.</p>
+      <label class="switch"><input type="checkbox" id="sAuto" ${c.auto ? 'checked' : ''}><span></span> Jede gespeicherte Fahrt automatisch hochladen</label>
+      <div class="row"><button class="btn sm ghost danger" id="sOff">Verbindung trennen</button></div>`
+    : `<p class="small muted">Für den direkten Upload brauchst du eine eigene, kostenlose Strava-API-App. Client-ID und Client-Secret bleiben nur in diesem Browser, sie landen weder in der Sicherungsdatei noch auf dem NAS.</p>
+      <ol class="tips small muted"><li>Auf <b>strava.com/settings/api</b> eine App anlegen (Name z. B. „Windschatten“, Website beliebig).</li><li>Als <b>Authorization Callback Domain</b> eintragen: <code>${esc(location.hostname)}</code></li><li>Client-ID und Client-Secret hier eintragen und „Mit Strava verbinden“ tippen.</li></ol>
+      <div class="grid2 tight"><label class="f">Client-ID<input class="inp" id="sId" inputmode="numeric" value="${esc(c.clientId || '')}"></label><label class="f">Client-Secret<input class="inp" id="sSec" type="password" autocomplete="off" value="${esc(c.clientSecret || '')}"></label></div>
+      <label class="switch"><input type="checkbox" id="sAuto2" ${c.auto !== false ? 'checked' : ''}><span></span> Danach jede gespeicherte Fahrt automatisch hochladen</label>
+      <div class="row"><button class="btn pri sm" id="sCon">Mit Strava verbinden</button></div>`}
+    <p class="small muted">Fotos nimmt die Strava-Schnittstelle nicht an. Übersichtsbild und Fahrtfoto speichert die App beim Upload mit, du kannst sie in der Strava-App zur Aktivität hinzufügen.</p>`;
+  box.querySelector('#sAuto')?.addEventListener('change', e => setStravaAuto(e.target.checked));
+  box.querySelector('#sOff')?.addEventListener('click', async () => { await stravaDisconnect(); toast('Strava getrennt'); stravaCard(box); });
+  box.querySelector('#sCon')?.addEventListener('click', async () => {
+    const id = box.querySelector('#sId').value.trim(), sec = box.querySelector('#sSec').value.trim();
+    if (!/^\d+$/.test(id) || sec.length < 20) { toast('Bitte Client-ID (Zahl) und Client-Secret aus den Strava-API-Einstellungen eintragen', 5000); return; }
+    await setStravaApp(id, sec, box.querySelector('#sAuto2').checked); stravaAuthorize();
+  });
+}
+
+// NAS-Speicher (WebDAV, z. B. Synology)
+function nasCard(box) {
+  const c = sync.cfg || { url: '', user: '', pass: '', auto: true };
+  box.innerHTML = `<h2>NAS-Speicher (Synology)</h2>
+    <p class="small muted">Zusätzlich zum Browser werden alle Daten in einem Ordner auf deinem NAS abgelegt: Einstellungen und Fortschritt in <code>state.json</code>, jede Fahrt als eigene Datei, Fotos als JPG. Auf einem neuen Gerät hier dieselben Daten eintragen und „Vom NAS laden“ tippen.</p>
+    <label class="f">WebDAV-Adresse des Ordners<input class="inp" id="nUrl" type="url" placeholder="https://nas.deine-domain.de:5006/home/windschatten" value="${esc(c.url)}"></label>
+    <div class="grid2 tight"><label class="f">Benutzer<input class="inp" id="nUser" autocomplete="username" value="${esc(c.user)}"></label><label class="f">Passwort<input class="inp" id="nPass" type="password" autocomplete="current-password" value="${esc(c.pass)}"></label></div>
+    <label class="switch"><input type="checkbox" id="nAuto" ${c.auto ? 'checked' : ''}><span></span> Automatisch abgleichen (beim Start und nach jeder Änderung)</label>
+    <p class="small muted">Das Passwort bleibt nur in diesem Browser. Am besten ein eigenes DSM-Konto anlegen, das nur auf diesen Ordner zugreifen darf.</p>
+    <div class="row"><button class="btn sm" id="nSave">Speichern und testen</button><button class="btn sm" id="nPush">Jetzt hochladen</button><button class="btn sm" id="nPull">Vom NAS laden</button>${c.url ? '<button class="btn sm ghost danger" id="nOff">Trennen</button>' : ''}</div>
+    <div class="small" id="nStat"></div>
+    <details class="small muted"><summary>Einrichtung auf der Synology</summary>
+      <ol class="tips">
+        <li>Im Paket-Zentrum <b>WebDAV Server</b> installieren und HTTPS aktivieren (Port 5006).</li>
+        <li>Einen freigegebenen Ordner oder Unterordner anlegen, z. B. <code>home/windschatten</code>, und dem Benutzer Lese- und Schreibrechte geben.</li>
+        <li>Das NAS braucht ein gültiges Zertifikat (Systemsteuerung → Sicherheit → Zertifikat, z. B. Let’s Encrypt), sonst blockiert der Browser.</li>
+        <li>Weil die App unter <b>${esc(location.origin)}</b> läuft, muss das NAS Zugriffe von dort erlauben (CORS). Dazu unter Systemsteuerung → Anmeldeportal → Erweitert → <b>Reverse Proxy</b> einen Eintrag von z. B. <code>https://dav.deine-domain.de:443</code> auf <code>https://localhost:5006</code> anlegen und unter „Benutzerdefinierte Kopfzeile“ eintragen:<br>
+          <code>Access-Control-Allow-Origin: ${esc(location.origin)}</code><br><code>Access-Control-Allow-Methods: GET, PUT, DELETE, MKCOL, PROPFIND, OPTIONS</code><br><code>Access-Control-Allow-Headers: Authorization, Content-Type, Depth</code></li>
+        <li>Dann hier die Adresse über den Reverse Proxy eintragen, z. B. <code>https://dav.deine-domain.de/home/windschatten</code>.</li>
+      </ol>
+      <p>Alternative ohne CORS: Die App selbst über Web Station auf dem NAS hosten und WebDAV unter derselben Adresse einbinden.</p>
+    </details>`;
+  const stat = () => { const s = box.querySelector('#nStat'); if (!s) return; s.innerHTML = sync.busy ? '⏳ Abgleich läuft …' : sync.error ? `<span style="color:#ff8b97">⚠ ${esc(sync.error)}</span>` : sync.last ? `✅ Zuletzt abgeglichen: ${fmtDate(sync.last)}` : c.url ? 'Noch nicht abgeglichen' : 'Nicht eingerichtet'; };
+  stat(); const off = bus.on('sync', stat); const mo = new MutationObserver(() => { if (!box.isConnected) { off(); mo.disconnect(); } }); mo.observe(document.body, { childList: true, subtree: true });
+  const read = () => ({ url: box.querySelector('#nUrl').value.trim(), user: box.querySelector('#nUser').value.trim(), pass: box.querySelector('#nPass').value, auto: box.querySelector('#nAuto').checked });
+  box.querySelector('#nSave').onclick = async () => {
+    const cfg = read(); if (!/^https?:\/\//.test(cfg.url)) { toast('Bitte eine vollständige Adresse mit https:// eingeben'); return; }
+    if (location.protocol === 'https:' && cfg.url.startsWith('http:')) { toast('Die App läuft über https, das NAS muss auch über https erreichbar sein', 5000); return; }
+    await saveSyncCfg(cfg); sync.error = null;
+    try { await testConnection(); toast('Verbindung klappt'); nasCard(box); }
+    catch (e) { sync.error = e.message === 'Failed to fetch' ? 'NAS nicht erreichbar oder CORS nicht freigegeben (siehe Einrichtung)' : e.message; stat(); }
+  };
+  box.querySelector('#nPush').onclick = async () => { try { const r = await pushNow(); if (r) toast(`Hochgeladen (${r.rides} neue Fahrten)`); } catch (e) { } };
+  box.querySelector('#nPull').onclick = async () => {
+    try { const r = await pullNow(); if (r === null && !sync.error) toast('Auf dem NAS liegt noch nichts'); else if (r) { toast(`Vom NAS geladen (${r.rides} Fahrten), App wird neu geladen`); setTimeout(() => location.reload(), 1200); } } catch (e) { }
+  };
+  box.querySelector('#nOff')?.addEventListener('click', async () => { await saveSyncCfg(null); sync.last = null; sync.error = null; nasCard(box); toast('NAS-Abgleich getrennt, die Daten im Browser bleiben'); });
+}
+
 export async function render(el) {
   const u = await usage(), pers = await persist(), lv = levelOf(progress.xp).lv;
   el.innerHTML = `
@@ -36,13 +101,31 @@ export async function render(el) {
     </div>
     <div class="card form"><h2>Grafik</h2>
       <label class="f">Qualität der 3D-Welt<select class="inp" id="quality">${[['auto', 'Automatisch (' + ({ high: 'hoch', medium: 'mittel' }[autoQuality()]) + ')'], ['high', 'Hoch: Schatten, weite Sicht'], ['medium', 'Mittel: für Tablets'], ['low', 'Niedrig: für ältere Geräte']].map(([v, l]) => `<option value="${v}" ${profile.quality === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <p class="small muted">Ruckelt die Fahrt, senkt die App die Auflösung automatisch. Auf schwachen Geräten hilft zusätzlich „Mittel“ oder „Niedrig“.</p>
       <h2 style="margin-top:18px">Daten</h2>
-      <p class="small muted">Gespeichert werden Profil, Einstellungen, gekoppelte Geräte und Tastenbelegung, Fahrten mit Fotos, Level, Abzeichen, Missionen, Bestzeiten, Trainingsplan-Fortschritt sowie eigene Strecken und Workouts. Die Sicherung enthält alles davon in einer Datei.</p>
-      <p class="small muted">Alles wird nur in diesem Browser unter <b>${esc(location.origin)}</b> gespeichert. Unter einer anderen Adresse (z. B. NAS statt localhost) siehst du andere Daten. Sichere regelmäßig und spiele die Datei dort wieder ein.</p>
+      <p class="small muted">Gespeichert werden Profil, Einstellungen, gekoppelte Geräte und Tastenbelegung, Fahrten mit Fotos, Level, Abzeichen, Missionen, Bestzeiten, Trainingsplan-Fortschritt sowie eigene Strecken, Pläne und Workouts. Die Sicherung enthält alles davon in einer Datei, aber keine Passwörter oder Schlüssel.</p>
+      <p class="small muted">Alles wird in diesem Browser unter <b>${esc(location.origin)}</b> gespeichert. Unter einer anderen Adresse siehst du andere Daten. Sichere regelmäßig oder richte unten den NAS-Speicher ein.</p>
       <p class="small muted">Belegt: ${u ? (u.usage / 1048576).toFixed(1).replace('.', ',') + ' MB' : 'unbekannt'} · Dauerhafter Speicher: ${pers ? 'ja' : 'nicht bestätigt'}</p>
       <div class="row"><button class="btn" id="bk">Sicherung herunterladen</button><label class="btn">Sicherung einspielen<input type="file" id="rs" accept=".json" hidden></label><button class="btn ghost danger" id="wp">Alles löschen</button></div>
     </div>
-  </section>`;
+  </section>
+  <section class="grid2">
+    <div class="card form"><h2>Ton</h2>
+      ${SW('soundOn', 'Ton an (in der Fahrt auch mit Taste M)')}
+      ${[['volMaster', 'Gesamtlautstärke'], ['volAmb', 'Umgebung (Wind, Reifen, Natur)'], ['volFx', 'Effekte (Countdown, Tore, Erfolge)']].map(([k, l]) => `<label class="f">${l}: <b id="${k}V">${Math.round(profile[k] * 100)} %</b><input type="range" id="${k}" min="0" max="1" step="0.05" value="${profile[k]}"></label>`).join('')}
+      <div class="row"><button class="btn sm" id="sndTest">Probehören</button></div>
+      <h2 style="margin-top:14px">Trainer-Hinweise</h2>
+      ${SW('tips', 'Tipps zu Kadenz und Fahrweise in Workouts anzeigen')}
+      ${SW('drinkTips', 'Ans Trinken erinnern (alle 15 Minuten)')}
+      ${SW('tripleSkip', 'Dreifach-Klick auf eine Click-Taste überspringt das Intervall')}
+    </div>
+    <div class="card form" id="nasCard"></div>
+  </section>
+  <section class="card form" id="stravaCard"></section>`;
+  nasCard($('#nasCard', el)); stravaCard($('#stravaCard', el));
+  for (const k of ['soundOn', 'tips', 'drinkTips', 'tripleSkip']) $('#' + k, el).onchange = e => { profile[k] = e.target.checked; saveProfile(); sound.apply(); };
+  for (const k of ['volMaster', 'volAmb', 'volFx']) $('#' + k, el).oninput = e => { profile[k] = +e.target.value; $('#' + k + 'V', el).textContent = Math.round(profile[k] * 100) + ' %'; saveProfile(); sound.apply(); };
+  $('#sndTest', el).onclick = () => { sound.unlock(); sound.fanfare(); };
   const num = ['ftp', 'kg', 'hrMax', 'bike', 'circ', 'maxW', 'shotEvery'];
   for (const k of ['name', ...num]) $('#' + k, el).onchange = e => { const v = num.includes(k) ? parseFloat(e.target.value) : e.target.value.trim(); if (num.includes(k) && isNaN(v)) return; if (k === 'ftp' && v !== profile.ftp) profile.ftpHistory = [...(profile.ftpHistory || []), { date: new Date().toISOString(), ftp: v, source: 'manuell' }]; profile[k] = v; saveProfile(); toast('Gespeichert', 1200); };
   $('#cda', el).onchange = e => { profile.cda = +e.target.value; saveProfile(); };
@@ -54,7 +137,7 @@ export async function render(el) {
     sw.onclick = e => { const b = e.target.closest('[data-c]'); if (!b) return; profile[sw.dataset.k] = b.dataset.c; saveProfile(); for (const x of sw.querySelectorAll('[data-c]')) x.setAttribute('aria-pressed', String(x === b)); };
     sw.oninput = e => { if (e.target.type === 'color') { profile[sw.dataset.k] = e.target.value; saveProfile(); } };
   });
-  $('#bk', el).onclick = async () => { download('trittwerk-sicherung-' + new Date().toISOString().slice(0, 10) + '.json', await backup(), 'application/json'); };
+  $('#bk', el).onclick = async () => { download('windschatten-sicherung-' + new Date().toISOString().slice(0, 10) + '.json', await backup(), 'application/json'); };
   $('#rs', el).onchange = async e => { try { await restore(await e.target.files[0].text()); toast('Sicherung eingespielt, App wird neu geladen'); setTimeout(() => location.reload(), 1200); } catch (err) { toast('Fehler: ' + err.message, 5000); } };
   $('#wp', el).onclick = async () => { if (await dialog({ title: 'Alle Daten löschen?', html: '<p>Fahrten, Fotos, Fortschritt, eigene Strecken und Workouts werden unwiderruflich gelöscht.</p>', buttons: [{ label: 'Abbrechen', value: false }, { label: 'Alles löschen', value: true, cls: 'danger' }] })) { await wipe(); location.reload(); } };
 }
