@@ -49,6 +49,18 @@ function labelTex(text, opt = {}) {
     x.fillText(text, w / 2, h / 2 + 2);
   }, false);
 }
+// Fassade mit Fenstern; wird mit der Hausfarbe multipliziert
+function windowTex() {
+  return canvasTex(128, 128, (x, w, h) => {
+    x.fillStyle = '#ffffff'; x.fillRect(0, 0, w, h);
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+      const px = 12 + i * 40, py = 10 + j * 40;
+      x.fillStyle = '#56636f'; x.fillRect(px, py, 24, 26);
+      x.fillStyle = '#e9e3d9'; x.fillRect(px + 11, py, 2, 26); x.fillRect(px, py + 12, 24, 2);
+    }
+    x.fillStyle = '#d6cfc2'; x.fillRect(0, h - 6, w, 6);
+  }, false);
+}
 function cloudTex() {
   return canvasTex(256, 128, (x, w, h) => {
     const r = rng(3);
@@ -202,7 +214,8 @@ export class World {
     this.terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true, map: this.grassTex });
     this.vcMat = new THREE.MeshLambertMaterial({ vertexColors: true });
     this.chunks = new Map(); this.queue = [];
-    this.buildRoad(); this.buildInstances(); this.buildFar(); this.buildClouds(); this.buildProps();
+    this.buildRoad(); this.buildInstances(); this.buildFar(); this.buildClouds(); this.buildProps(); this.buildTunnels();
+    this.npcs = [];
     if (route.water != null) {
       const wm = new THREE.MeshPhongMaterial({ color: 0x1f5f8f, specular: 0x5f8fb8, shininess: 60, transparent: true, opacity: .94 });
       this.water = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), wm); this.water.rotation.x = -Math.PI / 2; this.water.position.y = route.water; this.water.receiveShadow = true; this.scene.add(this.water);
@@ -242,7 +255,52 @@ export class World {
     road.receiveShadow = true; this.scene.add(road);
     const g2 = new THREE.BufferGeometry(); g2.setAttribute('position', new THREE.BufferAttribute(sp, 3)); g2.setAttribute('color', new THREE.BufferAttribute(sc, 3)); g2.setIndex(sidx); g2.computeVertexNormals();
     const sh = new THREE.Mesh(g2, new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 })); sh.receiveShadow = true; this.scene.add(sh);
-    this.roadMeshes = [road, sh];
+    // Steigungsband am Straßenrand: Farbe zeigt die Steigung (blau bergab, grün flach, gelb, orange, rot steil)
+    const gb = new Float32Array((N + 1) * 4 * 3), gcol = new Float32Array((N + 1) * 4 * 3), gidx = [];
+    const gc = g => col(g > 8 ? '#ef4458' : g > 5 ? '#ff8a3d' : g > 2.5 ? '#f5c542' : g > -1.5 ? '#4fd18b' : '#3fa7f5');
+    for (let i = 0; i <= N; i++) {
+      const h = R.head[i], rx = Math.cos(h), rz = Math.sin(h), x = R.x[i], z = R.z[i], y = R.e[i] + .11, c = gc(R.grade[i]);
+      gb.set([x - rx * (W + .5), y - .08, z - rz * (W + .5), x - rx * (W + .02), y, z - rz * (W + .02), x + rx * (W + .02), y, z + rz * (W + .02), x + rx * (W + .5), y - .08, z + rz * (W + .5)], i * 12);
+      for (let k = 0; k < 4; k++) gcol.set([c.r, c.g, c.b], i * 12 + k * 3);
+    }
+    for (let i = 0; i < N; i++) { const s = i * 4, t = s + 4; gidx.push(s, s + 1, t, s + 1, t + 1, t, s + 2, s + 3, t + 2, s + 3, t + 3, t + 2); }
+    const g3 = new THREE.BufferGeometry(); g3.setAttribute('position', new THREE.BufferAttribute(gb, 3)); g3.setAttribute('color', new THREE.BufferAttribute(gcol, 3)); g3.setIndex(gidx);
+    const band = new THREE.Mesh(g3, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -6 }));
+    this.scene.add(band);
+    this.roadMeshes = [road, sh, band];
+  }
+
+  /* Tunnel: Gewölbe entlang der Straße, Portale, Lampen */
+  buildTunnels() {
+    const R = this.route; if (!R.tunnels.length) return;
+    const SEG = 12, HW = 5.6, HH = 6.4;
+    const mat = new THREE.MeshLambertMaterial({ color: 0x77736c, side: THREE.DoubleSide });
+    const lampM = new THREE.MeshBasicMaterial({ color: 0xffe3a0 });
+    const portalM = new THREE.MeshLambertMaterial({ color: 0x9a948a });
+    for (const t of R.tunnels) {
+      const a = t.from - 32, b = t.to + 32, n = Math.max(2, Math.round((b - a) / 4));
+      const pos = [], idx = [];
+      for (let i = 0; i <= n; i++) {
+        const d = a + (b - a) * i / n, h = R.headAt(d), rx = Math.cos(h), rz = Math.sin(h), x = R.xAt(d), z = R.zAt(d), y = R.eleAt(d);
+        for (let k = 0; k <= SEG; k++) { const ang = Math.PI * k / SEG, lx = -Math.cos(ang) * HW, ly = Math.sin(ang) * HH - .3; pos.push(x + rx * lx, y + ly, z + rz * lx); }
+        if (i < n) for (let k = 0; k < SEG; k++) { const p = i * (SEG + 1) + k, q = p + SEG + 1; idx.push(p, q, p + 1, p + 1, q, q + 1); }
+      }
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+      const tube = new THREE.Mesh(g, mat); tube.castShadow = true; tube.receiveShadow = true; this.scene.add(tube);
+      // Lampen an der Decke
+      const cnt = Math.floor((b - a) / 18), lamps = new THREE.InstancedMesh(new THREE.BoxGeometry(.5, .12, 1.6), lampM, cnt), m = new THREE.Matrix4();
+      for (let k = 0; k < cnt; k++) { const d = a + 9 + k * 18, h = R.headAt(d); m.makeRotationY(-h); m.setPosition(R.xAt(d), R.eleAt(d) + HH - .45, R.zAt(d)); lamps.setMatrixAt(k, m); }
+      this.scene.add(lamps);
+      // Portale
+      for (const [d, dir] of [[a, 1], [b, -1]]) {
+        const grp = new THREE.Group(), h = R.headAt(d); grp.position.set(R.xAt(d), R.eleAt(d), R.zAt(d)); grp.rotation.y = -h;
+        for (const s of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(3, 9, 1.4), portalM); p.position.set(s * (HW + 1.4), 4.2, 0); p.castShadow = true; grp.add(p); }
+        const top = new THREE.Mesh(new THREE.BoxGeometry(HW * 2 + 5.8, 2.6, 1.4), portalM); top.position.y = HH + 1; top.castShadow = true; grp.add(top);
+        const sign = new THREE.Mesh(new THREE.PlaneGeometry(5, .9), new THREE.MeshBasicMaterial({ map: labelTex('TUNNEL ' +Math.round(t.to - t.from) + ' m', { w: 512, h: 90, size: 52, bg: '#f2f2f2', fg: '#1b1e22' }) }));
+        sign.position.set(0, HH + 1, dir * .72); if (dir < 0) sign.rotation.y = Math.PI; grp.add(sign);
+        this.scene.add(grp);
+      }
+    }
   }
 
   /* Leitpfosten, Kilometersteine, Start/Ziel, Anstiegsbanner */
@@ -272,6 +330,82 @@ export class World {
     arch(8, R.loop ? 'START · ZIEL' : 'START', { bg: '#ffffff', fg: '#111', checker: true });
     if (!R.loop) arch(R.total - 6, 'ZIEL', { bg: '#ffffff', fg: '#111', checker: true });
     for (const c of R.climbs) { arch(c.from, c.name.toUpperCase(), { bg: '#c8102e', fg: '#fff' }); arch(c.to, 'GIPFEL ' + c.name.toUpperCase(), { bg: '#ffffff', fg: '#c8102e', border: '#c8102e' }); }
+    for (const s of R.sprints) { arch(s.from, s.name.toUpperCase(), { bg: '#2f9e57', fg: '#fff' }); arch(s.to, 'SPRINT ENDE', { bg: '#ffffff', fg: '#2f9e57', border: '#2f9e57' }); }
+    // Steigungsschilder an Anstiegen: alle 500 m mit Steigung des nächsten Abschnitts
+    const signMat = new THREE.MeshLambertMaterial({ color: 0x9aa1a8 });
+    for (const c of R.climbs) for (let d = c.from + 20; d < c.to - 150; d += 500) {
+      const end = Math.min(c.to, d + 500), g = (R.eleAt(end) - R.eleAt(d)) / (end - d) * 100, left = (c.to - d) / 1000;
+      const grp = new THREE.Group(), p = at(d, -5.8); grp.position.copy(p); grp.rotation.y = -R.headAt(d);
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, 2.2, 6), signMat); post.position.y = 1.1; grp.add(post);
+      const bg = g > 8 ? '#ef4458' : g > 5 ? '#ff8a3d' : '#f5c542';
+      const pl = new THREE.Mesh(new THREE.PlaneGeometry(1.3, .9), new THREE.MeshBasicMaterial({ map: labelTex(`▲ ${g.toFixed(0)} %`, { w: 256, h: 176, size: 70, bg, fg: '#111', border: '#111' }) }));
+      pl.position.set(0, 2.4, .04); grp.add(pl);
+      const pl2 = new THREE.Mesh(new THREE.PlaneGeometry(1.3, .4), new THREE.MeshBasicMaterial({ map: labelTex(`noch ${left.toFixed(1).replace('.', ',')} km`, { w: 256, h: 80, size: 40, bg: '#fff', fg: '#111' }) }));
+      pl2.position.set(0, 1.75, .04); grp.add(pl2);
+      this.scene.add(grp);
+    }
+    // Ortschaften: Ortstafeln, Laternen, Kirchturm
+    const lampPole = new THREE.MeshLambertMaterial({ color: 0x3a3f45 }), lampHead = new THREE.MeshBasicMaterial({ color: 0xfff1c4 });
+    for (const t of R.towns) {
+      for (const [d, txt, back] of [[t.from - 15, t.name, false], [t.to + 15, t.name, true]]) {
+        const grp = new THREE.Group(), p = at(d, 5.9); grp.position.copy(p); grp.rotation.y = -R.headAt(d);
+        for (const s of [-.55, .55]) { const post = new THREE.Mesh(new THREE.CylinderGeometry(.04, .04, 2, 6), signMat); post.position.set(s, 1, 0); grp.add(post); }
+        const pl = new THREE.Mesh(new THREE.PlaneGeometry(1.6, .8), new THREE.MeshBasicMaterial({ map: labelTex(txt, { w: 320, h: 160, size: txt.length > 10 ? 40 : 54, bg: '#ffd23f', fg: '#111', border: '#111' }) }));
+        pl.position.set(0, 1.9, .03); grp.add(pl);
+        if (back) { const bar = new THREE.Mesh(new THREE.PlaneGeometry(1.7, .08), new THREE.MeshBasicMaterial({ color: 0xc8102e })); bar.position.set(0, 1.9, .04); bar.rotation.z = -.42; grp.add(bar); }
+        this.scene.add(grp);
+      }
+      const n = Math.floor((t.to - t.from) / 40), poles = new THREE.InstancedMesh(new THREE.CylinderGeometry(.07, .09, 5, 6).translate(0, 2.5, 0), lampPole, n), heads = new THREE.InstancedMesh(new THREE.BoxGeometry(.9, .14, .3), lampHead, n), m = new THREE.Matrix4();
+      for (let k = 0; k < n; k++) { const d = t.from + 20 + k * 40, s = k % 2 ? 1 : -1, p = at(d, s * 5.2, -.1); m.makeRotationY(-R.headAt(d)); m.setPosition(p); poles.setMatrixAt(k, m); m.setPosition(at(d, s * 4.7, 4.95)); heads.setMatrixAt(k, m); }
+      poles.castShadow = true; this.scene.add(poles, heads);
+      // Kirchturm in der Ortsmitte
+      const dm = (t.from + t.to) / 2, side = R.tunnelAt(dm) ? 0 : 1, cp = at(dm, side * 26, -.5);
+      cp.y = R.heightAt(cp.x, cp.z) - .5;
+      const tower = new THREE.Group(); tower.position.copy(cp); tower.rotation.y = -R.headAt(dm);
+      const body = new THREE.Mesh(new THREE.BoxGeometry(4.5, 20, 4.5), new THREE.MeshLambertMaterial({ color: 0xf1ebdf })); body.position.y = 10; body.castShadow = true; tower.add(body);
+      const spire = new THREE.Mesh(new THREE.ConeGeometry(3.4, 9, 4), new THREE.MeshLambertMaterial({ color: 0x4f6a5a })); spire.position.y = 24.5; spire.rotation.y = Math.PI / 4; spire.castShadow = true; tower.add(spire);
+      const clock = new THREE.Mesh(new THREE.CircleGeometry(1, 20), new THREE.MeshBasicMaterial({ color: 0xffffff })); clock.position.set(0, 16, 2.26); tower.add(clock);
+      const nave = new THREE.Mesh(new THREE.BoxGeometry(9, 8, 16), new THREE.MeshLambertMaterial({ color: 0xece4d6 })); nave.position.set(0, 4, -10); nave.castShadow = true; tower.add(nave);
+      const roofM = new THREE.MeshLambertMaterial({ color: 0x8b3a2b });
+      for (const s of [-1, 1]) { const rf = new THREE.Mesh(new THREE.BoxGeometry(5.6, .3, 16.6), roofM); rf.position.set(s * 2.3, 9.6, -10); rf.rotation.z = -s * .62; rf.castShadow = true; tower.add(rf); }
+      this.scene.add(tower);
+    }
+    // Küste: Leuchtturm und Segelboote auf dem Meer
+    if (R.theme.coast && R.water != null) {
+      const dl = R.total * .55, h = R.headAt(dl), side = R.theme.coast;
+      const lx = R.xAt(dl) - Math.cos(h) * side * 34, lz = R.zAt(dl) - Math.sin(h) * side * 34;
+      const lh = new THREE.Group(); lh.position.set(lx, Math.max(R.heightAt(lx, lz), R.water + .5), lz);
+      for (let k = 0; k < 5; k++) { const seg = new THREE.Mesh(new THREE.CylinderGeometry(2.1 - k * .18, 2.3 - k * .18, 4, 16), new THREE.MeshLambertMaterial({ color: k % 2 ? 0xc8102e : 0xffffff })); seg.position.y = 2 + k * 4; seg.castShadow = true; lh.add(seg); }
+      const lamp = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 2, 12), new THREE.MeshBasicMaterial({ color: 0xfff5b0 })); lamp.position.y = 21; lh.add(lamp);
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(1.7, 2, 12), new THREE.MeshLambertMaterial({ color: 0x2b2f35 })); cap.position.y = 23; lh.add(cap);
+      this.scene.add(lh);
+      const r = rng(77); this.boats = [];
+      const hullM = new THREE.MeshLambertMaterial({ color: 0xf4f4f0 }), sailM = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+      for (let k = 0; k < 14; k++) {
+        const d = r() * R.total, hh = R.headAt(d), off = (120 + r() * 700) * side;
+        const bx = R.xAt(d) - Math.cos(hh) * off, bz = R.zAt(d) - Math.sin(hh) * off;
+        if (R.heightAt(bx, bz) > R.water - 1) continue;
+        const b = new THREE.Group(); b.position.set(bx, R.water, bz); b.rotation.y = r() * 6.28;
+        const hull = new THREE.Mesh(new THREE.BoxGeometry(2.2, .9, 7).translate(0, .2, 0), hullM); b.add(hull);
+        const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute([0, .7, -2.5, 0, 9, -.3, 0, .7, 2.4], 3)); sg.computeVertexNormals();
+        b.add(new THREE.Mesh(sg, k % 3 ? sailM : new THREE.MeshLambertMaterial({ color: 0xff6a3d, side: THREE.DoubleSide })));
+        b.userData = { ph: r() * 6 }; this.scene.add(b); this.boats.push(b);
+      }
+    }
+    // Intervall-Zieltor (wird bei Bedarf positioniert)
+    const gate = this.gate = new THREE.Group(); gate.visible = false;
+    const gm = new THREE.MeshLambertMaterial({ color: 0x1b1e22 });
+    for (const s of [-1, 1]) { const pole = new THREE.Mesh(new THREE.BoxGeometry(.5, 6.2, .5), gm); pole.position.set(s * 5.1, 3.1, 0); pole.castShadow = true; gate.add(pole); }
+    this.gateMat = new THREE.MeshBasicMaterial({ map: labelTex('INTERVALL', { w: 512, h: 96, size: 54, bg: '#ff6a3d', fg: '#111' }), side: THREE.DoubleSide });
+    const gb = new THREE.Mesh(new THREE.PlaneGeometry(10.6, 1.8), this.gateMat); gb.position.y = 5.6; gate.add(gb);
+    this.gateRing = new THREE.Mesh(new THREE.PlaneGeometry(10.2, .25), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .9 })); this.gateRing.position.y = .25; this.gateRing.rotation.x = -Math.PI / 2; gate.add(this.gateRing);
+    this.scene.add(gate);
+  }
+  setGate(d, text, color = '#ff6a3d') {
+    if (d == null) { this.gate.visible = false; this.gateKey = null; return; }
+    const key = text + color;
+    if (key !== this.gateKey) { this.gateKey = key; this.gateMat.map?.dispose(); this.gateMat.map = labelTex(text, { w: 512, h: 96, size: text.length > 16 ? 40 : 54, bg: color, fg: '#111' }); this.gateMat.needsUpdate = true; }
+    const R = this.route, h = R.headAt(d); this.gate.position.set(R.xAt(d), R.eleAt(d) + .05, R.zAt(d)); this.gate.rotation.y = -h; this.gate.visible = true;
   }
 
   /* Instanzen für Bäume, Felsen, Häuser, Grasbüschel */
@@ -281,8 +415,8 @@ export class World {
     this.inst = {
       conifer: mk(coniferGeo(), this.vcMat, cap), leafy: mk(leafyGeo(), this.vcMat, cap),
       rock: mk(rockGeo(), this.vcMat, 1500), tuft: mk(tuftGeo(), this.vcMat, 24000, false),
-      wall: mk(new THREE.BoxGeometry(1, 1, 1).translate(0, .5, 0), new THREE.MeshLambertMaterial({ color: 0xffffff }), 600),
-      roof: mk(new THREE.CylinderGeometry(.62, .62, 1, 3, 1).rotateZ(Math.PI / 2).rotateX(Math.PI / 2).scale(1, .5, 1).translate(0, .25, 0), new THREE.MeshLambertMaterial({ color: 0xffffff }), 600),
+      wall: mk(new THREE.BoxGeometry(1, 1, 1).translate(0, .5, 0), new THREE.MeshLambertMaterial({ map: windowTex() }), 2000),
+      roof: mk(new THREE.CylinderGeometry(.62, .62, 1, 3, 1).rotateZ(Math.PI / 2).rotateX(Math.PI / 2).scale(1, .5, 1).translate(0, .25, 0), new THREE.MeshLambertMaterial({ color: 0xffffff }), 2000),
     };
     for (const k of ['wall', 'roof', 'leafy', 'conifer']) this.inst[k].instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(this.inst[k].instanceMatrix.count * 3).fill(1), 3);
   }
@@ -344,6 +478,7 @@ export class World {
     for (let t = 0; t < tries; t++) {
       const x = x0 + r() * CHUNK, z = z0 + r() * CHUNK, nn = R.nearest(x, z), dist = nn ? nn.dist : 999;
       if (dist < 9) continue;
+      if (nn && dist < 60 && R.townAt(nn.i * R.step)) continue;
       const y = R.heightAt(x, z);
       if (R.water != null && y < R.water + 1.5) continue;
       if (y > treeline) continue;
@@ -370,6 +505,21 @@ export class World {
       const y = R.heightAt(x, z); if (R.water != null && y < R.water + 1.5) continue;
       const h = R.head[nn.i];
       objs.house.push([x, y - .3, z, 7 + r() * 5, -h + (r() < .5 ? 0 : Math.PI / 2), 5 + r() * 3, 8 + r() * 6, (r() * 4) | 0]);
+    }
+    // Ortschaften: dichte Bebauung direkt an der Straße, mehrstöckig
+    if (R.towns.length) {
+      const placed = [];
+      for (let t = 0; t < 260; t++) {
+        const x = x0 + r() * CHUNK, z = z0 + r() * CHUNK, nn = R.nearest(x, z);
+        if (!nn || nn.dist < 10 || nn.dist > 48 || !R.townAt(nn.i * R.step) || R.tunnelAt(nn.i * R.step, 40)) continue;
+        if (placed.some(p => (p[0] - x) ** 2 + (p[1] - z) ** 2 < 150)) continue;
+        const near = nn.dist < 24, w = near ? 7 + r() * 4 : 8 + r() * 5, dd = near ? 8 + r() * 3 : 8 + r() * 6;
+        // Abstand der Hauskante zur Straße einhalten
+        if (nn.dist - Math.max(w, dd) / 2 < 7.5) continue;
+        placed.push([x, z]);
+        const y = R.heightAt(x, z), h = R.head[nn.i];
+        objs.house.push([x, y - .4, z, w, -h, near ? 7 + r() * 8 : 5 + r() * 4, dd, (r() * 4) | 0]);
+      }
     }
     return { mesh, objs };
   }
@@ -405,7 +555,7 @@ export class World {
         }
       }
       for (const o of ch.objs.house) {
-        if (cnt.wall >= 600) break;
+        if (cnt.wall >= this.inst.wall.instanceMatrix.count) break;
         q.setFromAxisAngle(up, o[4]); s.set(o[3], o[5], o[6]); p.set(o[0], o[1], o[2]); m.compose(p, q, s); this.inst.wall.setMatrixAt(cnt.wall, m); this.inst.wall.setColorAt(cnt.wall, wallCols[o[7]]);
         s.set(o[3] * 1.12, o[3] * .55, o[6] * 1.08); p.set(o[0], o[1] + o[5], o[2]); m.compose(p, q, s); this.inst.roof.setMatrixAt(cnt.roof, m); this.inst.roof.setColorAt(cnt.roof, roofCols[o[7]]);
         cnt.wall++; cnt.roof++;
@@ -419,8 +569,20 @@ export class World {
     if (on && !this.pacer) { this.pacer = new Rider({ jersey: '#7b4fd6', bikeColor: '#222831', helmet: '#7b4fd6', skin: '#c99272' }); this.scene.add(this.pacer.root); }
     if (!on && this.pacer) { this.scene.remove(this.pacer.root); this.pacer = null; }
   }
+  // Mitfahrer: Liste von { jersey, bikeColor, helmet, skin, name }
+  setRiders(list) {
+    for (const n of this.npcs) { this.scene.remove(n.rider.root); }
+    this.npcs = list.map(c => {
+      const rider = new Rider(c); rider.root.visible = false; this.scene.add(rider.root);
+      const lab = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex(c.name, { w: 256, h: 56, size: 34, bg: c.jersey, fg: '#fff' }), depthWrite: false, transparent: true, opacity: .92 }));
+      lab.scale.set(1.1, .24, 1); lab.position.set(0, 2.05, 0); rider.root.add(lab);
+      return { rider, lab };
+    });
+  }
   setColors(p) { this.rider.setColors(p); }
   cycleView() { this.view = (this.view + 1) % 5; this.camInit = false; return this.view; }
+  // Kurzer Kameraschwenk (z. B. am Zieltor), danach zurück zur gewählten Ansicht
+  cinematic(sec = 3, view = 2) { this.cine = { until: performance.now() + sec * 1000, view }; this.camInit = false; }
 
   // Position auf der Strecke mit Seitenversatz
   place(obj, d, lat) {
@@ -433,20 +595,40 @@ export class World {
     this.place(this.rider.root, d, 1.5); this.rider.root.visible = this.view !== 4;
     this.rider.update(st.crank, st.v, dt, R.gradeAt(d));
     if (this.pacer && st.pacerDist != null) { this.place(this.pacer.root, st.pacerDist, .6); this.pacer.update(st.pacerCrank, st.pacerV, dt, R.gradeAt(st.pacerDist)); }
+    // Mitfahrer
+    if (st.npcs) st.npcs.forEach((n, i) => {
+      const o = this.npcs[i]; if (!o) return;
+      let gap = n.d - d; if (R.loop) { if (gap > R.total / 2) gap -= R.total; if (gap < -R.total / 2) gap += R.total; }
+      const vis = Math.abs(gap) < (this.qKey === 'low' ? 90 : 170);
+      o.rider.root.visible = vis; if (!vis) return;
+      this.place(o.rider.root, n.d, n.lat); o.rider.update(n.crank, n.v, dt, R.gradeAt(n.d));
+      o.lab.visible = gap > 7 && gap < 45 && this.view !== 3;
+    });
+    // Boote schaukeln
+    if (this.boats) { const t = performance.now() / 1000; for (const b of this.boats) { b.rotation.z = Math.sin(t * .9 + b.userData.ph) * .06; b.position.y = R.water + Math.sin(t * .7 + b.userData.ph) * .15; } }
+    if (this.gate?.visible) this.gateRing.material.opacity = .55 + .4 * Math.sin(performance.now() / 160);
+    // Im Tunnel: dunkler, Kamera bleibt hinter dem Fahrer
+    const inTun = !!R.tunnelAt(d, 25);
+    const expo = inTun ? .62 : 1.05; this.renderer.toneMappingExposure += (expo - this.renderer.toneMappingExposure) * Math.min(1, dt * 2.5);
+    if (this.cine && performance.now() > this.cine.until) { this.cine = null; this.camInit = false; }
+    let view = this.cine ? this.cine.view : this.view;
+    if (inTun && view !== 4) view = 0;
+    this.rider.root.visible = view !== 4;
     // Kamera
     const rp = this.rider.root.position, h = R.headAt(d);
     const fwd = new THREE.Vector3(Math.sin(h), 0, -Math.cos(h)), right = new THREE.Vector3(Math.cos(h), 0, Math.sin(h));
     const pt = (dd, lat, up) => { const hh = R.headAt(dd); return new THREE.Vector3(R.xAt(dd) + Math.cos(hh) * lat, R.eleAt(dd) + up, R.zAt(dd) + Math.sin(hh) * lat); };
     let cp, look;
-    switch (this.view) {
+    switch (view) {
+      case 5: cp = pt(d + 9, -2.2, 1.4); look = pt(d - 1, 1.5, 1.1); break;
       case 0: cp = pt(d - 5.2, 1.3, 2.05); look = pt(d + 7, 1.4, 1.05); break;
       case 1: cp = pt(d - 12, 1.2, 4.8); look = pt(d + 12, 1.4, .8); break;
       case 2: cp = rp.clone().addScaledVector(right, 4.2).addScaledVector(fwd, 1.2).add(new THREE.Vector3(0, 1.3, 0)); look = rp.clone().add(new THREE.Vector3(0, .9, 0)); break;
       case 3: cp = pt(d - 26, 1.5, 32); look = pt(d + 18, 1.5, 0); break;
       default: cp = pt(d + .2, 1.5, 1.62); look = pt(d + 30, 1.5, 1.2); break;
     }
-    const ground = R.heightAt(cp.x, cp.z) + .8; if (cp.y < ground) cp.y = ground;
-    const k = this.camInit ? 1 - Math.pow(this.view === 4 ? .0001 : .02, dt) : 1;
+    if (!inTun) { const ground = R.heightAt(cp.x, cp.z) + .8; if (cp.y < ground) cp.y = ground; }
+    const k = this.camInit ? 1 - Math.pow(view === 4 ? .0001 : .02, dt) : 1;
     this.camPos.lerp(cp, k); this.camLook.lerp(look, k); this.camInit = true;
     this.camera.position.copy(this.camPos); this.camera.lookAt(this.camLook);
     // Umgebung mitführen

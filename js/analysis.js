@@ -79,12 +79,21 @@ export const BADGES = [
   { id: 'wkg4', name: 'Kraftpaket', desc: '20 Minuten über 4 W/kg', test: s => (s.curve[1200] || 0) / s.kg >= 4 },
   { id: 'kj1000', name: 'Ofen an', desc: '1000 kJ in einer Fahrt', test: s => s.kj >= 1000 },
   { id: 'streak', name: 'Dranbleiben', desc: 'An 3 Tagen in Folge gefahren', test: (s, t) => t.streak >= 3 },
+  { id: 'streak7', name: 'Eiserne Woche', desc: 'An 7 Tagen in Folge gefahren', test: (s, t) => t.streak >= 7 },
+  { id: 'wo10', name: 'Trainingsweltmeister', desc: '10 Workouts vollständig beendet', test: (s, t) => t.workouts >= 10 },
+  { id: 'plan1', name: 'Planerfüller', desc: 'Einen ganzen Trainingsplan abgeschlossen', test: (s, t, x) => x.planFinished },
+  { id: 'gf', name: 'Gran Fondista', desc: 'Den Gran-Fondo-Plan abgeschlossen', test: (s, t, x) => x.planFinished === 'gf' },
+  { id: 'pass50', name: 'Überholspur', desc: '50 Fahrer in einer Fahrt überholt', test: (s, t, x) => (x.overtakes || 0) >= 50 },
+  { id: 'sprint', name: 'Sprinter', desc: 'Eine Sprintwertung gefahren', test: (s, t, x) => x.sprints > 0 },
+  { id: 'mission', name: 'Auftrag erfüllt', desc: 'Alle drei Wochenmissionen geschafft', test: (s, t, x) => x.allMissions },
+  { id: 'early', name: 'Frühaufsteher', desc: 'Eine Fahrt vor 7 Uhr begonnen', test: (s, t, x) => x.hour < 7 },
+  { id: 'night', name: 'Nachteule', desc: 'Eine Fahrt nach 21 Uhr begonnen', test: (s, t, x) => x.hour >= 21 },
 ];
 
 export function totals(rides) {
-  const t = { rides: rides.length, dist: 0, dur: 0, asc: 0, kj: 0, streak: 0 };
+  const t = { rides: rides.length, dist: 0, dur: 0, asc: 0, kj: 0, streak: 0, workouts: 0 };
   const days = new Set();
-  for (const r of rides) { t.dist += r.sum.dist; t.dur += r.sum.dur; t.asc += r.sum.asc; t.kj += r.sum.kj; days.add(r.date.slice(0, 10)); }
+  for (const r of rides) { if (r.workoutDone) t.workouts++; t.dist += r.sum.dist; t.dur += r.sum.dur; t.asc += r.sum.asc; t.kj += r.sum.kj; days.add(r.date.slice(0, 10)); }
   let st = 0, d = new Date(); d.setHours(12);
   if (!days.has(d.toISOString().slice(0, 10))) d.setDate(d.getDate() - 1);
   while (days.has(d.toISOString().slice(0, 10))) { st++; d.setDate(d.getDate() - 1); }

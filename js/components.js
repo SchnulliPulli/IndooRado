@@ -2,6 +2,12 @@
 import { esc, bus, fmtKm, fmtDur, fmtDate, fmtT } from './util.js';
 import { KINDS, status, devs, connect, disconnect, support, demo, setDemo, reconnectKnown, click } from './ble.js';
 import { live, levelOf, progress } from './state.js';
+import { titleOf } from './game.js';
+
+// Karte der Wochenmissionen
+export function missionCard(ms) {
+  return `<div class="missions">${ms.map(m => `<div class="mission ${m.done ? 'done' : ''}"><span class="mi">${m.done ? '✅' : m.icon}</span><div style="flex:1"><div class="row between small"><b>${esc(m.text)}</b><span class="muted num">+${m.xp} XP</span></div><div class="bar"><i style="width:${(m.frac * 100).toFixed(1)}%"></i></div><div class="small muted num">${Math.floor(Math.min(m.v, m.goal))} / ${m.goal}</div></div></div>`).join('')}</div>`;
+}
 
 export const ICON = {
   trainer: '<svg viewBox="0 0 24 24"><circle cx="7" cy="16" r="4"/><path d="M7 16 12 7h5M12 7l4 9M15 4h3"/><path d="M14 16h6l1 4H11z"/></svg>',
@@ -11,6 +17,7 @@ export const ICON = {
   home: '<svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/></svg>',
   ride: '<svg viewBox="0 0 24 24"><circle cx="6" cy="17" r="3.5"/><circle cx="18" cy="17" r="3.5"/><path d="m6 17 4-8h5l3 8M10 9 9 6H7M15 9l-3 8"/></svg>',
   workout: '<svg viewBox="0 0 24 24"><path d="M3 20V14h3v6M8 20V9h3v11M13 20v-8h3v8M18 20V5h3v15"/></svg>',
+  plan: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4M8 14l2 2 4-4"/></svg>',
   route: '<svg viewBox="0 0 24 24"><path d="M3 19c4-1 3-6 7-6s3 5 7 4 3-8 4-10"/><circle cx="3" cy="19" r="1.5"/><circle cx="21" cy="7" r="1.5"/></svg>',
   history: '<svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 3-6.2"/><path d="M4 4v4h4M12 8v4l3 2"/></svg>',
   progress: '<svg viewBox="0 0 24 24"><path d="M4 19h16"/><path d="m5 15 4-4 3 3 7-7"/><path d="M15 7h4v4"/></svg>',
@@ -79,7 +86,7 @@ export function deviceCards(el) {
 
 export function levelBar() {
   const L = levelOf(progress.xp);
-  return `<div class="level"><div class="lvbadge">${L.lv}</div><div style="flex:1"><div class="row between small"><span>Level ${L.lv}</span><span class="muted">${progress.xp - L.lo} / ${L.hi - L.lo} XP</span></div><div class="bar"><i style="width:${(L.frac * 100).toFixed(1)}%"></i></div></div></div>`;
+  return `<div class="level"><div class="lvbadge">${L.lv}</div><div style="flex:1"><div class="row between small"><span>Level ${L.lv} · <b>${titleOf(L.lv)}</b></span><span class="muted">${progress.xp - L.lo} / ${L.hi - L.lo} XP</span></div><div class="bar"><i style="width:${(L.frac * 100).toFixed(1)}%"></i></div></div></div>`;
 }
 
 export function rideRow(r) {

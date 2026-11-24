@@ -7,7 +7,10 @@ const ss = (dur, p, text) => ({ dur, a: p, b: p, text });
 const ramp = (dur, a, b, text) => ({ dur, a, b, text });
 const free = (dur, text) => ({ dur, a: null, b: null, text });
 const rep = (n, ...segs) => Array.from({ length: n }, () => segs).flat();
-const W = (id, name, cat, desc, segs, extra = {}) => ({ id, name, cat, desc, segs, builtin: true, ...extra });
+export const WB = { ss, ramp, free, rep };
+// Workouts aus Trainingsplänen (plans.js trägt sie hier ein)
+export const EXTRA_W = new Map();
+const W =(id, name, cat, desc, segs, extra = {}) => ({ id, name, cat, desc, segs, builtin: true, ...extra });
 
 export const BUILTIN_W = [
   W('w-easy', 'Lockere Grundlage', 'Ausdauer', '45 Minuten ruhig in Zone 2. Fördert den Fettstoffwechsel und erholt aktiv.', [ramp(300, .45, .62, 'Einrollen'), ss(2100, .65), ramp(300, .6, .4, 'Ausrollen')]),
@@ -30,7 +33,7 @@ export async function listWorkouts() {
   const own = (await db.all('workouts')).sort((a, b) => (b.created || '').localeCompare(a.created || ''));
   return [...BUILTIN_W, ...own];
 }
-export async function getWorkout(id) { if (!id) return null; return BUILTIN_W.find(w => w.id === id) || await db.get('workouts', id); }
+export async function getWorkout(id) { if (!id) return null; return BUILTIN_W.find(w => w.id === id) || EXTRA_W.get(id) || await db.get('workouts', id); }
 export const saveWorkout = w => db.put('workouts', w);
 export const deleteWorkout = id => db.del('workouts', id);
 

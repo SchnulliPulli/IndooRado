@@ -24,13 +24,16 @@ export async function render(el, [id], query) {
       <div class="cel-xp"><b class="num">+${ride.xp}</b><span>XP</span></div>
       <div style="flex:1">${ride.lvAfter > ride.lvBefore ? `<div class="lvup">Level ${ride.lvAfter} erreicht!</div>` : ''}${levelBar()}
       ${ride.newBadges.length ? `<div class="badges-new">${ride.newBadges.map(b => { const B = BADGES.find(x => x.id === b); return `<span class="badge on">${ICON.trophy}${esc(B.name)}</span>`; }).join('')}</div>` : ''}
-      ${ride.prs.length || ride.climbs.some(c => c.pr) ? `<div class="small" style="margin-top:6px">Neue Bestwerte: ${[...ride.prs.map(curveLabel), ...ride.climbs.filter(c => c.pr).map(c => c.name)].map(esc).join(', ')}</div>` : ''}</div>
+      ${ride.prs.length || ride.climbs.some(c => c.pr) ? `<div class="small" style="margin-top:6px">Neue Bestwerte: ${[...ride.prs.map(curveLabel), ...ride.climbs.filter(c => c.pr).map(c => c.name)].map(esc).join(', ')}</div>` : ''}
+      ${ride.xpParts?.length > 1 ? `<div class="xpparts small">${ride.xpParts.map(([l, v]) => `<span>${esc(l)} <b class="num">+${v}</b></span>`).join('')}</div>` : ''}
+      ${ride.plan ? `<div class="small" style="margin-top:6px">📅 Trainingsplan ${esc(ride.plan.name)}: ${ride.plan.finished ? '<b>komplett abgeschlossen!</b>' : 'Einheit abgehakt.'} <a href="#/plans">Zum Plan</a></div>` : ''}
+      ${ride.overtakes ? `<div class="small muted" style="margin-top:4px">${ride.overtakes} Fahrer überholt</div>` : ''}</div>
     </section>` : ''}
   <section class="sumhead">
     <div><div class="small muted">${fmtDate(ride.date, { dateStyle: 'full', timeStyle: 'short' })}</div><h1 id="title">${esc(ride.title)}</h1>
       <div class="small muted">${esc(ride.routeName)}${ride.laps ? ` · ${ride.laps + 1} Runden` : ''} · Widerstand: ${{ gear: 'virtuelle Gänge', sim: 'Steigung', erg: 'ERG' }[ride.mode] || ride.mode} · FTP ${ride.ftpUsed} W</div></div>
     <div class="row">
-      <button class="btn sm" id="eFit">FIT</button><button class="btn sm" id="eTcx">TCX</button><button class="btn sm ghost" id="eRen">Umbenennen</button><button class="btn sm ghost danger" id="eDel">Löschen</button>
+      <button class="btn sm pri" id="eStrava" title="FIT-Datei speichern und Strava-Upload öffnen">Zu Strava</button><button class="btn sm" id="eFit">FIT</button><button class="btn sm" id="eTcx">TCX</button><button class="btn sm ghost" id="eRen">Umbenennen</button><button class="btn sm ghost danger" id="eDel">Löschen</button>
     </div>
   </section>
   ${ride.test ? `<section class="card testbox"><h2>${esc(ride.test.type)}: neue FTP ${ride.test.ftp} W</h2><p class="muted">${esc(ride.test.basis)}. Aktuell eingetragen: ${profile.ftp} W.</p>${ride.test.ftp !== profile.ftp ? '<button class="btn pri" id="ftpApply">FTP übernehmen</button>' : '<p>Bereits übernommen.</p>'}</section>` : ''}
@@ -81,6 +84,11 @@ export async function render(el, [id], query) {
 
   // Aktionen
   $('#eFit', el).onclick = () => download(fileBase(ride) + '.fit', new Blob([toFit(ride)], { type: 'application/vnd.ant.fit' }));
+  $('#eStrava', el).onclick = async () => {
+    download(fileBase(ride) + '.fit', new Blob([toFit(ride)], { type: 'application/vnd.ant.fit' }));
+    await dialog({ title: 'Bei Strava hochladen', html: '<p>Die FIT-Datei wurde gespeichert. Auf der Strava-Seite „Datei auswählen“ klicken und die Datei aus den Downloads wählen. Leistung, Puls, Kadenz und Strecke werden übernommen.</p>', buttons: [{ label: 'Strava öffnen', value: true, cls: 'pri' }] });
+    window.open('https://www.strava.com/upload/select', '_blank', 'noopener');
+  };
   $('#eTcx', el).onclick = () => download(fileBase(ride) + '.tcx', toTcx(ride), 'application/vnd.garmin.tcx+xml');
   $('#eRen', el).onclick = async () => {
     let val = ride.title;

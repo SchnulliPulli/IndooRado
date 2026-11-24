@@ -4,13 +4,14 @@ import { loadState } from './state.js';
 import { loadClickMap, setDemo, status, support, reconnectKnown } from './ble.js';
 import { kv, persist } from './db.js';
 import { ICON } from './components.js';
+import { loadPlan } from './plans.js';
 
 const PAGES = {
   '': () => import('./pages/start.js'), ride: () => import('./pages/ride.js'), summary: () => import('./pages/summary.js'),
-  workouts: () => import('./pages/workouts.js'), routes: () => import('./pages/routes.js'), history: () => import('./pages/history.js'),
+  workouts: () => import('./pages/workouts.js'), plans: () => import('./pages/plans.js'), routes: () => import('./pages/routes.js'), history: () => import('./pages/history.js'),
   progress: () => import('./pages/progress.js'), profile: () => import('./pages/profile.js'), devices: () => import('./pages/devices.js'),
 };
-const NAV = [['', 'Start', 'home'], ['workouts', 'Workouts', 'workout'], ['routes', 'Strecken', 'route'], ['history', 'Verlauf', 'history'], ['progress', 'Fortschritt', 'progress'], ['devices', 'Geräte', 'devices'], ['profile', 'Profil', 'profile']];
+const NAV = [['', 'Start', 'home'], ['plans', 'Pläne', 'plan'], ['workouts', 'Workouts', 'workout'],['routes', 'Strecken', 'route'], ['history', 'Verlauf', 'history'], ['progress', 'Fortschritt', 'progress'], ['devices', 'Geräte', 'devices'], ['profile', 'Profil', 'profile']];
 let current = null, currentKey = null;
 
 function nav() {
@@ -36,6 +37,7 @@ async function route() {
   document.body.dataset.page = k || 'start';
   for (const a of document.querySelectorAll('#nav a')) a.classList.toggle('on', a.dataset.k === k);
   const el = $('#view'); el.innerHTML = '<div class="pageload"><div class="spinner"></div></div>';
+  el.onclick = el.onchange = el.oninput = el.ondragover = el.ondrop = null;
   window.scrollTo(0, 0);
   try {
     const mod = await PAGES[k]();
@@ -49,7 +51,7 @@ async function route() {
 }
 
 async function init() {
-  await loadState(); await loadClickMap();
+  await loadState(); await loadClickMap(); await loadPlan();
   nav();
   bus.on('toast', m => toast(m));
   if (await kv.get('demo', !support().ok)) setDemo(true);

@@ -6,6 +6,22 @@ import { listRoutes, quickStats, THEMES } from '../routes.js';
 import { listWorkouts, stats as wStats, drawWorkout, getWorkout } from '../workouts.js';
 import { db } from '../db.js';
 import { totals } from '../analysis.js';
+import { missionCard } from '../components.js';
+import { missionState, streakBonus } from '../game.js';
+import { planProgress } from '../plans.js';
+
+function planOpts() {
+  const pr = planProgress(); if (!pr) return '';
+  const list = pr.p.all.filter(w => w.id === sel.workoutId || w.id === pr.next?.id);
+  return `<optgroup label="Trainingsplan ${esc(pr.p.name)}">${list.map(w => `<option value="${esc(w.id)}" ${w.id === sel.workoutId ? 'selected' : ''}>W${w.week}/${w.n} ${esc(w.name)} · ${fmtDur(wStats(w).dur)}</option>`).join('')}</optgroup>`;
+}
+function planCard() {
+  const pr = planProgress();
+  if (!pr) return '<p class="muted">Kein Plan aktiv. Ein Plan führt dich Woche für Woche durch passende Workouts, zum Beispiel zur Vorbereitung auf einen Gran Fondo.</p><a class="btn sm pri" href="#/plans">Plan auswählen</a>';
+  const n = pr.next;
+  return `<div class="row between"><b style="color:${pr.p.color}">${esc(pr.p.name)}</b><span class="small muted num">${pr.done}/${pr.total} · Woche ${pr.week}/${pr.p.weeks.length}</span></div><div class="bar"><i style="width:${(pr.frac * 100).toFixed(1)}%"></i></div>
+    ${n ? `<p class="small" style="margin:10px 0 6px">Als Nächstes: <b>${esc(n.name)}</b> <span class="muted num">· ${fmtDur(wStats(n).dur)} · TSS ${wStats(n).tss}</span></p><div class="row end"><button class="btn sm" data-plansel="${n.id}">Auswählen</button><button class="btn sm pri" data-plango="${n.id}">Jetzt fahren</button></div>` : '<p>Plan abgeschlossen 🎉</p>'}`;
+}
 
 export function routeSvg(raw, w = 300, h = 54) {
   const p = raw.pts, n = 80; let mn = Infinity, mx = -Infinity;
@@ -37,6 +53,10 @@ export async function render(el) {
     <div><h1>Hallo ${esc(profile.name)}</h1><p class="muted">FTP ${profile.ftp} W · ${String(profile.kg).replace('.', ',')} kg · ${(profile.ftp / profile.kg).toFixed(2).replace('.', ',')} W/kg</p></div>
     <div class="hero-lv">${levelBar()}</div>
   </section>
+  <section class="grid2">
+    <div class="card"><div class="row between"><h2>Trainingsplan</h2><a href="#/plans" class="small">Alle Pläne</a></div>${planCard()}</div>
+    <div class="card"><div class="row between"><h2>Wochenmissionen</h2><span class="small muted">${t.streak ? '🔥 ' + t.streak + ' Tage Serie' + (streakBonus(t.streak) ? ' · +' + Math.round(streakBonus(t.streak) * 100) + ' % XP' : '') : 'Heute fahren startet eine Serie'}</span></div>${missionCard(missionState(rides))}</div>
+  </section>
   <section class="card"><div class="row between"><h2>Geräte</h2><a href="#/devices" class="small">Details und Tasten anlernen</a></div><div id="devs"></div></section>
   <section class="card">
     <h2>Fahrt einrichten</h2>
@@ -49,7 +69,7 @@ export async function render(el) {
     <div class="setup">
       <div>
         <h3 class="sub">Workout</h3>
-        <select id="woSel" class="inp"><option value="">Kein Workout, freie Fahrt</option>${cats.map(c => `<optgroup label="${esc(c)}">${wos.filter(w => w.cat === c).map(w => `<option value="${esc(w.id)}" ${w.id === sel.workoutId ? 'selected' : ''}>${esc(w.name)} · ${fmtDur(wStats(w).dur)}</option>`).join('')}</optgroup>`).join('')}</select>
+        <select id="woSel" class="inp"><option value="">Kein Workout, freie Fahrt</option>${planOpts()}${cats.map(c => `<optgroup label="${esc(c)}">${wos.filter(w => w.cat === c).map(w => `<option value="${esc(w.id)}" ${w.id === sel.workoutId ? 'selected' : ''}>${esc(w.name)} · ${fmtDur(wStats(w).dur)}</option>`).join('')}</optgroup>`).join('')}</select>
         <div class="wprev"><canvas id="woPrev"></canvas><div class="small muted" id="woInfo"></div></div>
       </div>
       <div>
@@ -58,6 +78,10 @@ export async function render(el) {
         <p class="small muted" id="modeTxt"></p>
         <h3 class="sub">Schrittmacher</h3>
         <div class="seg" id="pacerSeg">${[0, 2, 2.5, 3, 3.5, 4].map(v => `<button data-p="${v}" aria-pressed="${sel.pacer === v}">${v ? String(v).replace('.', ',') + ' W/kg' : 'Aus'}</button>`).join('')}</div>
+        <div class="form" style="margin-top:12px">
+          <label class="switch"><input type="checkbox" id="optNpc" ${sel.npcs !== false ? 'checked' : ''}><span></span> Mitfahrer auf der Strecke (Windschatten, Überholen)</label>
+          <label class="switch"><input type="checkbox" id="optAdapt" ${sel.adaptive !== false ? 'checked' : ''}><span></span> Workouts adaptiv an Kadenz, Puls und Trainer anpassen</label>
+        </div>
       </div>
     </div>
     <div class="row end" style="margin-top:14px"><a class="btn pri big" href="#/ride">${ICON.ride} Fahrt starten</a></div>
@@ -71,6 +95,11 @@ export async function render(el) {
     </div>
   </section>`;
   off.push(deviceCards($('#devs', el)));
+  el.onclick = (e => {
+    const b = e.target.closest('[data-plansel],[data-plango]'); if (!b) return;
+    sel.workoutId = b.dataset.plansel || b.dataset.plango; saveSel();
+    if (b.dataset.plango) location.hash = '#/ride'; else render(el);
+  });
   $('#routePick', el).onclick = e => { const b = e.target.closest('[data-rid]'); if (!b) return; sel.routeId = b.dataset.rid; saveSel(); for (const x of el.querySelectorAll('.rcard')) x.classList.toggle('on', x === b); };
   const modeTxt = { gear: 'Wie draußen schalten: Trittfrequenz, Gang, Steigung und Gewicht bestimmen die Leistung, der Trainer stellt sie im ERG-Modus ein. Ideal mit Zwift Cog und Click.', sim: 'Die Steigung geht direkt an den Trainer (beim D100 bis etwa 6 %). Schalten nur mit echter Kassette.', erg: 'Feste Wattzahl, mit + und − in 10-W-Schritten verstellbar.' };
   const updMode = () => { for (const b of $('#modeSeg', el).children) b.setAttribute('aria-pressed', String(b.dataset.m === sel.mode)); $('#modeTxt', el).textContent = modeTxt[sel.mode]; };
@@ -82,7 +111,9 @@ export async function render(el) {
     const cv = $('#woPrev', el); cv.parentElement.hidden = !w;
     if (w) { drawWorkout(cv, w); const s = wStats(w); $('#woInfo', el).textContent = `${fmtDur(s.dur)} · TSS ${s.tss} · IF ${s.IF.toFixed(2).replace('.', ',')} · ${w.desc || ''}`; }
   };
-  $('#woSel', el).onchange = e => { sel.workoutId = e.target.value || null; saveSel(); updWo(); };
+  $('#optNpc', el).onchange = e => { sel.npcs = e.target.checked; saveSel(); };
+  $('#optAdapt', el).onchange = e => { sel.adaptive = e.target.checked; saveSel(); };
+  $('#woSel', el).onchange =e => { sel.workoutId = e.target.value || null; saveSel(); updWo(); };
   updWo();
 }
 export function leave() { off.forEach(f => f()); off = []; }

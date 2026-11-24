@@ -51,7 +51,17 @@ const BUILTIN_DEF = [
   { id: 'b-tour', name: 'Königsetappe', theme: 'alpine', desc: '55 km mit Talfahrt und zwei harten Anstiegen.', make: () => pathOpen({ len: 55000, heading: d => 0.8 * Math.sin(d / 3100) + 0.5 * Math.sin(d / 900 + .3) + (d > 18000 && d < 25000 ? 1.2 * Math.sin((d - 18000) / 200) : 0) + (d > 42000 && d < 47000 ? 1.3 * Math.sin((d - 42000) / 170) : 0), ele: d => { let e = 600 + 8 * Math.sin(d / 1300) + 4 * Math.sin(d / 400); if (d > 18000) e += Math.min(d - 18000, 7000) * 0.062; if (d > 25000) e -= Math.min(d - 25000, 9000) * 0.042; if (d > 42000) e += Math.min(d - 42000, 5000) * 0.078; if (d > 47000) e -= Math.min(d - 47000, 8000) * 0.04; return e; }, lat0: 46.9, lon0: 10.8 }), loop: false, climbNames: ['Colle di Fieno', 'Muro Finale'] },
   { id: 'b-flat', name: 'Flachland-Achter', theme: 'plains', desc: 'Topfebene Runde durch Felder für ERG-Workouts.', make: () => polarLoop({ len: 20000, lobes: [S(2, .35, .3), S(4, .06, 1)], lat0: 52.3, lon0: 9.7, ele: th => 60 + 1.2 * Math.sin(th * 3) }), loop: true, climbNames: [] },
 ];
-export const BUILTIN = BUILTIN_DEF.map(r => ({ id: r.id, name: r.name, theme: r.theme, desc: r.desc, loop: r.loop, builtin: true, climbNames: r.climbNames, _make: r.make }));
+// Ortschaften [Beginn m, Länge m, Name] und Tunnel [von m, bis m]
+const EXTRAS = {
+  'b-hills': { towns: [[2500, 650, 'Kirchdorf'], [11000, 800, 'Lindenau'], [18500, 550, 'Steinach']] },
+  'b-lake': { towns: [[4000, 700, 'Seehausen'], [12000, 500, 'Uferweiler']] },
+  'b-pass': { towns: [[250, 500, 'Fondovalle']], tunnels: [[6200, 6650]] },
+  'b-coast': { towns: [[2500, 900, 'Marina Chiara'], [15500, 700, 'San Vento'], [25500, 800, 'Capo Lume']], tunnels: [[9500, 9900], [20000, 20380]] },
+  'b-forest': { towns: [[6000, 300, 'Forsthaus']] },
+  'b-tour': { towns: [[2000, 1000, 'Talstadt'], [30000, 1200, 'Mittelberg'], [52800, 900, 'Gipfeldorf']], tunnels: [[27000, 27550], [38000, 38420]] },
+  'b-flat': { towns: [[5000, 900, 'Feldheim'], [14000, 700, 'Kornau']] },
+};
+export const BUILTIN = BUILTIN_DEF.map(r => ({ id: r.id, name: r.name, theme: r.theme, desc: r.desc, loop: r.loop, builtin: true, climbNames: r.climbNames, _make: r.make, ...EXTRAS[r.id] }));
 
 let cache = new Map();
 export async function listRoutes() {
@@ -196,6 +206,13 @@ export function prepare(raw) {
     return { ele: be, dist: bi >= 0 ? Math.sqrt(bd) : 5000, side };
   }
   const shape = raw.shape;
+  // Orte und Tunnel (GPX: Orte automatisch, keine Tunnel)
+  let towns = (raw.towns || []).map(([at, len, name]) => ({ from: at, to: Math.min(total - 50, at + len), name }));
+  if (!raw.builtin && !raw.towns && total > 8000) towns = [[.3, 'Ortschaft'], [.7, 'Weiler']].map(([f, name]) => ({ from: total * f, to: total * f + 600, name }));
+  const tunnels = (raw.tunnels || []).map(([from, to]) => ({ from, to })).filter(t => t.to < total - 60);
+  const townAt = d => towns.find(t => d >= t.from && d <= t.to) || null;
+  const tunnelAt = (d, pad = 0) => tunnels.find(t => d >= t.from - pad && d <= t.to + pad) || null;
+  const cover = d => { let c = 0; for (const t of tunnels) c = Math.max(c, smooth(t.from - 30, t.from + 15, d) * (1 - smooth(t.to - 15, t.to + 30, d))); return c; };
   function heightAt(px, pz) {
     const n = nearest(px, pz);
     let base, d, side = 0;
@@ -214,7 +231,12 @@ export function prepare(raw) {
         if (r < R) h = lerp(h, water - 10, smooth(R - 25, R - 140, r));
       }
     }
-    if (n && n.dist < 40) h = lerp(n.ele - 0.7, h, smooth(4.6, 32, n.dist));
+    const cv = n && tunnels.length && n.dist < 90 ? cover(n.i * step) * smooth(90, 50, n.dist) : 0;
+    if (n && n.dist < 40) h = lerp(lerp(n.ele - 0.7, h, smooth(4.6, 32, n.dist)), h, cv);
+    // Tunnel: Bergrücken über der Straße
+    if (cv > 0) h = lerp(h, Math.max(h, n.ele + 13 + n.dist * .55 + hills * .5), cv);
+    // Orte: Gelände flacher
+    if (n && n.dist < 70 && towns.length) { const tw = townAt(n.i * step); if (tw) h = lerp(n.ele - .5, h, smooth(20, 70, n.dist)); }
     return h;
   }
 
@@ -239,6 +261,9 @@ export function prepare(raw) {
     climbs.forEach((c, k) => { c.name = raw.climbNames?.[k] || 'Anstieg ' + (k + 1); c.id = k; let mx = 0; for (let i = Math.floor(c.from / step); i < c.to / step; i += 4) mx = Math.max(mx, grade[i]); c.max = mx; });
   }
 
+  // Sprintwertungen: 300 m in Ortschaften
+  const sprints = towns.filter(t => t.to - t.from >= 400).map((t, k) => ({ id: k, name: 'Sprint ' + t.name, from: t.from + 60, to: t.from + 360, len: 300 }));
+
   const idxAt = d => { const u = d / step; return [Math.floor(u), u - Math.floor(u)]; };
   function sample(arr, d) {
     if (raw.loop) d = ((d % total) + total) % total; else d = clamp(d, 0, total);
@@ -253,7 +278,7 @@ export function prepare(raw) {
   }
   return {
     id: raw.id, name: raw.name, desc: raw.desc, builtin: raw.builtin, loop: raw.loop, themeKey, theme, water,
-    N, step, total, x, z, e, head, grade, asc, minE, maxE, climbs, lat, lon,
+    N, step, total, x, z, e, head, grade, asc, minE, maxE, climbs, lat, lon, towns, tunnels, sprints, townAt, tunnelAt,
     eleAt: d => sample(e, d), gradeAt: d => sample(grade, d), xAt: d => sample(x, d), zAt: d => sample(z, d), headAt,
     latAt: d => lat0 - sample(z, d) / M_DEG, lonAt: d => lon0 + sample(x, d) / kx,
     heightAt, nearest,

@@ -1,15 +1,14 @@
 // Profil, Avatar, Grafik und Datensicherung
 import { $, esc, toast, dialog, download } from '../util.js';
-import { profile, saveProfile } from '../state.js';
+import { profile, saveProfile, progress, levelOf } from '../state.js';
+import { UNLOCKS } from '../game.js';
 import { backup, restore, wipe, usage, persist } from '../db.js';
 import { autoQuality } from '../world.js';
 
 const F = (id, label, type, extra = '', hint = '') => `<label class="f">${label}<input class="inp" id="${id}" type="${type}" ${extra} value="${esc(profile[id])}">${hint ? `<span class="small muted">${hint}</span>` : ''}</label>`;
 const SW = (id, label) => `<label class="switch"><input type="checkbox" id="${id}" ${profile[id] ? 'checked' : ''}><span></span> ${label}</label>`;
-const COLORS = ['#ff6a3d', '#ef4458', '#f5c542', '#4fd18b', '#3fa7f5', '#7b4fd6', '#1b1e22', '#f2f4f6'];
-
 export async function render(el) {
-  const u = await usage(), pers = await persist();
+  const u = await usage(), pers = await persist(), lv = levelOf(progress.xp).lv;
   el.innerHTML = `
   <section class="pagehead"><h1>Profil</h1></section>
   <section class="grid2">
@@ -31,12 +30,14 @@ export async function render(el) {
   </section>
   <section class="grid2">
     <div class="card form"><h2>Avatar</h2>
-      ${['jersey', 'helmet', 'bikeColor'].map(k => `<div class="f">${{ jersey: 'Trikot', helmet: 'Helm', bikeColor: 'Rahmen' }[k]}<div class="swatches" data-k="${k}">${COLORS.map(c => `<button style="background:${c}" data-c="${c}" aria-pressed="${profile[k] === c}" aria-label="${c}"></button>`).join('')}<input type="color" value="${profile[k]}" data-k="${k}"></div></div>`).join('')}
+      <p class="small muted">Weitere Farben schaltest du mit höheren Leveln frei (aktuell Level ${lv}).</p>
+      ${['jersey', 'helmet', 'bikeColor'].map(k => `<div class="f">${{ jersey: 'Trikot', helmet: 'Helm', bikeColor: 'Rahmen' }[k]}<div class="swatches" data-k="${k}">${UNLOCKS.map(u => u.lv <= lv ? `<button style="background:${u.c}" data-c="${u.c}" aria-pressed="${profile[k] === u.c}" aria-label="${u.name || u.c}" title="${u.name || ''}"></button>` : `<button class="locked" style="background:${u.c}" disabled title="Ab Level ${u.lv}" aria-label="Gesperrt bis Level ${u.lv}"><small>${u.lv}</small></button>`).join('')}${lv >= 10 ? `<input type="color" value="${profile[k]}" data-k="${k}" title="Freie Farbe">` : '<span class="small muted">Freie Farbwahl ab Level 10</span>'}</div></div>`).join('')}
       <div class="f">Hautton<div class="swatches" data-k="skin">${['#f1c7a5', '#e3b18c', '#c99272', '#9a6a4b', '#6b4532'].map(c => `<button style="background:${c}" data-c="${c}" aria-pressed="${profile.skin === c}"></button>`).join('')}</div></div>
     </div>
     <div class="card form"><h2>Grafik</h2>
       <label class="f">Qualität der 3D-Welt<select class="inp" id="quality">${[['auto', 'Automatisch (' + ({ high: 'hoch', medium: 'mittel' }[autoQuality()]) + ')'], ['high', 'Hoch: Schatten, weite Sicht'], ['medium', 'Mittel: für Tablets'], ['low', 'Niedrig: für ältere Geräte']].map(([v, l]) => `<option value="${v}" ${profile.quality === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <h2 style="margin-top:18px">Daten</h2>
+      <p class="small muted">Gespeichert werden Profil, Einstellungen, gekoppelte Geräte und Tastenbelegung, Fahrten mit Fotos, Level, Abzeichen, Missionen, Bestzeiten, Trainingsplan-Fortschritt sowie eigene Strecken und Workouts. Die Sicherung enthält alles davon in einer Datei.</p>
       <p class="small muted">Alles wird nur in diesem Browser unter <b>${esc(location.origin)}</b> gespeichert. Unter einer anderen Adresse (z. B. NAS statt localhost) siehst du andere Daten. Sichere regelmäßig und spiele die Datei dort wieder ein.</p>
       <p class="small muted">Belegt: ${u ? (u.usage / 1048576).toFixed(1).replace('.', ',') + ' MB' : 'unbekannt'} · Dauerhafter Speicher: ${pers ? 'ja' : 'nicht bestätigt'}</p>
       <div class="row"><button class="btn" id="bk">Sicherung herunterladen</button><label class="btn">Sicherung einspielen<input type="file" id="rs" accept=".json" hidden></label><button class="btn ghost danger" id="wp">Alles löschen</button></div>
