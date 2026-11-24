@@ -7,7 +7,7 @@ export function stravaTitle(ride) {
   if (ride.plan || ride.planId) parts.push(`${ride.plan?.name || 'Trainingsplan'} W${ride.planWeek || '?'}`);
   if (ride.workoutName) parts.push(ride.workoutName);
   parts.push(ride.routeName + (ride.laps ? ` (${ride.laps + 1} Runden)` : ''));
-  return 'Windschatten: ' + parts.join(' · ');
+  return 'VeloVerse: ' + parts.join(' · ');
 }
 export function stravaText(ride) {
   const s = ride.sum, L = [];
@@ -18,7 +18,7 @@ export function stravaText(ride) {
   if (tops.length) L.push(tops.join(' · '));
   if (ride.overtakes) L.push(`${ride.overtakes} Fahrer überholt`);
   if (ride.newBadges?.length) L.push('🏆 ' + ride.newBadges.map(b => BADGES.find(x => x.id === b)?.name).filter(Boolean).join(', '));
-  L.push('Indoor gefahren mit Windschatten');
+  L.push('Indoor gefahren mit VeloVerse');
   return L.join('\n');
 }
 
@@ -27,7 +27,7 @@ export async function overviewImage(ride, ftp) {
   try { await document.fonts?.ready; } catch (e) { }
   const W = 1600, H = 1000, c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
   const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#141a20'); g.addColorStop(1, '#1d2731'); x.fillStyle = g; x.fillRect(0, 0, W, H);
-  x.fillStyle = '#ff6a3d'; x.font = '700 30px Barlow, Arial'; x.fillText('WINDSCHATTEN', 56, 70);
+  x.fillStyle = '#ff6a3d'; x.font = '700 30px Barlow, Arial'; x.fillText('VELOVERSE', 56, 70);
   x.fillStyle = '#fff'; x.font = '700 54px "Barlow Condensed", Barlow, Arial'; x.fillText(trim(x, ride.title, W - 112), 56, 132);
   x.fillStyle = '#9aa7b3'; x.font = '500 24px Barlow, Arial'; x.fillText(new Date(ride.date).toLocaleString('de-DE', { dateStyle: 'full', timeStyle: 'short' }), 56, 170);
   // Karte aus den aufgezeichneten Koordinaten; Sprünge (Beamen) werden nicht verbunden

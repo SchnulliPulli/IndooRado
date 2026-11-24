@@ -11,9 +11,9 @@ import { loadStrava, handleRedirect } from './strava.js';
 const PAGES = {
   '': () => import('./pages/start.js'), ride: () => import('./pages/ride.js'), summary: () => import('./pages/summary.js'),
   workouts: () => import('./pages/workouts.js'), plans: () => import('./pages/plans.js'), routes: () => import('./pages/routes.js'), history: () => import('./pages/history.js'),
-  progress: () => import('./pages/progress.js'), profile: () => import('./pages/profile.js'), devices: () => import('./pages/devices.js'),
+  progress: () => import('./pages/progress.js'), profile: () => import('./pages/profile.js'), devices: () => import('./pages/devices.js'), help: () => import('./pages/help.js'),
 };
-const NAV = [['', 'Start', 'home'], ['plans', 'Pläne', 'plan'], ['workouts', 'Workouts', 'workout'],['routes', 'Strecken', 'route'], ['history', 'Verlauf', 'history'], ['progress', 'Fortschritt', 'progress'], ['devices', 'Geräte', 'devices'], ['profile', 'Profil', 'profile']];
+const NAV = [['', 'Start', 'home'], ['plans', 'Pläne', 'plan'], ['workouts', 'Workouts', 'workout'],['routes', 'Strecken', 'route'], ['history', 'Verlauf', 'history'], ['progress', 'Fortschritt', 'progress'], ['devices', 'Geräte', 'devices'], ['profile', 'Profil', 'profile'], ['help', 'Anleitung', 'help']];
 let current = null, currentKey = null;
 
 function nav() {
@@ -31,15 +31,11 @@ async function route() {
   const [path, query] = raw.split('?');
   const [key, ...params] = path.split('/');
   const k = key in PAGES ? key : '';
-  if (currentKey === 'ride' && k !== 'ride') {
-    const ride = await import('./pages/ride.js');
-    if (ride.isRiding() && !route.leaving) {
-      const ok = await dialog({ title: 'Fahrt verlassen?', html: '<p class="muted">Die laufende Fahrt wird nicht gespeichert. Zum Speichern „Beenden“ in der Fahransicht nutzen.</p>', buttons: [{ label: 'Weiterfahren', value: false }, { label: 'Verlassen', value: true, cls: 'danger' }] });
-      if (!ok) { route.leaving = true; location.hash = '#/ride'; setTimeout(() => route.leaving = false, 50); return; }
-    }
-  }
-  if (route.leaving && k === 'ride' && currentKey === 'ride') return;
-  try { current?.leave?.(); } catch (e) { console.error(e); }
+  // Laufende Fahrt beim Verlassen nicht verwerfen, sondern pausiert im Hintergrund parken
+  let parked = false;
+  if (currentKey === 'ride' && k !== 'ride') { const ride = await import('./pages/ride.js'); if (ride.isRiding()) { ride.park(); parked = true; } }
+  if (!parked) { try { current?.leave?.(); } catch (e) { console.error(e); } }
+  resumeBar(k);
   document.body.dataset.page = k || 'start';
   for (const a of document.querySelectorAll('#nav a')) a.classList.toggle('on', a.dataset.k === k);
   const el = $('#view'); el.innerHTML = '<div class="pageload"><div class="spinner"></div></div>';
@@ -56,6 +52,16 @@ async function route() {
   }
 }
 
+// Balken "Zurück zur Fahrt", solange eine pausierte Fahrt geparkt ist
+async function resumeBar(k) {
+  let bar = $('#resumeBar');
+  const ride = await import('./pages/ride.js'), info = k !== 'ride' && ride.parkedInfo();
+  if (!info) { bar?.remove(); return; }
+  if (!bar) { bar = document.createElement('div'); bar.id = 'resumeBar'; bar.className = 'resumebar'; document.body.appendChild(bar); }
+  bar.innerHTML = `<span>⏸ Fahrt pausiert · <b>${info}</b></span><span class="row"><button class="btn sm ghost" data-end>Beenden</button><a class="btn sm pri" href="#/ride">▶ Zurück zur Fahrt</a></span>`;
+  bar.querySelector('[data-end]').onclick = () => { sessionStorage.setItem('endAfterResume', '1'); location.hash = '#/ride'; };
+}
+
 async function init() {
   await loadState(); await loadClickMap(); await loadPlan();
   nav();
@@ -70,6 +76,7 @@ async function init() {
   reconnectKnown().catch(() => { });
   // NAS-Abgleich: neuerer Stand vom NAS wird übernommen, danach Seite neu aufbauen
   loadSync().then(autoSync).then(async pulled => {
+    if (sync.needLogin) toast('NAS: Anmeldung abgelaufen, unter Profil neu anmelden', 5000);
     if (!pulled) return;
     await loadState(); await loadPlan(); await loadClickMap(); toast('Daten vom NAS übernommen');
     if (currentKey !== 'ride') route();

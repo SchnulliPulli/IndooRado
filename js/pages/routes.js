@@ -1,10 +1,16 @@
 // Streckenübersicht mit Karte, Höhenprofil, Anstiegen und Bestzeiten
 import { $, esc, fmtKm, fmtT, fmtNum, toast, dialog } from '../util.js';
 import { sel, saveSel, progress } from '../state.js';
-import { listRoutes, quickStats, parseGpx, saveRoute, deleteRoute, getRoute, THEMES } from '../routes.js';
+import { listRoutes, quickStats, parseGpx, saveRoute, deleteRoute, getRoute, THEMES, loadDem } from '../routes.js';
 import { profileChart, trackMap } from '../charts.js';
 import { routeMapSvg, routeSvg } from './start.js';
 
+// Höhenmodell laden mit Fortschrittsanzeige
+async function terrain(r) {
+  const box = document.createElement('div'); box.className = 'toast show'; box.textContent = 'Echtes Gelände wird geladen …'; $('#toasts').appendChild(box);
+  try { await loadDem(r, f => box.textContent = `Echtes Gelände wird geladen … ${Math.round(f * 100)} %`); }
+  finally { box.remove(); }
+}
 const THEME_N = { meadow: 'Hügel und Wiesen', lake: 'Bergsee', alpine: 'Hochgebirge', coast: 'Küste', forest: 'Wald', plains: 'Flachland', auto: 'Automatisch' };
 export async function render(el, [rid]) {
   const routes = await listRoutes();
@@ -17,7 +23,14 @@ export async function render(el, [rid]) {
   </div>`;
   const load = async files => {
     let n = 0;
-    for (const f of files) { try { const r = parseGpx(await f.text(), f.name.replace(/\.\w+$/, '')); await saveRoute(r); n++; location.hash = '#/routes/' + r.id; } catch (e) { toast(f.name + ': ' + e.message, 5000); } }
+    for (const f of files) {
+      try {
+        const r = parseGpx(await f.text(), f.name.replace(/\.\w+$/, ''));
+        // Echtes Gelände gleich mitladen
+        try { await terrain(r); } catch (e) { toast('Gelände konnte nicht geladen werden, die Landschaft wird erzeugt: ' + e.message, 6000); }
+        await saveRoute(r); n++; location.hash = '#/routes/' + r.id;
+      } catch (e) { toast(f.name + ': ' + e.message, 5000); }
+    }
     if (n) toast(n + ' Strecke' + (n > 1 ? 'n' : '') + ' importiert');
   };
   $('#rFile', el).onchange = e => load(e.target.files);
@@ -32,11 +45,15 @@ export async function render(el, [rid]) {
     <canvas id="rMap" class="mapc"></canvas>
     <h3 class="sub">Höhenprofil</h3><canvas id="rProf" class="profc"></canvas>
     ${R.climbs.length ? `<h3 class="sub">Anstiege</h3><div class="scroll"><table class="tbl"><tr><th>Name</th><th class="n">ab km</th><th class="n">Länge</th><th class="n">Höhe</th><th class="n">Ø</th><th class="n">max.</th><th class="n">Bestzeit</th></tr>${R.climbs.map(c => { const b = progress.climbBest[R.id + ':' + c.id]; return `<tr><td>${esc(c.name)}</td><td class="n">${fmtKm(c.from)}</td><td class="n">${fmtKm(c.len)} km</td><td class="n">${Math.round(c.gain)} m</td><td class="n">${fmtNum(c.avg, 1)} %</td><td class="n">${fmtNum(c.max, 1)} %</td><td class="n">${b ? fmtT(b.time) : '–'}</td></tr>`; }).join('')}</table></div>` : ''}
-    ${cur.builtin ? '' : `<div class="row" style="margin-top:12px"><label class="small muted row">Landschaft <select class="inp sm" id="rTheme">${Object.keys(THEME_N).map(k => `<option value="${k}" ${k === (cur.theme || 'auto') ? 'selected' : ''}>${THEME_N[k]}</option>`).join('')}</select></label><button class="btn sm ghost danger" id="rDel">Strecke löschen</button></div>${cur.noEle ? '<p class="warn small">Diese GPX-Datei enthält keine Höhendaten, die Strecke ist daher flach.</p>' : ''}`}`;
+    ${cur.builtin ? '' : `<div class="row" style="margin-top:12px"><label class="small muted row">Landschaft <select class="inp sm" id="rTheme">${Object.keys(THEME_N).map(k => `<option value="${k}" ${k === (cur.theme || 'auto') ? 'selected' : ''}>${THEME_N[k]}</option>`).join('')}</select></label><button class="btn sm" id="rDem">${cur.realTerrain ? 'Gelände neu laden' : 'Echtes Gelände laden'}</button>${cur.realTerrain ? '<button class="btn sm ghost" id="rDemOff">Erzeugte Landschaft nutzen</button>' : ''}<button class="btn sm ghost danger" id="rDel">Strecke löschen</button></div>
+      <p class="small muted">${cur.realTerrain ? `⛰ Echtes Gelände aktiv: Berge und Täler rund um die Strecke stammen aus einem Höhenmodell (${cur.dem ? Math.round(cur.dem.min) + '–' + Math.round(cur.dem.max) + ' m, Raster ' + cur.dem.cell + ' m' : 'wird beim Fahren geladen'}). Wälder, Häuser und Orte werden passend dazu erzeugt.` : 'Die Landschaft wird passend zur Höhe erzeugt. Mit „Echtes Gelände laden“ werden die echten Berge und Täler rund um die Strecke geladen (Höhendaten von AWS Open Data, dazu wird der Kartenausschnitt der Strecke dort abgefragt).'}</p>
+      ${cur.noEle ? '<p class="warn small">Diese GPX-Datei enthält keine Höhendaten. Mit „Echtes Gelände laden“ werden die Höhen aus dem Gelände übernommen.</p>' : ''}`}`;
   trackMap($('#rMap', el), cur.pts.map(p => [p[0], p[1]]), { width: 5 });
   profileChart($('#rProf', el), dist, ele, { climbs: R.climbs });
   $('#rSel', el).onclick = () => { sel.routeId = cur.id; saveSel(); render(el, [cur.id]); };
   $('#rGo', el).onclick = () => { sel.routeId = cur.id; saveSel(); };
   $('#rTheme', el)?.addEventListener('change', async e => { cur.theme = e.target.value; await saveRoute(cur); toast('Landschaft geändert'); });
+  $('#rDem', el)?.addEventListener('click', async () => { try { await terrain(cur); await saveRoute(cur); toast('Echtes Gelände geladen'); render(el, [cur.id]); } catch (e) { toast('Gelände: ' + e.message, 6000); } });
+  $('#rDemOff', el)?.addEventListener('click', async () => { delete cur.dem; cur.realTerrain = false; await saveRoute(cur); render(el, [cur.id]); });
   $('#rDel', el)?.addEventListener('click', async () => { if (await dialog({ title: 'Strecke löschen?', buttons: [{ label: 'Abbrechen', value: false }, { label: 'Löschen', value: true, cls: 'danger' }] })) { await deleteRoute(cur.id); if (sel.routeId === cur.id) { sel.routeId = 'b-hills'; saveSel(); } location.hash = '#/routes'; } });
 }

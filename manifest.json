@@ -1,6 +1,6 @@
 {
-  "name": "Windschatten",
-  "short_name": "Windschatten",
+  "name": "VeloVerse",
+  "short_name": "VeloVerse",
   "description": "Indoor-Radtraining im Browser",
   "start_url": "./index.html",
   "display": "fullscreen",

@@ -216,6 +216,7 @@ export class World {
     this.vcMat = new THREE.MeshLambertMaterial({ vertexColors: true });
     this.chunks = new Map(); this.queue = [];
     this.buildRoad(); this.buildInstances(); this.buildFar(); this.buildClouds(); this.buildProps(); this.buildTunnels();
+    if (route.realTerrain) { this.buildDemFar(); this.scene.fog.far = 7000; this.scene.fog.near = viewR * .6; }
     this.npcs = [];
     if (route.water != null) {
       const wm = new THREE.MeshPhongMaterial({ color: 0x1f5f8f, specular: 0x5f8fb8, shininess: 60, transparent: true, opacity: .94 });
@@ -440,6 +441,23 @@ export class World {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(colr, 3)); g.setIndex(idx);
     this.far = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, fog: false, side: THREE.DoubleSide, depthWrite: false })); this.far.renderOrder = -5; this.scene.add(this.far);
   }
+  // Echtes Gelände in der Ferne: grobes Netz aus dem Höhenmodell (liegt etwas tiefer als die Nahkacheln)
+  buildDemFar() {
+    const R = this.route, D = R.dem, step = Math.max(1, Math.ceil(Math.max(D.nx, D.nz) / 260));
+    const nx = Math.floor((D.nx - 1) / step) + 1, nz = Math.floor((D.nz - 1) / step) + 1;
+    const pos = new Float32Array(nx * nz * 3), colr = new Float32Array(nx * nz * 3), c = new THREE.Color();
+    const g0 = col(R.theme.grass[0]), g1 = col('#4f7a3c'), rock = col('#8a8780'), snow = col('#f3f6f8'), sky = col(R.theme.sky[1]);
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+      const k = j * nx + i, gi = Math.min(D.nx - 1, i * step), gj = Math.min(D.nz - 1, j * step), y = D.data[gj * D.nx + gi] * D.scale;
+      pos.set([D.x0 + gi * D.cell, y - 14, D.z0 + gj * D.cell], k * 3);
+      c.copy(g0).lerp(g1, smooth(R.minE, R.minE + 600, y)).lerp(rock, smooth(1700, 2300, y)).lerp(snow, smooth(2500, 2900, y));
+      colr.set([c.r, c.g, c.b], k * 3);
+    }
+    const idx = []; for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) { const a = j * nx + i, b = a + 1, cc = a + nx, d = cc + 1; idx.push(a, cc, b, b, cc, d); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(colr, 3)); g.setIndex(idx); g.computeVertexNormals();
+    this.demFar = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true })); this.scene.add(this.demFar);
+    this.far.visible = false; // erzeugten Bergring ausblenden, die echten Berge stehen jetzt da
+  }
   buildClouds() {
     const tex = cloudTex(), r = rng(9); this.clouds = [];
     for (let i = 0; i < 26; i++) {
@@ -615,13 +633,15 @@ export class World {
     this.skyMat.uniforms.top.value.copy(top); this.skyMat.uniforms.hor.value.copy(hor); this.skyMat.uniforms.sun.value.copy(this.sunDir).multiplyScalar(cloudy || fog ? 0 : 1);
     this.scene.background.copy(hor); this.scene.fog.color.copy(hor);
     const viewR = (this.Q.radius + .5) * CHUNK;
-    this.scene.fog.near = fog ? 20 : wet ? viewR * .15 : viewR * .35; this.scene.fog.far = fog ? 260 : wet ? viewR * .7 : viewR * .98;
+    const farR = this.demFar ? 7000 : viewR * .98, nearR = this.demFar ? viewR * .6 : viewR * .35;
+    this.scene.fog.near = fog ? 20 : wet ? viewR * .15 : nearR; this.scene.fog.far = fog ? 260 : wet ? Math.min(farR, viewR * 1.5) : farR;
     this.sun.color.setHex(T.sunC); this.sun.intensity = T.sunI * (cloudy ? .45 : fog ? .5 : 1);
     this.hemi.intensity = T.hemi * (cloudy ? 1.1 : 1);
     this.hemi.color.copy(time === 'night' ? col('#6b7da8') : col('#dfefff'));
     this.expoBase = T.expo; this.renderer.toneMappingExposure = T.expo;
     this.stars.material.opacity = time === 'night' && !cloudy && !fog ? .9 : 0;
     for (const c of this.clouds) { c.material.opacity = cloudy ? .95 : time === 'night' ? .25 : .85; c.material.color.copy(cloudy ? col('#b9c0c8') : time === 'evening' ? col('#ffd2b0') : col('#ffffff')).multiplyScalar(time === 'night' ? .25 : 1); }
+    if (this.demFar) this.demFar.material.color.setScalar(time === 'night' ? .35 : 1);
     this.far.material.color.setScalar(time === 'night' ? .25 : time === 'evening' || time === 'morning' ? .8 : 1);
     this.rain.visible = wet;
     this.roadMeshes[2].material.color.setScalar(time === 'night' ? .4 : time === 'day' ? 1 : .75);

@@ -66,18 +66,27 @@ export async function backup() {
   // Zugangsdaten (NAS-Passwort, Strava-Schlüssel) gehören nicht in die Sicherungsdatei
   for (const k of await db.keys('kv')) if (!['sync', 'strava', 'syncMeta'].includes(k)) out.kv[k] = await db.get('kv', k);
   out.rides = await db.all('rides');
-  out.routes = await db.all('routes');
+  out.routes = (await db.all('routes')).map(r => ({ ...r, dem: undefined })); // Gelände wird bei Bedarf neu geladen
   out.workouts = await db.all('workouts');
   for (const s of await db.all('shots')) out.shots.push({ ...s, blob: await blobToDataUrl(s.blob) });
   return JSON.stringify(out);
 }
 export async function restore(text) {
   const d = JSON.parse(text);
-  if (d.app !== 'trittwerk') throw new Error('Keine Windschatten-Sicherung');
+  if (d.app !== 'trittwerk') throw new Error('Keine VeloVerse-Sicherung');
   for (const k in d.kv) await db.put('kv', d.kv[k], k);
   for (const s of ['rides', 'routes', 'workouts']) for (const v of d[s] || []) await db.put(s, v);
   for (const s of d.shots || []) await db.put('shots', { ...s, blob: await (await fetch(s.blob)).blob() });
   return d;
+}
+// Alles Lokale entfernen: Datenbank, App-Cache, Service Worker, Browser-Speicher (Daten auf dem NAS bleiben)
+export async function wipeAll() {
+  try { (await dbp)?.close(); } catch (e) { }
+  dbp = null;
+  await new Promise(res => { const r = indexedDB.deleteDatabase(NAME); r.onsuccess = r.onerror = r.onblocked = () => res(); });
+  try { for (const k of await caches.keys()) await caches.delete(k); } catch (e) { }
+  try { for (const r of await navigator.serviceWorker?.getRegistrations?.() || []) await r.unregister(); } catch (e) { }
+  try { localStorage.clear(); sessionStorage.clear(); } catch (e) { }
 }
 export async function wipe() { for (const s of ['kv', 'rides', 'shots', 'routes', 'workouts']) await db.clear(s); }
 function blobToDataUrl(b) { return new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(b); }); }

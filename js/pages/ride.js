@@ -1,7 +1,7 @@
 // Fahransicht: 3D-Welt, HUD, Steuerung des Trainers, Mitfahrer, Aufzeichnung, Screenshots
 import { $, esc, fmtT, fmtKm, clamp, bus, toast, dialog, fitCanvas, zoneColor, ZONES } from '../util.js';
 import { profile, sel, live, progress, saveSel, levelOf } from '../state.js';
-import { setPower, setGrade, control, trainer, status, demo } from '../ble.js';
+import { setPower, setGrade, control, trainer, status, demo, click } from '../ble.js';
 import { GEARS, gearPower, integrate, steadySpeed } from '../physics.js';
 import { getRoute, clearRouteCache } from '../routes.js';
 import { getWorkout, at as woAt, drawWorkout, total as woTotal } from '../workouts.js';
@@ -14,6 +14,8 @@ import { sound } from '../sound.js';
 import { tipFor, cadRange } from '../coach.js';
 import { saveProfile } from '../state.js';
 import { rng, toggleFullscreen } from '../util.js';
+import { applySaved, arrange, editMode } from '../hudlayout.js';
+const layout = () => { const w = $('#rw', S?.el); if (w) { applySaved(w); arrange(w); } };
 
 // Tageszeit und Wetter: fest gewählt oder automatisch (Uhrzeit, Wetter des Tages)
 export function resolveEnv() {
@@ -30,10 +32,11 @@ const NPC_COUNT = { high: 14, medium: 10, low: 6 };
 let S = null;
 
 export async function render(el) {
+  if (S?.parked) return unpark(el);
   el.innerHTML = `<div class="ridewrap" id="rw">
     <canvas id="gl"></canvas>
     <div class="loading" id="load"><div class="spinner"></div><div id="loadTxt">Welt wird aufgebaut …</div></div>
-    <div class="hud-top">
+    <div class="hud-top" data-drag="top">
       <div class="hud-row">
         <div class="hbox"><b id="hHr" class="num hr">--</b><span>Puls</span></div>
         <div class="hbox"><b id="hCad" class="num cad">--</b><span>U/min</span></div>
@@ -45,7 +48,7 @@ export async function render(el) {
       </div>
       <div class="hud-sub num small" id="hSub"></div>
     </div>
-    <div class="hud-left">
+    <div class="hud-left" data-drag="left">
       <div class="hud-wo" id="woBox" hidden>
         <div class="row between"><div style="flex:1"><div class="small muted" id="woName"></div><div class="wo-step" id="woStep"></div></div><div class="wo-left num" id="woLeft"></div></div>
         <div class="bar thin"><i id="woSegBar"></i></div>
@@ -59,28 +62,33 @@ export async function render(el) {
       </div>
       <div class="riders" id="riders"></div>
     </div>
-    <div class="hud-right">
+    <div class="hud-right" data-drag="right">
       <div class="gradebox"><b class="num" id="hGrade">0,0</b><span>% Steigung</span><div class="gradeicon" id="gIcon"></div></div>
       <div class="gearbox"><button class="gbtn" id="gUp" aria-label="Hochschalten">+</button><div class="gearval"><b class="num" id="hGear">12</b><span id="hGearSub">Gang</span></div><button class="gbtn" id="gDn" aria-label="Runterschalten">−</button></div>
       <div class="hbox small draftbox" id="draftBox" hidden><b class="num" id="hDraft">0 %</b><span>Windschatten</span></div>
       <div class="hbox small" id="pacerBox" hidden><b class="num" id="hPacer">0 m</b><span>zum Schrittmacher</span></div>
     </div>
-    <div class="climb" id="climbBox" hidden><div class="climb-name" id="clName"></div><div class="climb-row num"><span id="clLeft"></span><span id="clGrade"></span><span id="clTime"></span></div><div class="bar"><i id="clBar"></i></div></div>
-    <div class="banner" id="banner"></div>
-    <div class="xpfloat" id="xpFloat"></div>
+    <div class="msgstack" id="msgStack" data-drag="msg">
+      <div class="climb" id="climbBox" hidden><div class="climb-name" id="clName"></div><div class="climb-row num"><span id="clLeft"></span><span id="clGrade"></span><span id="clTime"></span></div><div class="bar"><i id="clBar"></i></div></div>
+      <div class="banner" id="banner"></div>
+      <div class="xpfloat" id="xpFloat"></div>
+    </div>
+    <div class="editbar" id="editBar" hidden><span>Elemente ziehen, um sie zu verschieben</span><button class="btn sm ghost" id="edReset">Zurücksetzen</button><button class="btn sm pri" id="edDone">Fertig</button></div>
     <div class="hud-bottom">
-      <canvas id="mini" class="minimap" title="Karte öffnen (K)"></canvas>
-      <div class="elevwrap"><canvas id="elev"></canvas><div class="elevtxt small" id="elevTxt"></div></div>
+      <canvas id="mini" class="minimap" title="Karte öffnen (K)" data-drag="mini"></canvas>
+      <div class="elevwrap" data-drag="elev"><canvas id="elev"></canvas><div class="elevtxt small" id="elevTxt"></div></div>
     </div>
     <div class="toolbar">
       <button class="tbtn" id="tPause" title="Pause (Leertaste)">${ICON.pause}<span>Pause</span></button>
+      <button class="tbtn" id="tMenu" title="Pausieren und ins Menü">${ICON.home}<span>Menü</span></button>
       <button class="tbtn" id="tView" title="Kamera (C)">${ICON.view}<span>Kamera</span></button>
       <button class="tbtn" id="tShot" title="Foto (P)">${ICON.camera}<span>Foto</span></button>
       <button class="tbtn" id="tMode" title="Widerstand">${ICON.workout}<span id="tModeL">Gänge</span></button>
       <button class="tbtn" id="tNpc" title="Mitfahrer (N)">${ICON.ride}<span id="tNpcL">Feld an</span></button>
       <button class="tbtn" id="tMap" title="Karte und Beamen (K)">${ICON.route}<span>Karte</span></button>
       <button class="tbtn" id="tEnv" title="Tageszeit und Wetter (W)">${ICON.sun}<span>Wetter</span></button>
-      <button class="tbtn" id="tSnd" title="Ton (T)">${ICON.sound}<span id="tSndL">Ton</span></button>
+      <button class="tbtn" id="tSnd" title="Ton (M)">${ICON.sound}<span id="tSndL">Ton</span></button>
+      <button class="tbtn" id="tLayout" title="Anzeige anordnen">${ICON.layout}<span>Anordnen</span></button>
       <button class="tbtn" id="tFull" title="Vollbild">${ICON.full}<span>Vollbild</span></button>
       <button class="tbtn stop" id="tEnd" title="Beenden">${ICON.stop}<span>Beenden</span></button>
     </div>
@@ -137,15 +145,33 @@ async function start(el) {
   if (S.pacer) $('#pacerBox').hidden = false;
   updMode(); updGear(); updNpcBtn(); updSnd(); updEnvPanel();
   bindUi();
-  S.ro = new ResizeObserver(() => world.resize()); S.ro.observe(canvas);
+  S.ro = new ResizeObserver(() => { world.resize(); requestAnimationFrame(layout); }); S.ro.observe(canvas);
+  requestAnimationFrame(layout);
   S.timer = setInterval(tick, 100);
   S.lastFrame = performance.now();
   const frame = now => {
-    if (!S?.alive) return;
-    const dt = Math.min(.1, (now - S.lastFrame) / 1000); S.lastFrame = now;
-    world.update({ dist: S.dist, v: S.v, crank: S.crank, pacerDist: S.pacer?.d, pacerV: S.pacer?.v, pacerCrank: S.pacer?.crank, npcs: S.npcOn ? S.field : null }, dt);
-    if (now - S.lastHud > 200) { S.lastHud = now; hud(); }
+    if (!S?.alive || S.parked) return;
+    S.frameFn(now);
     S.raf = requestAnimationFrame(frame);
+  };
+  S.frameFn = now => {
+    const dt = Math.min(.1, (now - S.lastFrame) / 1000); S.lastFrame = now;
+    // Die Physik rechnet mit 10 Hz. Für ruckelfreie Bilder pro Frame weiterrechnen und sanft nachführen.
+    const R = S.route, moving = S.state === 'riding';
+    const smoothD = (o, key, d, v) => {
+      if (o[key] == null) { o[key] = d; return d; }
+      let x = o[key] + (moving ? v * dt * SPEED : 0); const gap = gapOf(R, d, x);
+      if (Math.abs(gap) > 40) x = d; else x += gap * Math.min(1, dt * 3);
+      if (R.loop) x = ((x % R.total) + R.total) % R.total; else x = clamp(x, 0, R.total);
+      return (o[key] = x);
+    };
+    const dist = smoothD(S, 'rdist', S.dist, S.v);
+    S.rcrank = (S.rcrank || 0) + (S.v > .3 || moving ? (live.cadence || 0) / 60 * Math.PI * 2 * dt : 0);
+    let npcs = null;
+    if (S.npcOn) npcs = S.field.map(n => { const d = smoothD(n, 'rd', n.d, n.v); n.rc = (n.rc || 0) + (moving ? n.cadence / 60 * Math.PI * 2 * dt : 0); return { d, lat: n.lat, v: n.v, crank: n.rc }; });
+    const pd = S.pacer ? smoothD(S.pacer, 'rd', S.pacer.d, S.pacer.v) : null;
+    world.update({ dist, v: S.v, crank: S.rcrank, pacerDist: pd, pacerV: S.pacer?.v, pacerCrank: S.pacer?.crank, npcs }, dt);
+    if (now - S.lastHud > 200) { S.lastHud = now; hud(); }
   };
   S.raf = requestAnimationFrame(frame);
   lockScreen();
@@ -171,6 +197,11 @@ function bindUi() {
   $('#woP', el).onclick = () => { S.wOff = clamp(S.wOff + 2, -40, 40); };
   $('#woSkip', el).onclick = () => { const w = woAt(S.wo, S.wT); if (w && !w.done) S.wT += w.left + .01; };
   $('#tSnd', el).onclick = toggleSound;
+  // Workout-Box einklappen (Kopfzeile antippen)
+  $('#woBox', el).classList.toggle('collapsed', !!profile.woCollapsed);
+  $('#woName', el).parentElement.parentElement.onclick = () => { profile.woCollapsed = !profile.woCollapsed; saveProfile(); $('#woBox', el).classList.toggle('collapsed', profile.woCollapsed); requestAnimationFrame(layout); };
+  $('#tLayout', el).onclick = () => { $('#editBar', el).hidden = false; editMode($('#rw', el), true, () => { $('#editBar', el).hidden = true; layout(); }); };
+  $('#tMenu', el).onclick = () => { if (!S.samples.length) { leave(); location.hash = '#/'; return; } location.hash = '#/'; };
   $('#tEnv', el).onclick = () => { $('#envPanel', el).hidden = !$('#envPanel', el).hidden; };
   $('#envTime', el).onclick = e => { const b = e.target.closest('[data-v]'); if (b) { sel.time = b.dataset.v; saveSel(); applyEnv(); } };
   $('#envWeather', el).onclick = e => { const b = e.target.closest('[data-v]'); if (b) { sel.weather = b.dataset.v; saveSel(); applyEnv(); } };
@@ -210,7 +241,14 @@ function bindUi() {
       else if (s.k === 'gear') { S.gear = clamp(S.gear - s.dir, 0, GEARS.length - 1); sel.gear = S.gear; }
     }
     S.shiftLog = []; S.presses = []; updGear();
-    S.wT += wi.left + .01; flash('⏭ Intervall übersprungen', 1500); sound.whoosh();
+    // Plus-Taste: nächstes Intervall. Minus-Taste: Intervall neu starten, in den ersten 10 s eins zurück.
+    if (click.map?.[id] === 'down') {
+      const into = wi.g.dur - wi.left;
+      if (into > 10 || wi.i === 0) { S.wT = wi.start + .01; flash('⏮ Intervall ' + (wi.i + 1) + ' von vorn', 1500); }
+      else { const prev = woAt(S.wo, wi.start - .5); S.wT = prev.start + .01; flash('⏮ Zurück zu Intervall ' + wi.i, 1500); }
+      S.lastSeg = -2; S.gateFor = null; S.world.setGate(null);
+    } else { S.wT += wi.left + .01; flash('⏭ Intervall übersprungen', 1500); }
+    sound.whoosh();
   }));
 }
 
@@ -324,7 +362,7 @@ function togglePause() {
 function begin() { S.state = 'riding'; S.startWall = Date.now(); $('#startCard', S.el).hidden = true; flash('Los geht’s!', 1000); }
 
 let bannerT = 0;
-function flash(txt, ms = 1600) { const b = $('#banner', S?.el); if (!b) return; b.textContent = txt; b.classList.add('show'); clearTimeout(bannerT); bannerT = setTimeout(() => b.classList.remove('show'), ms); }
+function flash(txt, ms = 1600) { const b = $('#banner', S?.el); if (!b) return; b.textContent = txt; b.classList.add('show'); requestAnimationFrame(layout); clearTimeout(bannerT); bannerT = setTimeout(() => b.classList.remove('show'), ms); }
 function xpPop(txt) { const f = $('#xpFloat', S.el); if (!f) return; const s = document.createElement('span'); s.textContent = txt; f.appendChild(s); setTimeout(() => s.remove(), 1600); }
 function note(txt) { S.adapt.note = txt; S.adapt.noteT = performance.now(); if (/gesenkt|hoch|nicht/.test(txt)) sound.warn(); }
 
@@ -363,6 +401,9 @@ function step(dt, first) {
   if (S.startWall) S.wall = (S.wall || 0) + dt;
   const R = S.route, grade = R.gradeAt(S.dist), cad = live.cadence;
   const pw = live.fresh ? live.power : 0;
+  if (S.parked) return; // im Menü: Fahrt steht
+  // Nach der Rückkehr aus dem Menü: Treten setzt die Fahrt fort
+  if (S.resumeOnPedal && S.state === 'paused' && (pw > 10 || (cad || 0) > 20)) { S.resumeOnPedal = false; S.state = 'riding'; flash('Weiter'); $('#tPause', S.el).innerHTML = ICON.pause + '<span>Pause</span>'; }
   // Start und automatische Pause
   if (S.state === 'ready' && (pw > 10 || (cad || 0) > 20)) begin();
   if (S.state === 'riding' && profile.autoPause && pw < 5 && (cad || 0) < 5 && S.v < .3) { S.idle += dt; if (S.idle > 3) { S.state = 'auto'; flash('Automatische Pause'); } } else S.idle = 0;
@@ -480,7 +521,8 @@ function hud() {
   const g = R.gradeAt(S.dist); $('#hGrade', el).textContent = f(g); $('.gradebox', el).dataset.g = g > 8 ? 4 : g > 5 ? 3 : g > 2.5 ? 2 : g < -2 ? 0 : 1;
   $('#gIcon', el).style.transform = `rotate(${-clamp(g * 2.2, -35, 35)}deg)`;
   if (S.mode !== 'gear') updGear();
-  // Windschatten
+
+
   $('#draftBox', el).hidden = !(S.draft > .03);
   if (S.draft > .03) $('#hDraft', el).textContent = '−' + Math.round(S.draft * 100) + ' % Luft';
   // Workout
@@ -497,6 +539,7 @@ function hud() {
   }
   if (S.pacer) { const gap = (S.pacer.d - S.dist); $('#hPacer', el).textContent = (gap >= 0 ? '+' : '−') + Math.abs(Math.round(gap)) + ' m'; }
   if (S.npcOn && (S.rlN = (S.rlN || 0) + 1) % 3 === 0) riderList(el);
+  if ((S.lyN = (S.lyN || 0) + 1) % 5 === 0) arrange($('#rw', el));
   drawElevStrip($('#elev', el));
   drawMini($('#mini', el));
 }
@@ -623,7 +666,7 @@ function shot(caption) {
   const items = [[p3 + ' W', 'Leistung'], [(live.heart ?? '–') + '', 'Puls'], [(S.v * 3.6).toFixed(1).replace('.', ',') + ' km/h', 'Tempo'], [fmtKm(S.odo) + ' km', 'Distanz'], [Math.round(S.asc) + ' m', 'Höhe'], [fmtT(S.t), 'Zeit']];
   let xx = w - 28; x.textAlign = 'right';
   for (let i = items.length - 1; i >= 0; i--) { x.fillStyle = '#fff'; x.font = '700 30px Barlow, Arial'; x.fillText(items[i][0], xx, h - 52); x.fillStyle = '#9aa7b3'; x.font = '500 15px Barlow, Arial'; x.fillText(items[i][1], xx, h - 30); xx -= Math.max(x.measureText(items[i][0]).width, 90) + 34; }
-  x.textAlign = 'left'; x.fillStyle = '#ff6a3d'; x.font = '700 20px Barlow, Arial'; x.fillText('WINDSCHATTEN', 28, 40);
+  x.textAlign = 'left'; x.fillStyle = '#ff6a3d'; x.font = '700 20px Barlow, Arial'; x.fillText('VELOVERSE', 28, 40);
   c.toBlob(b => { if (b && S) { S.shots.push({ blob: b, caption, t: Math.round(S.t), d: Math.round(S.odo) }); if (caption === 'Foto') flash('📷 Foto gespeichert', 900); } }, 'image/jpeg', .86);
   const fl = document.createElement('div'); fl.className = 'shotflash'; S.el.querySelector('.ridewrap').appendChild(fl); setTimeout(() => fl.remove(), 500);
 }
@@ -666,4 +709,29 @@ export function leave() {
   
   S = null;
 }
-export const isRiding = () => !!S && S.state !== 'ready' && S.samples.length > 0;
+export const isRiding = () => !!S && !S.parked && S.state !== 'ready' && S.samples.length > 0;
+
+/* ---------- Pausieren und ins Menü (Fahrt bleibt im Speicher) ---------- */
+export function park() {
+  if (!S || S.parked) return;
+  S.parked = true; S.state = 'paused'; S.v = 0;
+  cancelAnimationFrame(S.raf); sound.silence(); closeMap();
+  S.wrap = $('#rw', S.el); document.getElementById('parkHold')?.remove();
+  const hold = document.createElement('div'); hold.id = 'parkHold'; hold.hidden = true; hold.appendChild(S.wrap); document.body.appendChild(hold);
+  if (status.trainer === 'on' || demo.on) setPower(Math.min(100, profile.ftp * .4));
+  document.removeEventListener('keydown', S.key);
+}
+export const parkedInfo = () => S?.parked ? `${S.route.name} · ${fmtKm(S.odo)} km · ${fmtT(S.t)}` : null;
+function unpark(el) {
+  S.parked = false; S.el = el; el.innerHTML = ''; el.appendChild(S.wrap); document.getElementById('parkHold')?.remove();
+  document.addEventListener('keydown', S.key);
+  $('#tPause', el).innerHTML = ICON.play + '<span>Weiter</span>';
+  S.world.resize(); S.world.camInit = false; S.lastFrame = performance.now(); S.lastTick = performance.now();
+  const frame = now => {
+    if (!S?.alive || S.parked) return;
+    S.frameFn(now); S.raf = requestAnimationFrame(frame);
+  };
+  S.raf = requestAnimationFrame(frame);
+  flash('Pausiert · Tritt los oder „Weiter“ drücken', 2500); S.state = 'paused'; S.resumeOnPedal = true;
+  if (sessionStorage.getItem('endAfterResume')) { sessionStorage.removeItem('endAfterResume'); setTimeout(() => endRide(), 200); }
+}

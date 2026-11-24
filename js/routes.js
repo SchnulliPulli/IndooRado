@@ -78,6 +78,8 @@ export async function getRaw(id) {
 export async function getRoute(id) {
   if (cache.has(id)) return cache.get(id);
   const raw = await getRaw(id) || await getRaw('b-hills');
+  // Gelände fehlt (z. B. nach Wiederherstellung aus Sicherung oder NAS): erneut laden
+  if (raw.realTerrain && !raw.dem) { try { await loadDem(raw); await db.put('routes', raw); } catch (e) { console.warn('Gelände nicht geladen', e); } }
   const r = prepare(raw);
   cache.set(id, r);
   return r;
@@ -119,6 +121,52 @@ export function parseGpx(text, fname) {
   if (r.stats.dist < 500) throw new Error('Strecke ist kürzer als 500 m');
   return r;
 }
+/* ---------- Echtes Gelände: Höhenmodell aus freien Terrain-Kacheln (AWS Open Data, Terrarium-Format) ---------- */
+const TILE_URL = (z, x, y) => `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
+const lon2x = (lon, z) => (lon + 180) / 360 * 2 ** z;
+const lat2y = (lat, z) => { const r = lat * Math.PI / 180; return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * 2 ** z; };
+async function tileData(z, x, y) {
+  const res = await fetch(TILE_URL(z, x, y), { mode: 'cors' });
+  if (!res.ok) throw new Error('Höhendaten nicht erreichbar (HTTP ' + res.status + ')');
+  const bmp = await createImageBitmap(await res.blob());
+  const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height;
+  const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(bmp, 0, 0);
+  return g.getImageData(0, 0, c.width, c.height).data;
+}
+// Lädt das Gelände rund um die Strecke (Rand 2,5 km) und speichert es als Raster in der Strecke
+export async function loadDem(raw, onProgress = () => { }) {
+  const P = raw.pts, lat0 = P[0][0], lon0 = P[0][1], kx = M_DEG * Math.cos(lat0 / R2D), M = 2500;
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (const p of P) { const x = (p[1] - lon0) * kx, z = -(p[0] - lat0) * M_DEG; x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+  x0 -= M; x1 += M; z0 -= M; z1 += M;
+  const latN = lat0 - z0 / M_DEG, latS = lat0 - z1 / M_DEG, lonW = lon0 + x0 / kx, lonE = lon0 + x1 / kx;
+  // Zoomstufe: so fein wie möglich, höchstens 80 Kacheln
+  let z = 13, tx0, tx1, ty0, ty1;
+  for (; z >= 9; z--) { tx0 = Math.floor(lon2x(lonW, z)); tx1 = Math.floor(lon2x(lonE, z)); ty0 = Math.floor(lat2y(latN, z)); ty1 = Math.floor(lat2y(latS, z)); if ((tx1 - tx0 + 1) * (ty1 - ty0 + 1) <= 80) break; }
+  const tiles = new Map(), list = [];
+  for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) list.push([tx, ty]);
+  let done = 0;
+  // 6 Kacheln gleichzeitig laden
+  const queue = [...list]; const worker = async () => { while (queue.length) { const [tx, ty] = queue.shift(); tiles.set(tx + ',' + ty, await tileData(z, tx, ty)); onProgress(++done / list.length); } };
+  await Promise.all(Array.from({ length: 6 }, worker));
+  const ele = (lat, lon) => {
+    const fx = lon2x(lon, z), fy = lat2y(lat, z), tx = Math.floor(fx), ty = Math.floor(fy), d = tiles.get(tx + ',' + ty); if (!d) return 0;
+    const px = Math.min(255, Math.floor((fx - tx) * 256)), py = Math.min(255, Math.floor((fy - ty) * 256)), o = (py * 256 + px) * 4;
+    return d[o] * 256 + d[o + 1] + d[o + 2] / 256 - 32768;
+  };
+  // Raster in lokalen Metern, Zellgröße nach Fläche (höchstens ~1,4 Mio. Punkte)
+  const cell = Math.max(15, Math.ceil(Math.sqrt((x1 - x0) * (z1 - z0) / 1.4e6))), nx = Math.ceil((x1 - x0) / cell) + 1, nz = Math.ceil((z1 - z0) / cell) + 1;
+  const scale = .25, data = new Int16Array(nx * nz); let min = Infinity, max = -Infinity;
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+    const x = x0 + i * cell, zz = z0 + j * cell, e = ele(lat0 - zz / M_DEG, lon0 + x / kx);
+    data[j * nx + i] = Math.round(Math.max(-500, Math.min(8000, e)) / scale); min = Math.min(min, e); max = Math.max(max, e);
+  }
+  raw.dem = { x0, z0, cell, nx, nz, scale, data, min, max, zoom: z, src: 'AWS Terrain Tiles' }; raw.realTerrain = true;
+  // GPX ohne Höhen: Straßenhöhe aus dem Gelände übernehmen
+  if (raw.noEle) { for (const p of P) p[2] = +ele(p[0], p[1]).toFixed(1); raw.noEle = false; raw.stats = null; quickStats(raw); }
+  return raw;
+}
+
 export async function saveRoute(r) { await db.put('routes', r); cache.delete(r.id); }
 export async function deleteRoute(id) { await db.del('routes', id); cache.delete(id); }
 
@@ -161,7 +209,14 @@ export function prepare(raw) {
   let themeKey = raw.theme;
   if (themeKey === 'auto') themeKey = maxE > 1300 ? 'alpine' : (maxE - minE > 250 ? 'meadow' : (asc / total * 1000 < 5 ? 'plains' : 'forest'));
   const theme = THEMES[themeKey] || THEMES.meadow;
-  const water = theme.lake ? minE - 2.5 : theme.coast ? Math.min(0, minE - 25) : null;
+  // Echtes Höhenmodell (nur importierte Strecken, wenn geladen)
+  const dem = raw.dem && raw.dem.data ? raw.dem : null;
+  const demAt = dem ? (px, pz) => {
+    const gx = (px - dem.x0) / dem.cell, gz = (pz - dem.z0) / dem.cell, w = dem.nx, D = dem.data;
+    const i = clamp(Math.floor(gx), 0, w - 2), j = clamp(Math.floor(gz), 0, dem.nz - 2), fx = clamp(gx - i, 0, 1), fz = clamp(gz - j, 0, 1);
+    return lerp(lerp(D[j * w + i], D[j * w + i + 1], fx), lerp(D[(j + 1) * w + i], D[(j + 1) * w + i + 1], fx), fz) * dem.scale;
+  } : null;
+  const water = dem ? (dem.min <= .5 ? 0 : null) : theme.lake ? minE - 2.5 : theme.coast ? Math.min(0, minE - 25) : null;
 
   // Räumlicher Index: grob (25 m) und fein (5 m)
   const CELL = 100, grid = new Map(), FAR = 600, far = new Map();
@@ -217,14 +272,22 @@ export function prepare(raw) {
   const cover = d => { let c = 0; for (const t of tunnels) c = Math.max(c, smooth(t.from - 30, t.from + 15, d) * (1 - smooth(t.to - 15, t.to + 30, d))); return c; };
   function heightAt(px, pz) {
     const n = nearest(px, pz);
+    let h, hills = 0;
+    if (demAt) {
+      // Echtes Gelände: Höhenmodell, nahe der Straße auf deren GPX-Höhe angeglichen
+      h = demAt(px, pz);
+      if (n && n.dist < 400) h += (n.ele - demAt(x[n.i], z[n.i])) * smooth(400, 30, n.dist);
+      hills = 4 * fbm(px / 60, pz / 60, 2, 9); h += hills * smooth(20, 120, n ? n.dist : 999);
+    } else {
     let base, d, side = 0;
     if (n && n.dist < 260) { base = n.ele; d = n.dist; side = n.side; }
     else { const f = farBase(px, pz); base = f.ele; d = Math.max(260, f.dist); side = f.side; }
     const sc = theme.hillScale;
-    let hills = theme.hillAmp * (fbm(px / sc, pz / sc, 4, 3) + 0.25 * fbm(px / 90, pz / 90, 2, 9));
-    let h = base + hills * smooth(14, 150, d) + Math.min(d, 900) * theme.valley * (0.6 + 0.4 * fbm(px / 800, pz / 800, 2, 5));
+    hills = theme.hillAmp * (fbm(px / sc, pz / sc, 4, 3) + 0.25 * fbm(px / 90, pz / 90, 2, 9));
+    h = base + hills * smooth(14, 150, d) + Math.min(d, 900) * theme.valley * (0.6 + 0.4 * fbm(px / 800, pz / 800, 2, 5));
     if (theme.mountains) h += theme.mountains * 180 * smooth(500, 2200, d) * (0.55 + 0.45 * fbm(px / 1500, pz / 1500, 3, 11));
-    if (water != null) {
+    }
+    if (water != null && !demAt) {
       if (theme.coast && side === theme.coast) h = lerp(h, water - 14, smooth(22, 150, d));
       if (theme.lake && shape) {
         const ang = Math.atan2(pz - shape.center[1], px - shape.center[0]);
@@ -283,6 +346,6 @@ export function prepare(raw) {
     N, step, total, x, z, e, head, grade, asc, minE, maxE, climbs, lat, lon, towns, tunnels, sprints, townAt, tunnelAt,
     eleAt: d => sample(e, d), gradeAt: d => sample(grade, d), xAt: d => sample(x, d), zAt: d => sample(z, d), headAt,
     latAt: d => lat0 - sample(z, d) / M_DEG, lonAt: d => lon0 + sample(x, d) / kx,
-    heightAt, nearest,
+    heightAt, nearest, realTerrain: !!dem, dem, demAt,
   };
 }

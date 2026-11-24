@@ -30,7 +30,8 @@ function build() {
     hum: loop(brown, 'bandpass', 120, 4),
     sea: loop(brown, 'lowpass', 700, .5),
     breeze: loop(white, 'bandpass', 1800, .4),
-    tick: 0, bird: 0,
+    chain: loop(white, 'bandpass', 2600, 3), // Kette läuft über die Ritzel
+    tick: 0, bird: 0, stroke: 0,
   };
   apply();
 }
@@ -56,19 +57,37 @@ export function update(st) {
   const t = now(), v = st.riding ? st.v : 0, k = Math.min(1, v / 14);
   const N = nodes, set = (p, val, tc = .25) => p.setTargetAtTime(val, t, tc);
   // Fahrtwind: lauter und heller mit dem Tempo, im Tunnel dumpfer und hallig
-  set(N.wind.g.gain, (k * k * .35 + (st.weather === 'rain' ? .06 : 0)) * (st.tunnel ? 1.6 : 1));
-  set(N.wind.f.frequency, (st.tunnel ? 250 : 350) + k * 1400);
+  // Fahrtwind: erst bei höherem Tempo hörbar, dumpf statt zischend
+  set(N.wind.g.gain, Math.max(0, k - .25) ** 2 * .22 * (st.tunnel ? 1.5 : 1));
+  set(N.wind.f.frequency, (st.tunnel ? 220 : 260) + k * 650);
   // Reifen auf Asphalt (bei Regen nasser, höher)
-  set(N.roll.g.gain, k * (st.weather === 'rain' ? .5 : .32));
-  set(N.roll.f.frequency, 180 + k * (st.weather === 'rain' ? 1600 : 500));
+  set(N.roll.g.gain, k * (st.weather === 'rain' ? .36 : .3));
+  set(N.roll.f.frequency, 180 + k * (st.weather === 'rain' ? 900 : 500));
   // Antrieb: Brummen mit der Trittfrequenz
   const cad = st.cad || 0;
   set(N.hum.g.gain, cad > 20 && st.riding ? Math.min(.12, .03 + st.power / 4000) : 0);
   set(N.hum.f.frequency, 60 + cad * 1.2);
   // Umgebung: Meer an der Küste, leichter Wind draußen, Regen
   set(N.sea.g.gain, st.theme === 'coast' && !st.tunnel ? .22 + .1 * Math.sin(t / 3) : 0, .8);
-  set(N.breeze.g.gain, st.tunnel ? 0 : st.weather === 'rain' ? .16 : .025, .8);
-  set(N.breeze.f.frequency, st.weather === 'rain' ? 4200 : 1800, .8);
+  // Regen nur als leises, gedämpftes Prasseln, kein Dauerrauschen
+  set(N.breeze.g.gain, st.tunnel ? 0 : st.weather === 'rain' ? .05 : 0, .8);
+  set(N.breeze.f.frequency, st.weather === 'rain' ? 2600 : 1500, .8);
+  if (st.weather === 'rain' && !st.tunnel && Math.random() < .5) for (let i = 0; i < 3; i++) click(t + Math.random() * .2, .01 + Math.random() * .015);
+  // Radeln: Kettensurren im Takt der Kurbel (zwei Druckphasen pro Umdrehung) und ein leises Knarzen am Totpunkt
+  const pedaling = st.riding && cad > 20;
+  set(N.chain.f.frequency, 1800 + cad * 12 + k * 800);
+  if (!pedaling) { if (N.stroke) N.chain.g.gain.cancelScheduledValues(t); set(N.chain.g.gain, 0, .15); N.stroke = 0; }
+  else {
+    // kurze Impulse je Tritt, dazwischen fast still (kein Dauerrauschen)
+    const per = 60 / cad / 2, base = .008 + Math.min(.02, st.power / 20000);
+    if (N.stroke < t) N.stroke = t + .02;
+    while (N.stroke < t + .35) {
+      const s = N.stroke, g = N.chain.g.gain;
+      g.setTargetAtTime(base * 2, s, per * .1); g.setTargetAtTime(base * .08, s + per * .3, per * .15);
+      if (Math.random() < .5) click(s + per * .5, .018 + Math.random() * .012);
+      N.stroke += per;
+    }
+  }
   // Freilauf-Knattern, wenn gerollt und nicht getreten wird
   if (v > 2 && cad < 10 && t > N.tick) { for (let i = 0; i < 6; i++) click(t + i * (.9 / (v * 2)), .05); N.tick = t + .8; }
   // Vögel auf dem Land, nicht im Tunnel, nicht nachts oder bei Regen
@@ -102,6 +121,6 @@ export const sound = {
   pass() { if (!ok()) return; tone(1400, now(), .08, { vol: .08, slide: 1.4 }); },
   warn() { if (!ok()) return; const t = now(); tone(440, t, .18, { type: 'square', vol: .08 }); tone(330, t + .2, .25, { type: 'square', vol: .08 }); },
   whoosh() { if (!ok()) return; const s = ctx.createBufferSource(); s.buffer = noiseBuffer('white', .8); const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.5; f.frequency.setValueAtTime(300, now()); f.frequency.exponentialRampToValueAtTime(3000, now() + .6); const g = ctx.createGain(); g.gain.setValueAtTime(.0001, now()); g.gain.exponentialRampToValueAtTime(.4, now() + .25); g.gain.exponentialRampToValueAtTime(.0001, now() + .75); s.connect(f).connect(g).connect(fx); s.start(); },
-  silence() { if (!ctx || !nodes) return; for (const k of ['wind', 'roll', 'hum', 'sea', 'breeze']) nodes[k].g.gain.setTargetAtTime(0, now(), .2); },
+  silence() { if (!ctx || !nodes) return; for (const k of ['wind', 'roll', 'hum', 'sea', 'breeze', 'chain']) { nodes[k].g.gain.cancelScheduledValues(now()); nodes[k].g.gain.setTargetAtTime(0, now(), .2); } nodes.stroke = 0; },
   toggle() { profile.soundOn = profile.soundOn === false; apply(); return !muted(); },
 };
