@@ -1,0 +1,25 @@
+TRITTWERK – Indoor-Radtraining im Browser
+==========================================
+
+Den ganzen Ordner auf einen Webserver legen, index.html ist der Einstieg.
+Es ist eine reine statische Website, ein Server ohne PHP oder Datenbank reicht.
+
+Wichtig für Bluetooth
+- Nur Chrome oder Edge (Android, Windows, macOS, ChromeOS).
+- Nur über https:// oder über http://localhost bzw. http://127.0.0.1.
+  Über eine IP-Adresse wie http://192.168.x.x sperrt der Browser Bluetooth.
+- Direkt per Doppelklick (file://) startet die App nicht.
+
+Varianten
+1. Synology NAS: Web Station installieren, Ordner in "web" kopieren,
+   in DSM ein Let's-Encrypt-Zertifikat für die eigene Domain einrichten,
+   App über https://deine-domain/trittwerk/ öffnen.
+2. Android-Tablet: App "Simple HTTP Server" auf diesen Ordner zeigen lassen
+   und in Chrome http://localhost:PORT/ öffnen (nicht die 192.168-Adresse).
+3. Laptop: im Ordner "python -m http.server 8000" ausführen und
+   http://localhost:8000/ öffnen.
+
+Daten
+Fahrten, Fotos und Fortschritt liegen im Browser (IndexedDB) und hängen an der
+Adresse. Unter einer anderen Adresse sind es andere Daten. Im Profil gibt es
+Sicherung und Wiederherstellung als Datei.
