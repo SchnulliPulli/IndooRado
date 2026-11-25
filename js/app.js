@@ -169,6 +169,9 @@ async function announce(el) {
   } catch (e) { }
 }
 // Online angemeldet: Abgleich läuft über das Konto, NAS und andere Cloud-Speicher pausieren. Abgemeldet: zurück zum bisherigen Speicher.
+// Abgleichfehler höchstens alle 15 Minuten melden (der Abgleich läuft oft automatisch)
+let lastSyncErr = 0;
+function syncErrToast(msg) { if (Date.now() - lastSyncErr < 15 * 60e3) return; lastSyncErr = Date.now(); toast(msg, 6000); }
 async function bindOnline(O) {
   const S = await import('./sync.js');
   const on = O.loggedIn() && !O.needsMfa() && O.access().ok; // ohne Zugang (Testphase abgelaufen, gesperrt) kein Online-Abgleich
@@ -177,7 +180,7 @@ async function bindOnline(O) {
   await S.setOnlineBackend(on ? { sb: O.online.client, uid: O.online.user.id } : null);
   window.__cloudUpd?.();
   if (on) {
-    const pulled = await autoSync().catch(e => { toast('Online-Abgleich: ' + (sync.error || e.message), 5000); return null; });
+    const pulled = await autoSync().catch(e => { syncErrToast('Online-Abgleich: ' + (sync.error || e.message)); return null; });
     if (pulled) { await loadState(); await loadPlan(); toast(sync.info || 'Neuerer Stand aus dem Konto übernommen', sync.info ? 6000 : 3000); sync.info = ''; if (currentKey !== 'ride') route(); }
     (await import('./online/sync.js')).pushRides().catch(() => { });
   }
@@ -189,7 +192,15 @@ function onlineHooks(O) {
   bus.on('online', ev => { if (['SIGNED_IN', 'SIGNED_OUT', 'MFA_CHALLENGE_VERIFIED', 'mfa', 'out'].includes(ev)) bindOnline(O); });
   bus.on('rideSaved', async () => { if (sync.online) (await import('./online/sync.js')).pushRides().catch(() => { }); });
 }
+// Ladeanzeige für Online-Anfragen: erscheint erst nach 400 ms, damit schnelle Antworten nicht flackern
+function netIndicator() {
+  const pill = document.createElement('div'); pill.className = 'netpill'; pill.hidden = true; pill.setAttribute('role', 'status');
+  pill.innerHTML = '<span class="spinner sm"></span><span>Online-Infos werden geladen …</span>'; document.body.appendChild(pill);
+  let t = null;
+  bus.on('netbusy', n => { clearTimeout(t); if (n > 0) t = setTimeout(() => { pill.hidden = currentKey === 'ride'; }, 400); else pill.hidden = true; });
+}
 async function init() {
+  netIndicator();
   await loadState(); await loadClickMap(); await loadPlan();
   const { applyAppTheme } = await import('./pages/profile.js'); applyAppTheme();
   matchMedia('(prefers-color-scheme: light)').addEventListener?.('change', applyAppTheme);
@@ -197,12 +208,11 @@ async function init() {
   bus.on('toast', m => toast(m));
   if (await kv.get('demo', !support().ok)) setDemo(true);
   persist();
-  // VeloVerse Online (nur wenn online.json oder ein Zugang eingetragen ist). Bei Rückkehr vom Login zuerst, damit niemand sonst den ?code= nimmt
+  // VeloVerse Online läuft im Hintergrund an, die Startseite wartet nicht darauf.
+  // Nur bei Rückkehr vom Login (?code=…) erst die Anmeldung abschließen, damit niemand sonst den Code nimmt.
   const O = await import('./online/client.js');
-  await O.loadSiteConfig();
-  window.__loginUpd?.();
-  let onlineP = Promise.resolve();
-  if (O.configured()) { onlineP = O.initOnline().then(() => { window.__loginUpd?.(); }).catch(e => console.warn('Online:', e.message)); if (O.expectingReturn()) await onlineP; }
+  const onlineP = O.loadSiteConfig().then(() => { window.__loginUpd?.(); if (O.configured()) return O.initOnline().then(() => window.__loginUpd?.()); }).catch(e => console.warn('Online:', e.message));
+  if (new URLSearchParams(location.search).has('code') && O.expectingReturn()) await onlineP;
   // Rückkehr von OneDrive/Google/Dropbox-Anmeldung zuerst auswerten (sonst hält Strava den Code für seinen)
   await loadSync();
   try { const who = await handleCloudRedirect(); if (who) toast('Verbunden mit ' + who, 4000); } catch (e) { toast(e.message, 7000); }
@@ -223,12 +233,21 @@ async function init() {
     if (!pulled) return;
     await loadState(); await loadPlan(); await loadClickMap(); toast(sync.info || 'Neuerer Stand von ' + providerName() + ' übernommen', sync.info ? 6000 : 3000); sync.info = '';
     if (currentKey !== 'ride') route();
-  }).catch(e => toast(providerName() + '-Abgleich: ' + (sync.error || e.message), 5000));
+  }).catch(e => syncErrToast(providerName() + '-Abgleich: ' + (sync.error || e.message)));
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState !== 'visible' || currentKey === 'ride') return;
     try { const pulled = await autoSync(); if (pulled) { await loadState(); await loadPlan(); toast('Neuer Stand von ' + providerName() + ' übernommen'); route(); } } catch (e) { }
   });
-  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => { });
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    const hadCtrl = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register('sw.js').then(r => r.update()).catch(() => { });
+    // Neue App-Version übernommen: einmal neu laden, damit alle Dateien zur selben Version gehören (während der Fahrt erst danach)
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadCtrl) return;
+      const go = () => { toast('Neue Version geladen', 1500); setTimeout(() => location.reload(), 600); };
+      if (currentKey !== 'ride') go(); else bus.on('rideEnded', go);
+    });
+  }
 }
 // Lesefelder mit Text (z. B. Strava-Titel): Antippen markiert alles (statt Inline-onclick, wegen Content Security Policy)
 document.addEventListener('click', e => { const f = e.target.closest?.('[data-selectall]'); if (f) f.select(); });

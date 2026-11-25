@@ -10,6 +10,7 @@ let off = [], tick = null;
 export function leave() { off.forEach(f => f()); off = []; clearInterval(tick); }
 
 async function gate(el) {
+  if (!el.querySelector('.acc-loading')) el.innerHTML = '<div class="pageload acc-loading"><div class="spinner"></div><div class="small muted">Online-Infos werden geladen …</div></div>';
   const tok = window.__routeTok, gone = () => tok !== window.__routeTok;
   await O.loadSiteConfig(); if (gone()) return false;
   if (!O.configured()) { el.innerHTML = '<section class="pagehead"><h1>Online</h1></section><section class="card"><p class="muted">VeloVerse Online ist nicht eingerichtet.</p><a class="btn" href="#/account">Zum Konto</a></section>'; return false; }

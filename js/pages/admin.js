@@ -34,12 +34,12 @@ export async function render(el) {
     const q = $('#adQ', el).value.trim().toLowerCase(), onlyP = $('#adPend', el)?.checked;
     const rows = users.filter(u => (!q || u.display_name.toLowerCase().includes(q) || u.id.startsWith(q)) && (!onlyP || (!u.approved && u.role === 'user')))
       .sort((a, b) => (a.approved || a.role !== 'user') - (b.approved || b.role !== 'user') || b.created_at.localeCompare(a.created_at));
-    $('#adUsers', el).innerHTML = `<tr><th>Name</th><th>Status</th><th>Rolle</th><th class="n">Level</th><th>Zuletzt</th><th>Seit</th><th></th></tr>` + rows.map(u => { const [st, c] = stat(u), me = u.id === O.online.user.id; return `<tr data-id="${u.id}">
+    $('#adUsers', el).innerHTML = `<tr><th>Name</th><th>Status</th><th>Rolle</th><th class="n">Level</th><th>Zuletzt</th><th>Seit</th><th class="n">Aktionen</th></tr>` + rows.map(u => { const [st, c] = stat(u), me = u.id === O.online.user.id; return `<tr data-id="${u.id}">
       <td>${esc(u.display_name)}${u.public_profile ? '' : ' <span class="muted small">(privat)</span>'}</td>
       <td><span class="stbadge ${c}">${st}</span></td>
       <td><select class="inp sm" data-role ${me ? 'disabled' : ''}>${['user', 'admin', 'banned'].map(r => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${{ user: 'Nutzer', admin: 'Admin', banned: 'Gesperrt' }[r]}</option>`).join('')}</select></td>
       <td class="n">${u.level}</td><td>${u.last_seen ? fmtDate(u.last_seen) : '–'}</td><td>${fmtDate(u.created_at)}</td>
-      <td class="row" style="flex-wrap:nowrap">${u.role === 'user' ? (u.approved ? `<button class="btn xs ghost" data-appr="0" ${me ? 'disabled' : ''}>Freischaltung entziehen</button>` : `<button class="btn xs pri" data-appr="1">Freischalten</button><button class="btn xs ghost" data-trial>+7 Tage Test</button>`) : ''}<button class="btn xs ghost danger" data-wipe ${me ? 'disabled' : ''}>Daten löschen</button></td></tr>`; }).join('');
+      <td class="actcell"><div class="row" style="flex-wrap:nowrap;justify-content:flex-end">${u.role === 'user' ? (u.approved ? `<button class="btn xs ghost" data-appr="0" ${me ? 'disabled' : ''}>Freischaltung entziehen</button>` : `<button class="btn xs pri" data-appr="1">Freischalten</button><button class="btn xs ghost" data-trial>+7 Tage Test</button>`) : ''}<button class="btn xs ghost danger" data-wipe ${me ? 'disabled' : ''}>Daten löschen</button></div></td></tr>`; }).join('');
   };
   const loadUsers = async () => { const { data, error } = await sb.from('profiles').select('*').order('created_at', { ascending: false }).limit(500); if (error) return toast(error.message, 5000); users = data; list(); };
   const anns = async () => {

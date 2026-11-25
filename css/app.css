@@ -712,3 +712,10 @@ span.badge{display:inline-flex;padding:5px 10px;font-weight:600}span.badge svg{w
 .dglist{display:flex;flex-direction:column;gap:4px}.dgrow{padding:6px 8px;border-radius:8px;background:var(--panel2);gap:10px;flex-wrap:wrap}.dgrow.bad{background:color-mix(in srgb,var(--hr) 16%,var(--panel2))}
 body:not(.is-admin) .admintab:not(.on){display:none}
 .loginbtn.in{cursor:pointer}
+#adUsers td,#adUsers th{vertical-align:middle;white-space:nowrap}#adUsers .actcell{width:1%}
+
+/* Ladeanzeige für Online-Anfragen (blockiert nichts) */
+.netpill{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:90;display:flex;align-items:center;gap:10px;padding:8px 16px 8px 10px;border-radius:999px;background:var(--panel);border:1px solid var(--line);box-shadow:0 8px 24px rgba(0,0,0,.3);font-size:13px;color:var(--soft);pointer-events:none;animation:popup .2s ease-out}
+.netpill[hidden]{display:none}
+.spinner.sm{width:18px;height:18px;border-width:2.5px;margin:0}
+@media(max-width:900px){.netpill{bottom:calc(74px + env(safe-area-inset-bottom))}}

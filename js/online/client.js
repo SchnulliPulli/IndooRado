@@ -43,6 +43,9 @@ async function tabLock(name, timeout, fn) {
   const prev = lockChain; let release; lockChain = new Promise(r => release = r);
   try { await Promise.race([prev, new Promise(r => setTimeout(r, 5000))]); return await fn(); } finally { release(); }
 }
+// Jede Anfrage ans Backend zählen: dauert etwas, zeigt die App unten eine kleine Ladeanzeige (blockiert nichts)
+export const net = { busy: 0 };
+const trackedFetch = (...a) => { net.busy++; bus.emit('netbusy', net.busy); return fetch(...a).finally(() => { net.busy--; bus.emit('netbusy', net.busy); }); };
 // Live-Dienst braucht den Anmelde-Schlüssel für private Kanäle
 export async function realtimeAuth() { const sb = await client(); const { data } = await sb.auth.getSession(); if (data.session) await sb.realtime.setAuth(data.session.access_token); return !!data.session; }
 export async function client() {
@@ -50,7 +53,7 @@ export async function client() {
   if (!configured()) throw new Error('VeloVerse Online ist nicht eingerichtet');
   const { createClient } = await import('../../vendor/supabase.esm.js');
   const c = config();
-  online.client = createClient(c.url, c.anonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: loginReturn(), flowType: 'pkce', storageKey: 'vv-auth', storage: authStore, lock: tabLock } });
+  online.client = createClient(c.url, c.anonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: loginReturn(), flowType: 'pkce', storageKey: 'vv-auth', storage: authStore, lock: tabLock }, global: { fetch: trackedFetch } });
   // Laut Supabase-Doku keine Supabase-Aufrufe direkt im Callback (kann blockieren): erst danach ausführen
   online.client.auth.onAuthStateChange((ev, session) => {
     if (ev === 'PASSWORD_RECOVERY') online.recovery = true;

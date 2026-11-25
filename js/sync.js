@@ -22,13 +22,16 @@ export async function setOnlineBackend(o) {
   bus.emit('sync');
 }
 export const nasPaused = () => !!ON && !!(sync.cfg && (sync.cfg.host || sync.cfg.url || sync.cfg.clientId));
+// Lesbare Fehlermeldung aus Supabase-Fehlern (manche haben nur einen HTTP-Status)
+const sbErr = e => e?.message && e.message !== '{}' ? e.message : (e?.status ?? e?.statusCode ?? e?.originalError?.status) ? 'HTTP ' + (e.status ?? e.statusCode ?? e.originalError.status) + (e.originalError?.statusText ? ' ' + e.originalError.statusText : '') : 'unbekannter Fehler';
 const SBK = {
   p: rel => `${ON.uid}/sync/${rel}`.replace(/\/+$/, ''),
   async mkdir() { },
-  async put(rel, body, type) { const { error } = await ON.sb.storage.from('vault').upload(SBK.p(rel), body instanceof Blob ? body : new Blob([body], { type: type || 'application/octet-stream' }), { upsert: true, contentType: type || 'application/octet-stream' }); if (error) throw new Error('Online: ' + error.message); },
-  async get(rel) { const { data, error } = await ON.sb.storage.from('vault').download(SBK.p(rel)); if (error) { if (/not.?found|404|400|Object not found/i.test(error.message || '') || error.statusCode == 404 || error.status === 400) return null; throw new Error('Online: ' + error.message); } return data; },
+  async put(rel, body, type) { const { error } = await ON.sb.storage.from('vault').upload(SBK.p(rel), body instanceof Blob ? body : new Blob([body], { type: type || 'application/octet-stream' }), { upsert: true, contentType: type || 'application/octet-stream' }); if (error) throw new Error('Online: ' + sbErr(error)); },
+  // Fehlende Datei = null. Supabase meldet das je nach Version als 400/404 oder mit leerem Fehlerobjekt "{}".
+  async get(rel) { const { data, error } = await ON.sb.storage.from('vault').download(SBK.p(rel)); if (error) { const st = error.status ?? error.statusCode ?? error.originalError?.status; if ([400, 404].includes(+st) || /not.?found|Object not found|^\{\}$/i.test(error.message || '{}')) return null; throw new Error('Online: ' + sbErr(error)); } return data; },
   async list(rel) {
-    const out = []; for (let off = 0; ; off += 1000) { const { data, error } = await ON.sb.storage.from('vault').list(SBK.p(rel), { limit: 1000, offset: off }); if (error) throw new Error('Online: ' + error.message); out.push(...data.map(f => f.name).filter(n => n !== '.emptyFolderPlaceholder')); if (data.length < 1000) break; }
+    const out = []; for (let off = 0; ; off += 1000) { const { data, error } = await ON.sb.storage.from('vault').list(SBK.p(rel), { limit: 1000, offset: off }); if (error) throw new Error('Online: ' + sbErr(error)); out.push(...data.map(f => f.name).filter(n => n !== '.emptyFolderPlaceholder')); if (data.length < 1000) break; }
     return out;
   },
   async del(rel) { await ON.sb.storage.from('vault').remove([SBK.p(rel)]); },
