@@ -14,8 +14,8 @@ const KNOWN_VENDOR = {
   'a026ee01-0a7d-4ab3-97fa-f1500f9feb8b': 'Wahoo',
   'a026ee03-0a7d-4ab3-97fa-f1500f9feb8b': 'Wahoo',
   'a026ee0b-0a7d-4ab3-97fa-f1500f9feb8b': 'Wahoo Trainer',
-  '0000fc82-0000-1000-8000-00805f9b34fb': 'Zwift',
-  '00000001-19ca-4651-86e5-fa29dcdd09d1': 'Zwift',
+  '0000fc82-0000-1000-8000-00805f9b34fb': 'Click-Controller',
+  '00000001-19ca-4651-86e5-fa29dcdd09d1': 'Click-Controller',
   '0000fe03-0000-1000-8000-00805f9b34fb': 'Amazon/Garmin',
   '6e400001-b5a3-f393-e0a9-e50e24dcca9e': 'Nordic UART',
 };

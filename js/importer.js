@@ -1,4 +1,4 @@
-// Fahrten von außen übernehmen: Strava-Aktivitäten (z. B. von Zwift übertragen) und FIT-Dateien.
+// Fahrten von außen übernehmen: Strava-Aktivitäten (z. B. von anderen Trainings-Apps übertragen) und FIT-Dateien.
 // Übernommene Fahrten zählen für Fitness, Form, Leistungskurve und Summen, bringen aber keine XP.
 import { db } from './db.js';
 import { profile } from './state.js';
@@ -33,7 +33,7 @@ export function rideFromStrava(act, st) {
   return makeRide('s-' + act.id, new Date(act.start_date).toISOString(), act.name || 'Strava-Fahrt', 'strava', toSamples(pts));
 }
 
-/* ---------- FIT (Garmin, Zwift, Wahoo …) ---------- */
+/* ---------- FIT (Garmin, Wahoo, andere Trainings-Apps …) ---------- */
 // Liest die "record"-Nachrichten: Zeit, Position, Höhe, Puls, Kadenz, Distanz, Tempo, Leistung
 export function parseFit(buf) {
   const dv = new DataView(buf), hl = dv.getUint8(0), size = dv.getUint32(4, true);

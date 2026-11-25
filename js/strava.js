@@ -82,7 +82,7 @@ export async function uploadRide(ride, onStatus = () => { }) {
 }
 export const activityUrl = id => 'https://www.strava.com/activities/' + id;
 
-/* ---------- Lesen: Routen und Aktivitäten (z. B. von Zwift zu Strava übertragene Fahrten) ---------- */
+/* ---------- Lesen: Routen und Aktivitäten (z. B. von anderen Apps zu Strava übertragene Fahrten) ---------- */
 async function api(path) {
   const tk = await token();
   const res = await fetch('https://www.strava.com/api/v3' + path, { headers: { Authorization: 'Bearer ' + tk } });

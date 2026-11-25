@@ -11,7 +11,7 @@ export async function render(el) {
   const months = new Map();
   for (const r of rides) { const k = r.date.slice(0, 7); if (!months.has(k)) months.set(k, []); months.get(k).push(r); }
   el.innerHTML = `<section class="pagehead"><h1>Verlauf</h1><span class="row"><input class="inp" id="q" placeholder="Suchen nach Strecke oder Workout" style="max-width:260px"><button class="btn sm ghost" id="selMode">Auswählen</button><label class="btn sm">FIT-Dateien importieren<input type="file" id="fitIn" accept=".fit,.gz,.zip" multiple hidden></label><button class="btn sm" id="stravaIn">Aus Strava übernehmen</button></span></section>
-  <p class="small muted">Bisherige Fahrten, z. B. aus Zwift, fließen so in Fitness, Form, Leistungskurve und Summen ein (ohne XP). Zwift überträgt Fahrten zu Strava. Einzelne Zwift-Fahrten gibt es auf zwift.com unter Aktivitäten als .fit, alle Strava-Fahrten im Strava-Kontoexport (ZIP).</p>
+  <p class="small muted">Bisherige Fahrten, z. B. aus anderen Trainings-Apps, fließen so in Fitness, Form, Leistungskurve und Summen ein (ohne XP). Viele Apps übertragen Fahrten zu Strava oder bieten sie als .fit zum Herunterladen an; alle Strava-Fahrten gibt es im Strava-Kontoexport (ZIP).</p>
   ${rides.length ? [...months].map(([m, list]) => {
     const d = list.reduce((a, r) => a + r.sum.dist, 0), t = list.reduce((a, r) => a + r.sum.dur, 0), tss = list.reduce((a, r) => a + r.sum.tss, 0);
     return `<section class="card month"><div class="row between"><h2>${new Date(m + '-15').toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}</h2><span class="small muted num">${list.length} Fahrten · ${fmtKm(d)} km · ${fmtDur(t)} · ${tss} TSS</span></div>${list.map(rideRow).join('')}</section>`;
@@ -23,7 +23,7 @@ export async function render(el) {
   };
   $('#stravaIn', el).onclick = async () => {
     if (!stravaConnected()) { toast('Erst unter Einstellungen › Verbindungen mit Strava verbinden'); location.hash = '#/connect'; return; }
-    const days = await dialog({ title: 'Fahrten aus Strava übernehmen', html: '<p>Welchen Zeitraum? Übernommen werden Rad- und virtuelle Fahrten (auch Zwift), schon vorhandene werden übersprungen. Strava erlaubt etwa 100 Abfragen pro 15 Minuten.</p>', buttons: [{ label: 'Abbrechen', value: 0 }, { label: '30 Tage', value: 30 }, { label: '90 Tage', value: 90, cls: 'pri' }, { label: '1 Jahr', value: 365 }] });
+    const days = await dialog({ title: 'Fahrten aus Strava übernehmen', html: '<p>Welchen Zeitraum? Übernommen werden Rad- und virtuelle Fahrten (auch aus anderen Trainings-Apps), schon vorhandene werden übersprungen. Strava erlaubt etwa 100 Abfragen pro 15 Minuten.</p>', buttons: [{ label: 'Abbrechen', value: 0 }, { label: '30 Tage', value: 30 }, { label: '90 Tage', value: 90, cls: 'pri' }, { label: '1 Jahr', value: 365 }] });
     if (!days) return;
     const t = document.createElement('div'); t.className = 'toast show'; t.textContent = 'Lade Liste von Strava …'; $('#toasts').appendChild(t);
     try {

@@ -1,4 +1,4 @@
-// Bluetooth-Geräte: FTMS-Trainer, Herzfrequenz, Trittfrequenz (CSC), Zwift Click
+// Bluetooth-Geräte: FTMS-Trainer, Herzfrequenz, Trittfrequenz (CSC), Click-Controller
 // Alle Verbindungen leben im Speicher der App und überdauern Seitenwechsel innerhalb der App.
 import { live, profile } from './state.js';
 import { bus, clamp } from './util.js';
@@ -12,7 +12,7 @@ export const KINDS = {
   trainer: { label: 'Smart-Trainer', hint: 'Van Rysel D100 und andere FTMS-Trainer' },
   hr: { label: 'Herzfrequenz', hint: 'Garmin HRM-Dual (Bluetooth)' },
   cad: { label: 'Trittfrequenz', hint: 'Garmin Cadence Sensor 2' },
-  click: { label: 'Zwift Click', hint: 'Zum Aufwecken eine Taste drücken' },
+  click: { label: 'Click-Controller', hint: 'Zum Aufwecken eine Taste drücken' },
 };
 export const devs = { trainer: null, hr: null, cad: null, click: null };
 export const status = { trainer: 'off', hr: 'off', cad: 'off', click: 'off' };
@@ -34,7 +34,8 @@ const OPTS = {
   trainer: { filters: [{ services: [U.ftms] }], optionalServices: [U.ftms, U.batt] },
   hr: { filters: [{ services: [U.hr] }], optionalServices: [U.batt] },
   cad: { filters: [{ services: [U.csc] }], optionalServices: [U.batt] },
-  click: { filters: [{ namePrefix: 'Zwift Click' }, { namePrefix: 'Zwift' }, { services: [U.zw] }], optionalServices: [U.zw, U.zwFc, U.batt] },
+  // Click-Controller: Erkennung über seine Bluetooth-Dienste
+  click: { filters: [{ services: [U.zw] }, { services: [U.zwFc] }], optionalServices: [U.zw, U.zwFc, U.batt] },
 };
 
 export async function connect(kind) {
@@ -197,7 +198,7 @@ function parseCsc(v) {
   C.rev = rev; C.time = t; live.cadT = now; bus.emit('data');
 }
 
-/* ---------------- Zwift Click ---------------- */
+/* ---------------- Click-Controller ---------------- */
 export const click = { map: null, learn: null, state: {}, lastId: '' };
 const DEFAULT_MAP = { '37:1': 'up', '37:2': 'down', '23:4096': 'up', '23:8192': 'down', '23:256': 'up', '23:512': 'down', '23:2': 'up', '23:8': 'down' };
 export async function loadClickMap() { click.map = await kv.get('clickmap', { ...DEFAULT_MAP }); }
@@ -213,7 +214,7 @@ async function setupClick(d, srv) {
   if (ind) {
     ind.addEventListener('characteristicvaluechanged', e => {
       const b = new Uint8Array(e.target.value.buffer);
-      if (b[0] === 0xff) log('Click ist gesperrt. Ein Click v2 muss etwa alle 24 h einmal in der Zwift-App verbunden werden.');
+      if (b[0] === 0xff) log('Click ist gesperrt. Ein Click v2 muss etwa alle 24 h einmal in der App des Herstellers verbunden werden.');
       else if (b[0] === 0x52) log('Click antwortet mit RideOn.');
     });
     try { await ind.startNotifications(); } catch (e) { }

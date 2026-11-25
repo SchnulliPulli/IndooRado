@@ -332,7 +332,7 @@ function bindUi() {
   };
   document.addEventListener('keydown', S.key);
   S.offs.push(bus.on('shift', d => shift(d)));
-  // Zwift Click: drei schnelle Klicks auf dieselbe Taste überspringen das Intervall, einzelne Klicks schalten
+  // Click-Controller: drei schnelle Klicks auf dieselbe Taste überspringen das Intervall, einzelne Klicks schalten
   S.offs.push(bus.on('clickpress', id => {
     const now = performance.now(), P = S.presses = (S.presses || []).filter(p => now - p.t < 900 && p.id === id);
     P.push({ id, t: now });

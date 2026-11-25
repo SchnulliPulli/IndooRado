@@ -21,7 +21,7 @@ const steps = [
     <div class="grid2 tight"><label class="f">FTP (Watt)<input class="inp" data-p="ftp" type="number" min="50" max="600" value="${profile.ftp}"></label><label class="f">Gewicht (kg)<input class="inp" data-p="kg" type="number" min="30" max="200" step="0.5" value="${profile.kg}"></label></div>
     <div class="grid2 tight"><label class="f">Max. Puls<input class="inp" data-p="hrMax" type="number" min="120" max="230" value="${profile.hrMax}"></label><label class="f">Max. Trainerleistung (W)<input class="inp" data-p="maxW" type="number" min="200" max="2500" value="${profile.maxW}"></label></div>
     <p class="small muted">FTP unbekannt? Schätzung: etwa 2,5 W/kg für Einsteiger, 3 W/kg für regelmäßig Fahrende. Ein FTP-Test liegt unter Workouts bereit.</p>` },
-  { t: 'Geräte verbinden', h: () => `<p class="small muted">Smart-Trainer, Pulsgurt, Trittfrequenz-Sensor und Zwift Click. Ohne Geräte einfach Demo-Geräte einschalten und alles ausprobieren.</p><div id="obDev"></div>`, after: box => deviceCards(box.querySelector('#obDev')) },
+  { t: 'Geräte verbinden', h: () => `<p class="small muted">Smart-Trainer, Pulsgurt, Trittfrequenz-Sensor und Click-Controller. Ohne Geräte einfach Demo-Geräte einschalten und alles ausprobieren.</p><div id="obDev"></div>`, after: box => deviceCards(box.querySelector('#obDev')) },
   { t: 'Fahrgefühl', h: () => `
     <h3 class="sub">Widerstand bei freier Fahrt</h3>
     <div class="seg" data-sel="mode">${[['gear', 'Virtuelle Gänge'], ['sim', 'Steigung'], ['erg', 'ERG fix'], ['hr', 'Puls-Ziel']].map(([k, l]) => `<button data-v="${k}" aria-pressed="${sel.mode === k}">${l}</button>`).join('')}</div>
@@ -31,7 +31,7 @@ const steps = [
       ${SW('s:adaptive', sel.adaptive !== false, 'Workouts adaptiv anpassen (Kadenz, Puls, Trainer)')}
       ${SW('p:ergSoft', profile.ergSoft !== false, 'Sanfter ERG-Einstieg bei großen Sprüngen')}
       ${SW('p:autoPause', profile.autoPause, 'Automatische Pause, wenn du aufhörst zu treten')}
-      ${SW('p:tripleSkip', profile.tripleSkip !== false, 'Zwift Click: dreimal Plus/Minus springt im Workout vor/zurück')}
+      ${SW('p:tripleSkip', profile.tripleSkip !== false, 'Click-Controller: dreimal Plus/Minus springt im Workout vor/zurück')}
     </div>` },
   { t: 'Anzeige, Ton und Hinweise', h: () => `
     <div class="grid2 tight">

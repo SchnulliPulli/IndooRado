@@ -12,8 +12,8 @@ export async function render(el) {
   <section class="pagehead"><h1>Geräte</h1></section>
   <section class="card"><div id="devs"></div></section>
   <section class="grid2">
-    <div class="card"><h2>Zwift Click</h2>
-      <p class="small muted">Click v1 funktioniert direkt. Ein Click v2 muss laut Nutzerberichten etwa alle 24 Stunden einmal in der Zwift-App verbunden werden, sonst bleibt er gesperrt. Falls + und − vertauscht sind oder nichts passiert: Taste anlernen.</p>
+    <div class="card"><h2>Click-Controller</h2>
+      <p class="small muted">Click v1 funktioniert direkt. Ein Click v2 muss laut Nutzerberichten etwa alle 24 Stunden einmal in der App des Herstellers verbunden werden, sonst bleibt er gesperrt. Falls + und − vertauscht sind oder nichts passiert: Taste anlernen.</p>
       <div class="row"><button class="btn" id="lUp">+ anlernen</button><button class="btn" id="lDn">− anlernen</button><button class="btn ghost" id="lRs">Zurücksetzen</button></div>
       <p class="small" id="cmap"></p><p class="small muted" id="clast"></p>
     </div>
@@ -21,7 +21,7 @@ export async function render(el) {
       <p class="small muted">Prüft, ob der Trainer Befehle annimmt. Vorher treten.</p>
       <div class="row"><button class="btn" data-w="100">ERG 100 W</button><button class="btn" data-w="200">ERG 200 W</button><button class="btn" data-g="0">Steigung 0 %</button><button class="btn" data-g="5">Steigung 5 %</button></div>
       <h3 class="sub">So klappt die Verbindung</h3>
-      <ul class="small muted tips"><li>Zwift, Onelap und andere Apps schließen. Der D100 nimmt nur eine Verbindung an.</li><li>Den HRM-Dual anfeuchten und anlegen, sonst sendet er nicht.</li><li>Den Kadenzsensor kurz drehen, damit er aufwacht.</li><li>Auf Android braucht Chrome die Berechtigung „Geräte in der Nähe“.</li></ul>
+      <ul class="small muted tips"><li>Andere Trainings-Apps schließen. Der D100 nimmt nur eine Verbindung an.</li><li>Den HRM-Dual anfeuchten und anlegen, sonst sendet er nicht.</li><li>Den Kadenzsensor kurz drehen, damit er aufwacht.</li><li>Auf Android braucht Chrome die Berechtigung „Geräte in der Nähe“.</li></ul>
     </div>
   </section>
   <section class="card form" id="snCard"></section>

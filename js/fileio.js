@@ -59,7 +59,7 @@ export async function readFiles(files, ftp) {
   return res;
 }
 
-// Export als .zwo (lesbar von Zwift, TrainingPeaks, intervals.icu und vielen anderen)
+// Export als .zwo (lesbar von TrainingPeaks, intervals.icu und vielen anderen Trainings-Apps)
 const x = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 export function toZwo(w) {
   const r = v => (+v).toFixed(3), segs = w.segs.map((g, i) => {
@@ -74,7 +74,7 @@ export function toZwo(w) {
 export const planToJson = p => JSON.stringify({ veloverse: 'plan', version: 1, name: p.name, perWeek: p.perWeek, weeksLayout: p.weeks?.map(w => w.length), wos: p.all.map(w => ({ name: w.name, desc: w.desc, segs: w.segs })) }, null, 1);
 export const workoutToJson = w => JSON.stringify({ veloverse: 'workout', version: 1, name: w.name, cat: w.cat, desc: w.desc, segs: w.segs }, null, 1);
 
-/* ---------- Plan aus eingefügtem Text (z. B. Wochenübersicht von whatsonzwift) ---------- */
+/* ---------- Plan aus eingefügtem Text (z. B. kopierte Wochenübersicht einer Workout-Sammlung) ---------- */
 // Erkennt Wochen ("Week 3", "Week 0 Prep"), Workouts (Titel, dann Schritte bis "View %FTP"), Schritte wie
 // "10min from 76 to 196W", "3min 30sec @ 244W", "3min @ 55rpm, 257W", "2min free ride", "1hr 10min free ride",
 // Wiederholungen "10x 3min @ 271W," + nächste Zeile "1min @ 166W". Watt werden über "Update FTP (300W)" in % FTP umgerechnet.
