@@ -85,10 +85,14 @@ export function createLobby({ title, route, routeName, minutes, race, settings }
 export function joinLobby(id) { setStatus({ joined: id }); }
 export function leaveLobby() { setStatus({ joined: null, host: null }); }
 // Startzeit erreicht: alle Teilnehmer fahren auf derselben Strecke los
-let started = '';
+// Die Lobby bleibt beim Gastgeber nach dem Start noch eine Minute sichtbar, damit alle sie sicher sehen.
+// Verschwindet sie trotzdem kurz vor dem Start (Gastgeber hat abweichende Uhr oder Verbindung kurz weg), starten Beigetretene mit dem zuletzt gesehenen Stand.
+let started = '', lastSeen = null;
 function checkStart() {
   const id = P.me.joined; if (!id || started === id) return;
-  const l = lobbies().find(x => x.id === id); if (!l) return;
+  const l = lobbies().find(x => x.id === id);
+  if (!l) { if (lastSeen?.id === id && lastSeen.startAt - Date.now() < 20e3 && Date.now() - lastSeen.seen < 90e3) { started = id; startGroup(lastSeen); } return; }
+  lastSeen = { ...l, seen: Date.now() };
   const ms = l.startAt - Date.now();
   if (ms <= 0 && ms > -60e3) { started = id; startGroup(l); }
 }
@@ -99,6 +103,6 @@ async function startGroup(l) {
   if (G.workout === 'plan') { const P = await import('../plans.js'); sel.workoutId = P.nextWorkout()?.id || null; }
   else if (G.woSegs) { const W = await import('../workouts.js'), wid = 'g-' + id; W.EXTRA_W.set(wid, { id: wid, name: G.woName || 'Gruppen-Workout', cat: 'Gruppe', desc: 'Workout der Gruppenfahrt', segs: G.woSegs, builtin: true }); sel.workoutId = wid; }
   else sel.workoutId = G.workout || null;
-  saveSel(); sessionStorage.setItem('groupRide', JSON.stringify({ id, title: l.title, race: l.race, hostSid: l.hostSid, isHost: !!l.mine, settings: G })); if (l.race) sessionStorage.setItem('raceNext', '1'); setStatus({ joined: null, host: null }); bus.emit('groupstart', l); location.hash = '#/ride';
+  saveSel(); sessionStorage.setItem('groupRide', JSON.stringify({ id, title: l.title, race: l.race, hostSid: l.hostSid, isHost: !!l.mine, settings: G })); if (l.race) sessionStorage.setItem('raceNext', '1'); setStatus({ joined: null }); if (l.mine) setTimeout(() => { if (P.me.host?.id === id) setStatus({ host: null }); }, 60e3); bus.emit('groupstart', l); location.hash = '#/ride';
 }
 setInterval(checkStart, 1000);
