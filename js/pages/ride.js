@@ -179,7 +179,7 @@ async function start(el) {
   // Online: echte Fahrer auf derselben Strecke
   const grp = S.group;
   try { S.joinRider = JSON.parse(sessionStorage.getItem('joinRider') || 'null'); } catch (e) { } sessionStorage.removeItem('joinRider');
-  if (S.joinRider) $('#startCard', el).innerHTML = `<b>🌐 Mitfahren bei ${esc(S.joinRider.name)}</b><span>Sobald die Verbindung steht, springst du direkt hinter ${esc(S.joinRider.name)}. Tritt in die Pedale!</span>`;
+  if (S.joinRider) $('#startCard', el).innerHTML = `<b>🌐 Mitfahren bei ${esc(S.joinRider.name)}</b><span>Sobald die Verbindung steht, springst du direkt hinter ${esc(S.joinRider.name)}.</span><small class="livest" id="liveSt">Live: wird verbunden …</small>`;
   if (grp) { $('#startCard', el).innerHTML = `<b>👥 ${esc(grp.title)}</b><span>Gruppenfahrt: alle starten jetzt mit denselben Einstellungen${grp.isHost ? ' (du bist Gastgeber und bestimmst das Wetter)' : ''}. Tritt in die Pedale!</span>`; }
   // Nach einem Neuladen läuft die Anmeldung evtl. noch: kurz darauf warten, dann live beitreten
   const onlineReady = online.ready ? Promise.resolve() : new Promise(r => { const off = bus.on('online', () => { off(); r(); }); setTimeout(() => { off(); r(); }, 20000); });
@@ -244,7 +244,7 @@ function syncRemote() {
   for (const [id, p] of peers) if (!keep.some(n => n.id === id)) keep.push({ remote: true, id, i: 100 + k++, name: p.name, wkg: p.wkg || 0, d: p.d || 0, v: p.v || 0, lat: 2.3, latT: 2.3, crank: 0, cadence: p.cad || 85, gap: gapOf(R, p.d || 0, S.dist), look: { ...(p.look || {}), jersey: p.look?.jersey || '#ffffff', name: '🌐 ' + p.name } });
   S.field = keep; if (peers.size && !S.npcOn) { S.npcOn = true; updNpcBtn(); }
   // "Mitfahren" aus "Wer ist online": einmalig direkt hinter den gewählten Fahrer beamen
-  if (S.joinRider && peers.has(S.joinRider.sid)) { const p = peers.get(S.joinRider.sid), name = S.joinRider.name; S.joinRider = null; S.joinGiveUp = 0; const d = R.loop ? ((p.d - 10) % R.total + R.total) % R.total : clamp(p.d - 10, 0, R.total - 20); setTimeout(() => { beam(d).then(() => flash('🌐 Du fährst jetzt direkt hinter ' + name, 2500)); }, 300); }
+  if (S.joinRider && peers.has(S.joinRider.sid)) { const p = peers.get(S.joinRider.sid), name = S.joinRider.name; S.joinRider = null; S.joinGiveUp = 0; const d = R.loop ? ((p.d - 10) % R.total + R.total) % R.total : clamp(p.d - 10, 0, R.total - 20); setTimeout(() => { beam(d).then(() => { flash('🌐 Du fährst jetzt direkt hinter ' + name + '. Tritt in die Pedale!', 3000); $('#startCard', S.el).hidden = true; }); }, 300); }
   S.world.setRiders(S.field.map(n => n.look));
   flash(peers.size ? '🌐 ' + peers.size + ' echte' + (peers.size === 1 ? 'r Fahrer' : ' Fahrer') + ' auf der Strecke' : 'Keine echten Fahrer mehr auf der Strecke', 2200);
 }
@@ -389,6 +389,12 @@ const groupLocked = () => { if (S.envLead && !S.group) { flash('🌦️ Eigenes 
 // Auto: Tageszeit und Wetter wechseln während der Fahrt alle 10 bis 15 Minuten
 const envGap = () => (10 + Math.random() * 5) * 60e3;
 const TIMES = ['morning', 'day', 'evening', 'night'];
+// Live-Status auf der Startkarte beim Mitfahren (zeigt, ob Verbindung steht und Daten fließen)
+function liveStatus() {
+  const e = S.el.querySelector('#liveSt'); if (!e || performance.now() - (S.lsT || 0) < 1000) return; S.lsT = performance.now();
+  const L = S.live, st = !L ? 'wird vorbereitet …' : { off: 'wird vorbereitet …', connecting: 'wird verbunden …', on: 'verbunden', error: 'Verbindung gestört, neuer Versuch …', nologin: 'nicht angemeldet oder kein Online-Zugang', private: 'du bist auf „unsichtbar“ gestellt (Konto › Für andere sichtbar)' }[L.status] || L.status;
+  e.textContent = 'Live: ' + st + (L?.status === 'on' ? ` · gesendet ${L.sent} · empfangen ${L.recv} · ${L.peers.size} ${L.peers.size === 1 ? 'Fahrer' : 'Fahrer'} auf der Strecke` : '');
+}
 // Wetter folgt dem Gastgeber oder dem Fahrer, bei dem man mitfährt (steckt in jeder Positionsmeldung)
 function followEnv() {
   const p = S.envLead && S.live?.peers.get(S.envLead); if (!p?.env) return;
@@ -521,6 +527,7 @@ function tick() {
   if (!S?.alive) return;
   if (S.state === 'riding') envCycle();
   followEnv();
+  liveStatus();
   if (S.joinRider && S.joinGiveUp && performance.now() > S.joinGiveUp) { S.joinGiveUp = 0; flash(S.live?.status === 'on' ? '🌐 ' + S.joinRider.name + ' ist gerade nicht live auf der Strecke (Fahrt beendet?). Sobald die Fahrt weitergeht, springst du hinterher.' : '🌐 Noch keine Live-Verbindung, es wird weiter versucht …', 4000); }
   if (S.group?.isHost && performance.now() > (S.envBeat ??= performance.now() + 30e3)) { S.envBeat = performance.now() + 30e3; S.live?.sendEnv(S.group.id, S.env); }
   // Alle ~45 s: Mitfahrer außer Sicht (und neu eingesetzte) bekommen neue Namen

@@ -42,7 +42,7 @@ function nav() {
   cc.innerHTML = '<svg viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.1 9.2 4.5 4.5 0 0 0 7 18Z"/></svg><i></i>';
   $('#chips').after(cc);
   const cloudUpd = () => {
-    const nas = isConfigured() || !!(sync.cfg && (sync.cfg.host || sync.cfg.url || sync.cfg.clientId)), st = stravaConnected();
+    const nas = !!(sync.cfg && (sync.cfg.host || sync.cfg.url || sync.cfg.clientId)), st = stravaConnected(); // nur echte Cloud-Speicher (NAS, OneDrive …), nicht das Online-Konto
     cc.hidden = !nas && !st;
     const state = !nas ? 'strava' : sync.busy ? 'busy' : sync.needLogin ? 'login' : sync.error ? 'error' : sync.last ? 'on' : 'off';
     cc.dataset.st = state;

@@ -259,6 +259,7 @@ span.badge{display:inline-flex;padding:5px 10px;font-weight:600}span.badge svg{w
 .tbtn:hover{background:rgba(40,48,58,.9)}
 .startcard{position:absolute;left:50%;bottom:120px;transform:translateX(-50%);background:var(--hudbg);border-radius:14px;padding:12px 20px;text-align:center;display:flex;flex-direction:column;z-index:6}
 .startcard b{font:700 26px "Barlow Condensed",sans-serif;color:var(--acc)}
+.startcard .livest{margin-top:6px;font-size:12px;opacity:.75}
 .shotflash{position:absolute;inset:0;background:#fff;opacity:.7;animation:flash .45s ease-out forwards;pointer-events:none;z-index:30}
 @keyframes flash{to{opacity:0}}
 @media(max-width:1100px){.hbox b{font-size:28px}.hbox.main b{font-size:46px}.hbox{min-width:64px;padding:4px 8px 3px}.hud-wo{width:250px}}

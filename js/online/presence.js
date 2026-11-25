@@ -37,13 +37,16 @@ function cleanMeta(m) {
     look: { jersey: COLOR.test(look.jersey) ? look.jersey : '#ff6a3d', helmet: COLOR.test(look.helmet) ? look.helmet : '#f2f4f6', bikeColor: COLOR.test(look.bikeColor) ? look.bikeColor : '#e9eef2', skin: COLOR.test(look.skin) ? look.skin : '#e3b18c', av: { head: txt(look.av?.head, 10), bike: txt(look.av?.bike, 10), glasses: txt(look.av?.glasses, 10), helmetStyle: txt(look.av?.helmetStyle, 10), pattern: txt(look.av?.pattern, 10), jersey2: COLOR.test(look.av?.jersey2) ? look.av.jersey2 : undefined, beard: !!look.av?.beard } } };
 }
 const sync = () => {
-  const st = P.ch?.presenceState?.() || {}; P.peers.clear();
+  const st = (P.ch !== 'pending' && P.ch?.presenceState?.()) || {}; P.peers.clear();
   for (const [key, arr] of Object.entries(st)) { const m = cleanMeta(arr?.[arr.length - 1]); if (m && key !== sid) P.peers.set(key, m); }
   bus.emit('presence'); checkStart();
 };
 export async function joinPresence() {
   if (P.ch || !loggedIn() || !access().ok) return;
-  const sb = await client(); await realtimeAuth();
+  P.ch = 'pending'; // gegen doppelten Aufruf während des Aufräumens
+  let sb; try { sb = await client(); await realtimeAuth(); } catch (e) { P.ch = null; throw e; }
+  for (const c of sb.getChannels().filter(c => c.topic === 'realtime:lobby')) { try { await sb.removeChannel(c); } catch (e) { } } // alten (schließenden) Kanal erst ganz entfernen
+  if (P.ch !== 'pending') return;
   P.ch = sb.channel('lobby', { config: { private: true, presence: { key: sid } } });
   P.ch.on('presence', { event: 'sync' }, sync);
   const c = P.ch;
@@ -55,15 +58,15 @@ export async function joinPresence() {
 }
 // Alle 15 s: Liste frisch aus dem Kanal lesen (Zähler oben aktuell halten) und eine abgerissene Verbindung neu aufbauen
 setInterval(async () => {
-  if (!P.ch) return;
+  if (!P.ch || P.ch === 'pending') return;
   if (P.ch.state === 'joined') { sync(); return; }
   if (P.ch.state === 'joining' || !loggedIn() || !access().ok) return;
   const old = P.ch; P.ch = null; P.ready = false;
   try { (await client()).removeChannel(old); } catch (e) { }
   joinPresence().catch(() => { });
 }, 15000);
-export async function leavePresence() { try { await P.ch?.untrack(); P.ch?.unsubscribe(); } catch (e) { } P.ch = null; P.ready = false; P.peers.clear(); bus.emit('presence'); }
-async function push() { if (!P.ch || !P.ready) return; await P.ch.track({ name: online.profile?.display_name || 'Fahrer', look: onlineLook(), ...P.me }); }
+export async function leavePresence() { const c = P.ch; P.ch = null; if (c && c !== 'pending') { try { await c.untrack(); (await client()).removeChannel(c); } catch (e) { } } P.ready = false; P.peers.clear(); bus.emit('presence'); }
+async function push() { if (!P.ch || P.ch === 'pending' || !P.ready) return; await P.ch.track({ name: online.profile?.display_name || 'Fahrer', look: onlineLook(), ...P.me }); }
 export function setStatus(patch) { Object.assign(P.me, patch); for (const k in P.me) if (P.me[k] == null) delete P.me[k]; push().catch(() => { }); }
 
 /* ---------- Lobby ---------- */
