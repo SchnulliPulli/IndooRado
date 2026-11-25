@@ -25,7 +25,7 @@ export function clean(m) {
 
 export function joinRoute(routeId, me) {
   const peers = new Map(); let ch = null, timer = null, sweep = null, closed = false;
-  const api = { peers, status: 'off', sent: 0, recv: 0, onChange: null, onEnv: null, onStatus: null, sendEnv(gid, env) { try { ch?.send({ type: 'broadcast', event: 'env', payload: { gid, from: sid, env } }); } catch (e) { } }, leave() { closed = true; clearInterval(timer); clearInterval(sweep); const c = ch; if (c) client().then(sb => sb.removeChannel(c)).catch(() => { }); peers.clear(); } };
+  const api = { peers, status: 'off', sent: 0, recv: 0, sendNow() { }, onChange: null, onEnv: null, onStatus: null, sendEnv(gid, env) { try { ch?.send({ type: 'broadcast', event: 'env', payload: { gid, from: sid, env } }); } catch (e) { } }, leave() { closed = true; clearInterval(timer); clearInterval(sweep); const c = ch; if (c) client().then(sb => sb.removeChannel(c)).catch(() => { }); peers.clear(); } };
   if (!loggedIn() || !access().ok) { api.status = 'nologin'; return api; }
   if (online.profile?.public_profile === false) { api.status = 'private'; return api; }
   (async () => {
@@ -61,7 +61,9 @@ export function joinRoute(routeId, me) {
       if (st === 'SUBSCRIBED') {
         setSt('on'); clearInterval(timer);
         try { await ch.track({ since: Date.now() }); } catch (e) { }
-        timer = setInterval(() => { const s = me(); if (s) { api.sent++; ch.send({ type: 'broadcast', event: 'pos', payload: { id: sid, name: online.profile?.display_name || 'Fahrer', ...s } }); } }, 1000);
+        const tx = () => { const s = me(); if (s) { api.sent++; ch.send({ type: 'broadcast', event: 'pos', payload: { id: sid, name: online.profile?.display_name || 'Fahrer', ...s } }); } };
+        api.sendNow = tx; // z. B. direkt nach dem Beamen, damit die anderen einen sofort an der neuen Stelle sehen
+        tx(); timer = setInterval(tx, 1000);
       } else if ((st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') && !failed) {
         failed = true; clearInterval(timer); setSt('error'); if (err) console.warn('Live:', st, err.message);
         setTimeout(async () => { if (closed) return; await purge(); await realtimeAuth().catch(() => { }); if (closed) return; ch = mk(); sub(); }, 5000);

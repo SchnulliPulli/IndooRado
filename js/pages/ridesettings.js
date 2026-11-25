@@ -63,6 +63,8 @@ export async function render(el, params = []) {
       ${SW('p', 'hudSub', 'Zweite Datenzeile', 'Ø Leistung, NP, kJ, kcal und XP unter den Hauptwerten')}
       ${SW('p', 'xpPops', 'XP-Einblendungen', 'Kurze „+XP“-Hinweise, z. B. beim Überholen')}
       ${SW('p', 'zoneEdge', 'Leuchtrand in Zonenfarbe', 'Bildschirmrand leuchtet in der Farbe deiner Leistungszone')}
+      <div class="grid2 tight">${SEL('p', 'zoneEdgeStr', 'Leuchtrand: Stärke', [['soft', 'Dezent'], ['normal', 'Normal'], ['strong', 'Kräftig']], 'normal')}
+      ${SEL('p', 'zoneEdgeFrom', 'Leuchtrand: ab', [['0', 'immer'], ['0.9', 'Zone 4 (Schwelle)'], ['1.05', 'Zone 5 (VO2max)'], ['1.2', 'Zone 6 (anaerob)']], '0')}</div>
       ${SW('p', 'living', 'Lebendige Welt', 'Wolkenschatten, Wind in Bäumen und Gras, Gegenlicht, Laub, Pollen und Staub, jubelnde Zuschauer am Gipfel, glänzende nasse Straße. Auf Grafik „Niedrig“ immer aus.')}
       ${SW('p', 'fx', 'Tempo-Effekte', 'Sichtfeld weitet sich bei hohem Tempo, Tempolinien bei schnellen Abfahrten')}
     </div>

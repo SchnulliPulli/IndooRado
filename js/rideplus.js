@@ -154,7 +154,12 @@ export function plusHud(S, p3, c) {
   // Tempolinien ab ~45 km/h
   const sl = el.querySelector('.speedlines'); if (sl && !sl.hidden) sl.style.opacity = clamp((S.v * 3.6 - 42) / 25, 0, .85);
   // Leuchtrand
-  const e = el.querySelector('.zoneedge'); if (e && !e.hidden) { e.style.setProperty('--zc', col); e.style.opacity = S.state === 'riding' ? clamp(.25 + f * .5, .25, 1) : 0; }
+  const e = el.querySelector('.zoneedge');
+  if (e && !e.hidden) {
+    const str = { soft: [.4, 22, 2], normal: [1, 42, 3], strong: [1.5, 80, 5] }[profile.zoneEdgeStr] || [1, 42, 3], from = +profile.zoneEdgeFrom || 0;
+    e.style.setProperty('--zc', col); e.style.setProperty('--zw', str[1] + 'px'); e.style.setProperty('--zl', str[2] + 'px');
+    e.style.opacity = S.state === 'riding' && f >= from ? clamp((.25 + f * .5) * str[0], .1, 1) : 0;
+  }
   // Power-up
   const pb = $('#pupBox', el);
   if (pb) {

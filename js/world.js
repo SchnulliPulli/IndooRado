@@ -61,6 +61,22 @@ function labelTex(text, opt = {}) {
     x.fillText(text, w / 2, h / 2 + 2);
   }, false);
 }
+// Pfeil nach unten mit Leuchtrand (echte Mitspieler)
+let _arrowTex = null, _glowTex = null;
+function remoteArrowTex() {
+  return _arrowTex ||= canvasTex(128, 160, x => {
+    x.clearRect(0, 0, 128, 160);
+    const path = () => { x.beginPath(); x.moveTo(40, 12); x.lineTo(88, 12); x.lineTo(88, 70); x.lineTo(116, 70); x.lineTo(64, 146); x.lineTo(12, 70); x.lineTo(40, 70); x.closePath(); };
+    x.shadowColor = '#2fe6ff'; x.shadowBlur = 22; x.fillStyle = '#2fe6ff'; path(); x.fill(); x.fill();
+    x.shadowBlur = 0; x.lineWidth = 6; x.strokeStyle = '#ffffff'; x.lineJoin = 'round'; path(); x.stroke();
+  }, false);
+}
+function glowTex() {
+  return _glowTex ||= canvasTex(128, 128, x => {
+    const g = x.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, 'rgba(255,255,255,.9)'); g.addColorStop(.35, 'rgba(255,255,255,.35)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+  }, false);
+}
 // Fassade mit Fenstern; wird mit der Hausfarbe multipliziert
 function windowTex() {
   return canvasTex(128, 128, (x, w, h) => {
@@ -755,6 +771,15 @@ export class World {
       const rider = new Rider(c); rider.root.visible = false; this.scene.add(rider.root);
       const lab = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex(c.name, { w: 256, h: 56, size: 34, bg: c.jersey, fg: '#fff' }), depthWrite: false, transparent: true, opacity: .92 }));
       lab.scale.set(1.1, .24, 1); lab.position.set(0, 2.05, 0); rider.root.add(lab);
+      // Echte Mitspieler: großer schwebender Pfeil und Leuchten, damit man sie im Feld sofort erkennt
+      if (c.remote) {
+        const arrow = new THREE.Sprite(new THREE.SpriteMaterial({ map: remoteArrowTex(), depthTest: false, depthWrite: false, transparent: true, fog: false }));
+        arrow.renderOrder = 20; arrow.position.set(0, 3, 0); rider.root.add(arrow);
+        const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0x2fe6ff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false, opacity: .8 }));
+        glow.scale.set(2.8, 2.8, 1); glow.position.set(0, 1, 0); rider.root.add(glow);
+        lab.scale.set(1.5, .33, 1); lab.position.set(0, 2.25, 0); lab.material.depthTest = false; lab.renderOrder = 19;
+        return { rider, lab, arrow, glow, remote: true };
+      }
       return { rider, lab };
     });
   }
@@ -885,12 +910,17 @@ export class World {
     if (st.npcs) st.npcs.forEach((n, i) => {
       const o = this.npcs[i]; if (!o) return;
       let gap = n.d - d; if (R.loop) { if (gap > R.total / 2) gap -= R.total; if (gap < -R.total / 2) gap += R.total; }
-      const vis = Math.abs(gap) < (this.qKey === 'low' ? 90 : 170);
+      const vis = Math.abs(gap) < (o.remote ? 600 : this.qKey === 'low' ? 90 : 170); // echte Mitspieler weiter sichtbar
       o.rider.root.visible = vis; if (!vis) return;
+      if (o.remote) {
+        const t = performance.now() / 1000, far = Math.max(1, Math.abs(gap) / 18); // in der Ferne größer, damit der Pfeil erkennbar bleibt
+        o.arrow.position.y = 3 + Math.sin(t * 3) * .2 + (far - 1) * .6; o.arrow.scale.set(1.1 * far, 1.4 * far, 1);
+        o.glow.material.opacity = .55 + Math.sin(t * 4) * .25;
+      }
       this.place(o.rider.root, n.d, n.lat);
       o.acc = (o.acc || 0) + dt;
       if (Math.abs(gap) < 90 || (this.frameN + i) % 2 === 0) { o.rider.update(n.crank, n.v, o.acc, R.gradeAt(n.d)); o.acc = 0; }
-      o.lab.visible = this.showNames !== false && gap > 7 && gap < 45 && this.view !== 3;
+      o.lab.visible = o.remote ? this.view !== 3 && Math.abs(gap) > 4 && Math.abs(gap) < 200 : this.showNames !== false && gap > 7 && gap < 45 && this.view !== 3;
     });
     if (this.traffic?.length) {
       for (const t of [...this.traffic]) {

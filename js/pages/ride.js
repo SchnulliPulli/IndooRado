@@ -121,6 +121,7 @@ export async function render(el) {
         <div class="row small" id="bmQuick"></div>
       </div>
     </div>
+    <button class="liveled" id="liveLed" hidden title="Live-Verbindung"><i></i><span id="liveLedN"></span></button>
     <div class="startcard" id="startCard"><b>Bereit</b><span>Tritt in die Pedale, die Fahrt startet automatisch.</span></div>
   </div>`;
   await start(el);
@@ -183,7 +184,7 @@ async function start(el) {
   if (grp) { $('#startCard', el).innerHTML = `<b>👥 ${esc(grp.title)}</b><span>Gruppenfahrt: alle starten jetzt mit denselben Einstellungen${grp.isHost ? ' (du bist Gastgeber und bestimmst das Wetter)' : ''}. Tritt in die Pedale!</span>`; }
   // Nach einem Neuladen läuft die Anmeldung evtl. noch: kurz darauf warten, dann live beitreten
   const onlineReady = online.ready ? Promise.resolve() : new Promise(r => { const off = bus.on('online', () => { off(); r(); }); setTimeout(() => { off(); r(); }, 20000); });
-  if (!demo.on) onlineReady.then(() => S?.alive && loggedIn() ? import('../online/presence.js') : Promise.reject(0)).then(m => { window.__presence = m; }).then(() => import('../online/live.js')).then(({ joinRoute }) => {
+  onlineReady.then(() => S?.alive && loggedIn() ? import('../online/presence.js') : Promise.reject(0)).then(m => { window.__presence = m; }).then(() => import('../online/live.js')).then(({ joinRoute }) => {
     if (!S?.alive) return;
     const PRm = window.__presence; PRm?.setStatus({ where: 'ride', route: route.id, routeName: route.name });
     // Position immer senden (auch in Pause oder vor dem ersten Tritt), sonst verschwindet man für die anderen
@@ -241,7 +242,7 @@ function syncRemote() {
   if (!S?.alive || !S.live) return;
   const R = S.route, peers = S.live.peers, keep = S.field.filter(n => !n.remote || peers.has(n.id));
   let k = 0;
-  for (const [id, p] of peers) if (!keep.some(n => n.id === id)) keep.push({ remote: true, id, i: 100 + k++, name: p.name, wkg: p.wkg || 0, d: p.d || 0, v: p.v || 0, lat: 2.3, latT: 2.3, crank: 0, cadence: p.cad || 85, gap: gapOf(R, p.d || 0, S.dist), look: { ...(p.look || {}), jersey: p.look?.jersey || '#ffffff', name: '🌐 ' + p.name } });
+  for (const [id, p] of peers) if (!keep.some(n => n.id === id)) keep.push({ remote: true, id, i: 100 + k++, name: p.name, wkg: p.wkg || 0, d: p.d || 0, v: p.v || 0, lat: 2.3, latT: 2.3, crank: 0, cadence: p.cad || 85, gap: gapOf(R, p.d || 0, S.dist), look: { ...(p.look || {}), jersey: p.look?.jersey || '#ffffff', name: '🌐 ' + p.name, remote: true } });
   S.field = keep; if (peers.size && !S.npcOn) { S.npcOn = true; updNpcBtn(); }
   // "Mitfahren" aus "Wer ist online": einmalig direkt hinter den gewählten Fahrer beamen
   if (S.joinRider && peers.has(S.joinRider.sid)) { const p = peers.get(S.joinRider.sid), name = S.joinRider.name; S.joinRider = null; S.joinGiveUp = 0; const d = R.loop ? ((p.d - 10) % R.total + R.total) % R.total : clamp(p.d - 10, 0, R.total - 20); setTimeout(() => { beam(d).then(() => { flash('🌐 Du fährst jetzt direkt hinter ' + name + '. Tritt in die Pedale!', 3000); $('#startCard', S.el).hidden = true; }); }, 300); }
@@ -257,6 +258,7 @@ function spawnField() {
 }
 
 function bindUi() {
+  $('#liveLed', S.el).onclick = e => flash('🌐 ' + e.currentTarget.title, 3500);
   const el = S.el;
   $('#gUp', el).onclick = () => shift(1); $('#gDn', el).onclick = () => shift(-1);
   $('#tPause', el).onclick = togglePause;
@@ -391,8 +393,15 @@ const envGap = () => (10 + Math.random() * 5) * 60e3;
 const TIMES = ['morning', 'day', 'evening', 'night'];
 // Live-Status auf der Startkarte beim Mitfahren (zeigt, ob Verbindung steht und Daten fließen)
 function liveStatus() {
-  const e = S.el.querySelector('#liveSt'); if (!e || performance.now() - (S.lsT || 0) < 1000) return; S.lsT = performance.now();
-  const L = S.live, st = !L ? 'wird vorbereitet …' : { off: 'wird vorbereitet …', connecting: 'wird verbunden …', on: 'verbunden', error: 'Verbindung gestört, neuer Versuch …', nologin: 'nicht angemeldet oder kein Online-Zugang', private: 'du bist auf „unsichtbar“ gestellt (Konto › Für andere sichtbar)' }[L.status] || L.status;
+  if (performance.now() - (S.lsT || 0) < 1000) return; S.lsT = performance.now();
+  const e = S.el.querySelector('#liveSt'), L = S.live, st = !L ? 'wird vorbereitet …' : { off: 'wird vorbereitet …', connecting: 'wird verbunden …', on: 'verbunden', error: 'Verbindung gestört, neuer Versuch …', nologin: 'nicht angemeldet oder kein Online-Zugang', private: 'du bist auf „unsichtbar“ gestellt (Konto › Für andere sichtbar)' }[L.status] || L.status;
+  // LED oben rechts: grün verbunden, gelb verbindet, rot gestört (nur wenn online angemeldet)
+  const led = S.el.querySelector('#liveLed');
+  if (led) {
+    const show = !!L && L.status !== 'nologin'; led.hidden = !show;
+    if (show) { led.dataset.st = L.status === 'on' ? 'on' : L.status === 'error' || L.status === 'private' ? 'bad' : 'wait'; S.el.querySelector('#liveLedN').textContent = L.status === 'on' && L.peers.size ? L.peers.size : ''; led.title = 'Live: ' + st + (L.status === 'on' ? ` · ${L.peers.size} echte Fahrer auf der Strecke · gesendet ${L.sent} · empfangen ${L.recv}` : ''); }
+  }
+  if (!e) return;
   e.textContent = 'Live: ' + st + (L?.status === 'on' ? ` · gesendet ${L.sent} · empfangen ${L.recv} · ${L.peers.size} ${L.peers.size === 1 ? 'Fahrer' : 'Fahrer'} auf der Strecke` : '');
 }
 // Wetter folgt dem Gastgeber oder dem Fahrer, bei dem man mitfährt (steckt in jeder Positionsmeldung)
@@ -489,7 +498,7 @@ async function beam(d) {
   for (const c of [...S.climbs, ...S.sprints]) c.state = d > c.from ? 'done' : 'pending';
   if (S.pacer) S.pacer.d = d;
   if (S.npcOn) { for (const n of S.field) { if (n.remote) continue; const off = (n.i % 2 ? 1 : -1) * (20 + (n.i * 37) % 300); n.d = R.loop ? ((d + off) % R.total + R.total) % R.total : clamp(d + off, 0, R.total - 10); n.v = S.v; n.gap = gapOf(R, n.d, d); } }
-  S.world.clearTraffic?.(); S.world.camInit = false; S.world.preload(d);
+  S.world.clearTraffic?.(); S.world.camInit = false; S.world.preload(d); setTimeout(() => S?.live?.sendNow(), 50);
   $('#load', S.el).hidden = true; flash('Gebeamt nach km ' + fmtKm(d), 1800);
 }
 function updNpcBtn() { $('#tNpcL', S.el).textContent = S.npcOn ? 'Feld an' : 'Feld aus'; $('#riders', S.el).hidden = !S.npcOn; }
@@ -607,7 +616,10 @@ function step(dt, first) {
   S.p3.push(pw); if (S.p3.length > 30) S.p3.shift();
   if (S.pacer && running) { const p = S.pacer, g = R.gradeAt(p.d); p.v += (steadySpeed(p.w, g) - p.v) * Math.min(1, dt * .8); p.d += p.v * dt; p.crank += 88 / 60 * Math.PI * 2 * dt; if (R.loop) p.d %= R.total; else p.d = Math.min(p.d, R.total); }
   // Mitfahrer
-  if (S.live?.peers.size) for (const n of S.field) if (n.remote) { const p = S.live.peers.get(n.id); if (p && p.t !== n.pt) { n.pt = p.t; n.d = p.d; n.v = p.v; n.wkg = p.wkg; n.cadence = p.cad || 85; } }
+  if (S.live?.peers.size) for (const n of S.field) if (n.remote) { const p = S.live.peers.get(n.id); if (p && p.t !== n.pt) {
+    // Großer Sprung = der andere hat sich gebeamt: Hinweis, wenn er jetzt in der Nähe ist
+    if (n.pt && Math.abs(gapOf(S.route, p.d, n.d)) > 60) { const g = gapOf(S.route, p.d, S.dist); if (Math.abs(g) < 80) flash(`🌐 ${n.name} ist ${g < 0 ? 'direkt hinter dir' : 'direkt vor dir'} aufgetaucht`, 2500); }
+    n.pt = p.t; n.d = p.d; n.v = p.v; n.wkg = p.wkg; n.cadence = p.cad || 85; } }
   if (S.npcOn && S.field.length) {
     const r = stepField(R, S.field, { d: S.dist, lat: S.lat ?? 1.5, v: S.v, kg: profile.kg, race: S.race }, dt, running);
     S.draft = r.draft; S.wheel = r.wheel;
