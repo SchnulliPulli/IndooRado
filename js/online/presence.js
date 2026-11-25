@@ -65,14 +65,29 @@ export async function joinPresence() {
 // Alle 15 s: Liste frisch aus dem Kanal lesen (Zähler oben aktuell halten) und eine abgerissene Verbindung neu aufbauen
 setInterval(async () => {
   if (!P.ch || P.ch === 'pending') return;
-  if (P.ch.state === 'joined') { sync(); return; }
+  if (P.ch.state === 'joined') {
+    sync();
+    // Selbstkontrolle: steht beim Server noch unsere aktuelle Meldung (z. B. Lobby-Beitritt)? Sonst erneut senden
+    const mine = P.ch.presenceState?.()[sid]?.at(-1), want = P.me;
+    if (P.ready && (!mine || (mine.joined || null) !== (want.joined || null) || (mine.host?.id || null) !== (want.host?.id || null) || mine.where !== want.where)) push().catch(() => { });
+    return;
+  }
   if (P.ch.state === 'joining' || !loggedIn() || !access().ok) return;
   const old = P.ch; P.ch = null; P.ready = false;
   try { (await client()).removeChannel(old); } catch (e) { }
   joinPresence().catch(() => { });
-}, 15000);
+}, 5000);
 export async function leavePresence() { const c = P.ch; P.ch = null; if (c && c !== 'pending') { try { await c.untrack(); (await client()).removeChannel(c); } catch (e) { } } P.ready = false; P.peers.clear(); bus.emit('presence'); }
-async function push() { if (!P.ch || P.ch === 'pending' || !P.ready) return; await P.ch.track({ name: online.profile?.display_name || 'Fahrer', look: onlineLook(), ...P.me }); }
+// Eigene Meldung senden; schlägt sie fehl (Zeitüberschreitung, Ratenlimit), bis zu 5-mal mit wachsender Pause wiederholen
+let pushTry = 0, pushTimer = null;
+const myMeta = () => ({ name: online.profile?.display_name || 'Fahrer', look: onlineLook(), ...P.me });
+async function push() {
+  if (!P.ch || P.ch === 'pending' || !P.ready) return;
+  clearTimeout(pushTimer);
+  let r; try { r = await P.ch.track(myMeta()); } catch (e) { r = 'error'; }
+  if (r === 'ok') { pushTry = 0; return; }
+  if (++pushTry <= 5) pushTimer = setTimeout(() => push().catch(() => { }), 500 * pushTry);
+}
 export function setStatus(patch) { Object.assign(P.me, patch); for (const k in P.me) if (P.me[k] == null) delete P.me[k]; push().catch(() => { }); }
 
 /* ---------- Lobby ---------- */
