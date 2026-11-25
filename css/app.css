@@ -5,6 +5,15 @@
   --r:14px;--nav:220px;--top:58px;
   font-family:Barlow,system-ui,sans-serif;color-scheme:dark;
 }
+:root[data-theme=light]{
+  --bg:#f3f5f7;--panel:#ffffff;--panel2:#e9edf1;--panel3:#dde3e9;--line:#d5dce3;--ink:#161b20;--soft:#5d6873;
+  --hr:#d92d45;--cad:#1f86d6;--ok:#1f9d5c;--warn:#b98a00;color-scheme:light;
+}
+:root[data-theme=light] .topbar{background:rgba(255,255,255,.92)}
+:root[data-theme=light] .chip{color:#9aa4ad}
+/* Fahrt, Overlay-Werkzeuge und Pausenleiste bleiben dunkel (eigener HUD-Stil) */
+:root[data-theme=light] :is(.ridewrap,.resumebar,.wzoom,.editbar){--bg:#12161a;--panel:#1a2026;--panel2:#222a32;--panel3:#2b343e;--line:#2f3943;--ink:#eef2f5;--soft:#94a1ad;color:var(--ink);color-scheme:dark}
+:root[data-theme=light] .celebrate{background:linear-gradient(120deg,#ffe3d6,var(--panel) 60%);border-color:#f3c3ad}
 *{box-sizing:border-box;min-width:0}
 [hidden]{display:none!important}
 html,body{margin:0;background:var(--bg);color:var(--ink)}
@@ -38,10 +47,15 @@ h3.sub{font-size:13px;color:var(--soft);text-transform:none;letter-spacing:0;mar
 .nav a.on{background:var(--panel2);color:var(--ink)}.nav a.on svg{color:var(--acc)}
 .nav a:hover{color:var(--ink)}
 main{margin-left:var(--nav);padding:20px clamp(14px,3vw,32px) 40px;max-width:calc(1240px + var(--nav));display:flex;flex-direction:column;gap:16px}
+.view{display:flex;flex-direction:column;gap:16px}
+.subnav{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--line);margin:-6px 0 2px}
+.subnav::-webkit-scrollbar{display:none}
+.subnav a{flex:none;padding:9px 14px 10px;color:var(--soft);font-weight:600;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.subnav a:hover{color:var(--ink)}
+.subnav a.on{color:var(--ink);border-bottom-color:var(--acc)}
 @media(max-width:900px){
   .nav{top:auto;left:0;right:0;bottom:0;width:auto;height:calc(62px + env(safe-area-inset-bottom));padding:4px 4px env(safe-area-inset-bottom);flex-direction:row;justify-content:space-around;border-right:0;border-top:1px solid var(--line);background:rgba(18,22,26,.96);backdrop-filter:blur(10px)}
   .nav a{flex-direction:column;gap:2px;padding:6px 2px;font-size:11px;flex:1;justify-content:center}
-  .nav a[data-k=devices],.nav a[data-k=help],.nav a[data-k=ridesettings],.nav a[data-k=workouts]{display:none}
   .logo{font-size:19px}.chips{gap:3px}.chip{width:30px;height:30px}.chip svg{width:17px;height:17px}.topbar{gap:8px;padding:0 10px}
   main{margin-left:0;padding:14px 12px calc(84px + env(safe-area-inset-bottom))}
   h1{font-size:28px}
@@ -49,7 +63,7 @@ main{margin-left:var(--nav);padding:20px clamp(14px,3vw,32px) 40px;max-width:cal
   .chip{width:34px;height:34px}
 }
 /* Ride: alles ausblenden */
-body[data-page=ride] .topbar,body[data-page=ride] .nav{display:none}
+body[data-page=ride] .topbar,body[data-page=ride] .nav,body[data-page=ride] .subnav{display:none}
 body[data-page=ride] main{margin:0;padding:0;max-width:none}
 /* Bausteine */
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px}
@@ -210,6 +224,9 @@ span.badge{display:inline-flex;padding:5px 10px;font-weight:600}span.badge svg{w
 .wo-target{display:flex;align-items:baseline;gap:8px}.wo-target .num{font-size:40px;font-weight:700;line-height:1;color:var(--warn)}
 .wo-next{margin-left:auto}
 .wo-chart{width:100%;height:58px;display:block;background:rgba(0,0,0,.25);border-radius:7px}
+/* Canvas-Pixelgröße darf die Breite nicht bestimmen (sonst wächst das Widget mit jedem Bild) */
+.wo-chart,.xgraph canvas,.elevwrap canvas,.miniwrap canvas{contain:size}
+.hud-wo[data-user],.hud-left .hud-wo[data-user]{width:var(--ww,300px)}
 .climb{position:absolute;left:50%;top:120px;transform:translateX(-50%);background:rgba(200,16,46,.88);color:#fff;border-radius:12px;padding:8px 16px;min-width:300px;text-align:center;z-index:5}
 .climb-name{font:700 20px "Barlow Condensed",sans-serif;letter-spacing:.02em}
 .climb-row{display:flex;gap:14px;justify-content:center;font-size:17px}

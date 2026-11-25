@@ -98,7 +98,7 @@ export async function dsmLogout() {
 async function ensureSid() {
   if (sync.cfg.sid) return;
   if (sync.cfg.pass) { await dsmLogin({ ...sync.cfg, pass: sync.cfg.pass, remember: true }); return; }
-  sync.needLogin = true; throw new Error('Bitte unter Profil beim NAS anmelden');
+  sync.needLogin = true; throw new Error('Bitte unter Einstellungen › Verbindungen beim NAS anmelden');
 }
 const join = (...p) => p.join('/').replace(/\/+/g, '/');
 const DSM = {

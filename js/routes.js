@@ -272,14 +272,14 @@ export function prepare(raw) {
   const cover = d => { let c = 0; for (const t of tunnels) c = Math.max(c, smooth(t.from - 30, t.from + 15, d) * (1 - smooth(t.to - 15, t.to + 30, d))); return c; };
   function heightAt(px, pz) {
     const n = nearest(px, pz);
-    let h, hills = 0;
+    let h, hills = 0, d = 999, side = 0;
     if (demAt) {
       // Echtes Gelände: Höhenmodell, nahe der Straße auf deren GPX-Höhe angeglichen
       h = demAt(px, pz);
       if (n && n.dist < 400) h += (n.ele - demAt(x[n.i], z[n.i])) * smooth(400, 30, n.dist);
       hills = 4 * fbm(px / 60, pz / 60, 2, 9); h += hills * smooth(20, 120, n ? n.dist : 999);
     } else {
-    let base, d, side = 0;
+    let base;
     if (n && n.dist < 260) { base = n.ele; d = n.dist; side = n.side; }
     else { const f = farBase(px, pz); base = f.ele; d = Math.max(260, f.dist); side = f.side; }
     const sc = theme.hillScale;

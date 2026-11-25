@@ -30,7 +30,7 @@ export async function startOAuth(mode, clientId, secret) {
   if (!clientId) throw new Error('Bitte zuerst die Client-ID eintragen');
   if (P.secret && !secret) throw new Error('Google verlangt zusätzlich das Client-Secret');
   const verifier = rnd(48), challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))), state = 'vv-' + rnd(12);
-  sessionStorage.setItem('vvOAuth', JSON.stringify({ mode, clientId, secret: secret || '', verifier, state, back: location.hash || '#/profile' }));
+  sessionStorage.setItem('vvOAuth', JSON.stringify({ mode, clientId, secret: secret || '', verifier, state, back: location.hash || '#/connect' }));
   const q = new URLSearchParams({ client_id: clientId, response_type: 'code', redirect_uri: redirectUri(), state, code_challenge: challenge, code_challenge_method: 'S256', ...P.extra });
   if (P.scope) q.set('scope', P.scope);
   location.href = P.auth + '?' + q;
@@ -40,7 +40,7 @@ export async function finishOAuth() {
   const q = new URLSearchParams(location.search), st = q.get('state') || '';
   if (!st.startsWith('vv-')) return null;
   const pend = JSON.parse(sessionStorage.getItem('vvOAuth') || 'null'); sessionStorage.removeItem('vvOAuth');
-  history.replaceState(null, '', location.pathname + (pend?.back || '#/profile'));
+  history.replaceState(null, '', location.pathname + (pend?.back || '#/connect'));
   if (!pend || pend.state !== st) throw new Error('Anmeldung abgebrochen (Sitzung abgelaufen), bitte erneut verbinden');
   if (q.get('error')) throw new Error(`${PROVIDERS[pend.mode].name}: ${q.get('error_description') || q.get('error')}`);
   const cfg = { mode: pend.mode, clientId: pend.clientId, secret: pend.secret || undefined, auto: true };

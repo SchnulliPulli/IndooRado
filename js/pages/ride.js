@@ -181,7 +181,7 @@ async function start(el) {
     const dist = smoothD(S, 'rdist', S.dist, S.v);
     S.rcrank = (S.rcrank || 0) + (S.v > .3 || moving ? (live.cadence || 0) / 60 * Math.PI * 2 * dt : 0);
     let npcs = null;
-    if (S.npcOn) npcs = S.field.map(n => { const d = smoothD(n, 'rd', n.d, n.v); n.rc = (n.rc || 0) + (moving ? n.cadence / 60 * Math.PI * 2 * dt : 0); return { d, lat: n.lat, v: n.v, crank: n.rc }; });
+    if (S.npcOn) npcs = S.field.map(n => { const d = smoothD(n, 'rd', n.d, n.v); n.rc = (n.rc || 0) + (moving ? n.cadence / 60 * Math.PI * 2 * dt : 0); n.rl = n.rl == null ? n.lat : n.rl + (n.lat - n.rl) * Math.min(1, dt * 5); n.rv = n.rv == null ? n.v : n.rv + (n.v - n.rv) * Math.min(1, dt * 4); return { d, lat: n.rl, v: n.rv, crank: n.rc }; });
     const pd = S.pacer ? smoothD(S.pacer, 'rd', S.pacer.d, S.pacer.v) : null;
     const ghostDist = S.ghost && S.ghostPos != null ? smoothD(S, 'rghost', S.ghostPos, S.v) : null;
     world.update({ dist, ghostDist, v: S.v, crank: S.rcrank, pacerDist: pd, pacerV: S.pacer?.v, pacerCrank: S.pacer?.crank, npcs }, dt);

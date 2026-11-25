@@ -69,4 +69,19 @@ export function toTcx(ride) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2" xmlns:ns3="http://www.garmin.com/xmlschemas/ActivityExtension/v2"><Activities><Activity Sport="Biking"><Id>${st.toISOString()}</Id><Lap StartTime="${st.toISOString()}"><TotalTimeSeconds>${s.dur}</TotalTimeSeconds><DistanceMeters>${s.dist.toFixed(1)}</DistanceMeters><MaximumSpeed>${s.maxV.toFixed(2)}</MaximumSpeed><Calories>${s.kcal}</Calories>${s.avgHr ? `<AverageHeartRateBpm><Value>${s.avgHr}</Value></AverageHeartRateBpm><MaximumHeartRateBpm><Value>${s.maxHr}</Value></MaximumHeartRateBpm>` : ''}<Intensity>Active</Intensity>${s.avgCad ? `<Cadence>${s.avgCad}</Cadence>` : ''}<TriggerMethod>Manual</TriggerMethod><Track>${tp}</Track><Extensions><ns3:LX><ns3:AvgWatts>${s.avgP}</ns3:AvgWatts><ns3:MaxWatts>${s.maxP}</ns3:MaxWatts></ns3:LX></Extensions></Lap><Notes>${x(ride.title || 'VeloVerse')}</Notes><Creator xsi:type="Device_t" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><Name>VeloVerse</Name></Creator></Activity></Activities></TrainingCenterDatabase>`;
 }
+// GPX der gefahrenen virtuellen Strecke: Koordinaten, Höhe, Zeit, dazu Puls, Kadenz und Leistung als Garmin-Erweiterung.
+// Lässt sich in Komoot, Karten-Apps oder auf dem Radcomputer öffnen.
+export function toGpx(ride) {
+  const st = new Date(ride.start), iso = t => new Date(+st + t * 1000).toISOString();
+  const pts = ride.samples.filter(p => p.la != null && p.lo != null);
+  const trk = pts.map(p => `<trkpt lat="${p.la}" lon="${p.lo}"><ele>${(+p.e).toFixed(1)}</ele><time>${iso(p.ts)}</time>${p.hr || p.cad != null || p.p != null ? `<extensions>${p.p != null ? `<power>${p.p}</power>` : ''}${p.hr || p.cad != null ? `<gpxtpx:TrackPointExtension>${p.hr ? `<gpxtpx:hr>${p.hr}</gpxtpx:hr>` : ''}${p.cad != null ? `<gpxtpx:cad>${p.cad}</gpxtpx:cad>` : ''}</gpxtpx:TrackPointExtension>` : ''}</extensions>` : ''}</trkpt>`).join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="VeloVerse" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">
+<metadata><name>${x(ride.title || ride.route || 'VeloVerse')}</name><time>${st.toISOString()}</time></metadata>
+<trk><name>${x(ride.title || ride.route || 'VeloVerse')}</name><type>VirtualRide</type><trkseg>
+${trk}
+</trkseg></trk>
+</gpx>`;
+}
+export const hasTrack = ride => ride.samples?.some(p => p.la != null);
 export const fileBase = ride => 'veloverse-' + ride.start.slice(0, 16).replace(/[:T]/g, '-');

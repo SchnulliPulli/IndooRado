@@ -24,7 +24,7 @@ export async function disconnect() {
 // Schritt 1: zur Strava-Anmeldung weiterleiten
 export function authorize() {
   const c = strava.cfg; if (!c?.clientId) throw new Error('Client-ID fehlt');
-  sessionStorage.setItem('stravaReturn', location.hash || '#/profile');
+  sessionStorage.setItem('stravaReturn', location.hash || '#/connect');
   const u = new URL('https://www.strava.com/oauth/authorize');
   u.search = new URLSearchParams({ client_id: c.clientId, redirect_uri: redirectUri(), response_type: 'code', approval_prompt: 'auto', scope: 'activity:write,activity:read_all,read_all' });
   location.href = u.toString();
@@ -33,7 +33,7 @@ export function authorize() {
 export async function handleRedirect() {
   const q = new URLSearchParams(location.search);
   if (!q.has('code') && !q.has('error')) return null;
-  const back = sessionStorage.getItem('stravaReturn') || '#/profile'; sessionStorage.removeItem('stravaReturn');
+  const back = sessionStorage.getItem('stravaReturn') || '#/connect'; sessionStorage.removeItem('stravaReturn');
   history.replaceState(null, '', location.pathname + back);
   if (q.has('error')) throw new Error('Strava-Anmeldung abgebrochen');
   if (!/activity:write/.test(q.get('scope') || '')) throw new Error('Bitte bei Strava das Hochladen von Aktivitäten erlauben');

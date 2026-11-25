@@ -160,7 +160,7 @@ class Rider {
     const r = .17, L1 = .45, L2 = .46;
     for (const l of this.legs) {
       const ang = crank + (l.s > 0 ? Math.PI : 0);
-      const ped = P.BB.clone().add(V(l.s * .09, -Math.cos(ang) * r, -Math.sin(ang) * r));
+      const ped = P.BB.clone().add(V(l.s * .09, -Math.cos(ang) * r, Math.sin(ang) * r));
       const arm = this.crank[l.s > 0 ? 1 : 0]; this.limb(arm, P.BB.clone().add(V(l.s * .07, 0, 0)), ped.clone().add(V(-l.s * .02, 0, 0)));
       const foot = ped.clone().add(V(0, .055, 0)), h = hip.clone().add(V(l.s * .1, -.02, 0));
       const dv = foot.clone().sub(h); let D = Math.min(dv.length(), L1 + L2 - .005);
@@ -171,7 +171,7 @@ class Rider {
       const ankle = h.clone().addScaledVector(dir, D);
       this.limb(l.sh, knee, ankle);
       l.sock.position.copy(ankle).lerp(knee, .12); l.sock.quaternion.copy(l.sh.quaternion);
-      l.shoe.position.copy(ankle).add(V(0, -.02, -.05)); l.shoe.rotation.x = -.15 + Math.sin(ang) * .2;
+      l.shoe.position.copy(ankle).add(V(0, -.02, -.05)); l.shoe.rotation.x = -.15 - Math.sin(ang) * .2;
     }
   }
 }
@@ -691,7 +691,7 @@ export class World {
       o.rider.root.visible = vis; if (!vis) return;
       this.place(o.rider.root, n.d, n.lat);
       o.acc = (o.acc || 0) + dt;
-      if (Math.abs(gap) < 35 || (this.frameN + i) % 3 === 0) { o.rider.update(n.crank, n.v, o.acc, R.gradeAt(n.d)); o.acc = 0; }
+      if (Math.abs(gap) < 90 || (this.frameN + i) % 2 === 0) { o.rider.update(n.crank, n.v, o.acc, R.gradeAt(n.d)); o.acc = 0; }
       o.lab.visible = this.showNames !== false && gap > 7 && gap < 45 && this.view !== 3;
     });
     // Boote schaukeln
@@ -719,9 +719,13 @@ export class World {
       case 3: cp = pt(d - 26, 1.5, 32); look = pt(d + 18, 1.5, 0); break;
       default: cp = pt(d + .2, 1.5, 1.62); look = pt(d + 30, 1.5, 1.2); break;
     }
-    if (!inTun) { const ground = R.heightAt(cp.x, cp.z) + .8; if (cp.y < ground) cp.y = ground; }
-    const k = this.camInit ? 1 - Math.pow(view === 4 ? .0001 : .02, dt) : 1;
-    this.camPos.lerp(cp, k); this.camLook.lerp(look, k); this.camInit = true;
+    // Kamera folgt dem Fahrer ohne Verzögerung, nur der Versatz (Kurven, Ansichtswechsel) wird geglättet.
+    // Vorher hinkte die Kamera bei 10 m/s rund 2,5 m hinterher, in der Seitenansicht lief der Fahrer davon.
+    const k = this.camInit ? 1 - Math.pow(view === 4 ? .0001 : .03, dt) : 1;
+    if (!this.camOff) { this.camOff = new THREE.Vector3(); this.lookOff = new THREE.Vector3(); }
+    this.camOff.lerp(cp.clone().sub(rp), k); this.lookOff.lerp(look.clone().sub(rp), k); this.camInit = true;
+    this.camPos.copy(rp).add(this.camOff); this.camLook.copy(rp).add(this.lookOff);
+    if (!inTun) { const ground = R.heightAt(this.camPos.x, this.camPos.z) + .8; if (this.camPos.y < ground) this.camPos.y = ground; }
     this.camera.position.copy(this.camPos); this.camera.lookAt(this.camLook);
     // Umgebung mitführen
     const cx = this.camPos.x, cz = this.camPos.z;

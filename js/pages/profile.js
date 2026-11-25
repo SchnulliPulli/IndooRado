@@ -1,4 +1,4 @@
-// Profil, Avatar, Grafik, Ton, Datensicherung, NAS und Strava
+// Einstellungen: Profil (Fahrer, Trainer, Avatar), App (Thema, Grafik, Daten), Verbindungen (NAS/Cloud, Strava)
 import { $, esc, toast, dialog, download, fmtDate, bus } from '../util.js';
 import { profile, saveProfile, progress, levelOf } from '../state.js';
 import { UNLOCKS } from '../game.js';
@@ -7,7 +7,6 @@ import { autoQuality } from '../world.js';
 import { sync, saveSyncCfg, testConnection, pushNow, pullNow, dsmLogin, dsmLogout, normalizeHost, renameDevice, providerName } from '../sync.js';
 import { PROVIDERS, isOAuth, startOAuth, redirectUri } from '../cloud.js';
 import { kv } from '../db.js';
-import { sound } from '../sound.js';
 import { strava, connected as stravaConnected, setApp as setStravaApp, setAuto as setStravaAuto, authorize as stravaAuthorize, disconnect as stravaDisconnect } from '../strava.js';
 
 const F = (id, label, type, extra = '', hint = '') => `<label class="f">${label}<input class="inp" id="${id}" type="${type}" ${extra} value="${esc(profile[id])}">${hint ? `<span class="small muted">${hint}</span>` : ''}</label>`;
@@ -183,10 +182,22 @@ function loginDialog() {
   });
 }
 
-export async function render(el) {
+export const APP_VERSION = '2026.11';
+// App-Thema und Akzentfarbe sofort anwenden, für den nächsten Start auch in localStorage merken
+export function applyAppTheme() {
+  const t = profile.appTheme || 'dark', acc = profile.appAccent || '#ff6a3d';
+  const eff = t === 'system' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : t;
+  document.documentElement.dataset.theme = eff; document.documentElement.style.setProperty('--acc', acc); document.documentElement.style.setProperty('--acc2', `color-mix(in srgb, ${acc} 78%, ${eff === 'light' ? '#000' : '#fff'})`);
+  try { localStorage.setItem('vvTheme', JSON.stringify({ theme: eff, acc })); } catch (e) { }
+}
+// sec: 'profile' (Fahrer, Trainer, Avatar), 'app' (Darstellung, Grafik, Daten), 'connect' (Strava, Cloud)
+export async function render(el, params = []) {
+  const sec = params[0] || 'profile';
   const u = await usage(), pers = await persist(), lv = levelOf(progress.xp).lv;
-  el.innerHTML = `
-  <section class="pagehead"><h1>Profil</h1><span class="row"><a class="btn sm" href="#/ridesettings">Fahransicht</a><button class="btn sm" id="onbAgain">Einrichtung starten</button><a class="btn sm" href="#/help">Anleitung</a></span></section>
+  const theme = profile.appTheme || 'dark', acc = profile.appAccent || '#ff6a3d';
+  const html = {
+  profile: `
+  <section class="pagehead"><h1>Profil</h1></section>
   <section class="grid2">
     <div class="card form"><h2>Fahrer</h2>
       ${F('name', 'Name', 'text', 'maxlength="30"')}
@@ -197,69 +208,68 @@ export async function render(el) {
       <label class="f">Sitzposition<select class="inp" id="cda">${[['0.40', 'Aufrecht (CdA 0,40)'], ['0.32', 'Oberlenker (CdA 0,32)'], ['0.28', 'Unterlenker (CdA 0,28)'], ['0.24', 'Zeitfahren (CdA 0,24)']].map(([v, l]) => `<option value="${v}" ${+v === +profile.cda ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <p class="small muted">Leistungszonen: ${[['Z2', .56, .75], ['Z3', .76, .9], ['Z4', .91, 1.05], ['Z5', 1.06, 1.2]].map(([z, a, b]) => `${z} ${Math.round(a * profile.ftp)}–${Math.round(b * profile.ftp)} W`).join(' · ')}</p>
     </div>
-    <div class="card form"><h2>Trainer und Fahrgefühl</h2>
+    <div class="card form"><h2>Trainer</h2>
       <div class="grid2 tight">${F('circ', 'Radumfang (mm)', 'number', 'min="1800" max="2400" inputmode="numeric"', '700×25c: 2105, 700×28c: 2136')}${F('maxW', 'Max. Trainerleistung (W)', 'number', 'min="200" max="2500" inputmode="numeric"', 'D100: 600 W')}</div>
-      <label class="f">Steigungsgefühl bei virtuellen Gängen: <b id="gdV">${profile.gearDiff} %</b><input type="range" id="gearDiff" min="25" max="100" step="5" value="${profile.gearDiff}"></label>
-      <label class="f">Steigungsgefühl im Steigungsmodus: <b id="sdV">${profile.simDiff} %</b><input type="range" id="simDiff" min="10" max="100" step="5" value="${profile.simDiff}"></label>
-      ${SW('autoPause', 'Automatische Pause, wenn du aufhörst zu treten')}
-      ${SW('autoShots', 'Automatische Fotos während der Fahrt')}
-      <label class="f">Foto-Abstand (Minuten)<input class="inp" id="shotEvery" type="number" min="3" max="60" value="${profile.shotEvery}"></label>
+      <p class="small muted">Fahrgefühl, automatische Pause, Fotos und Hinweise stellst du unter <a href="#/ridesettings">Fahransicht</a> ein.</p>
     </div>
   </section>
-  <section class="grid2">
-    <div class="card form"><h2>Avatar</h2>
+  <section class="card form"><h2>Avatar</h2>
       <p class="small muted">Weitere Farben schaltest du mit höheren Leveln frei (aktuell Level ${lv}).</p>
       ${['jersey', 'helmet', 'bikeColor'].map(k => `<div class="f">${{ jersey: 'Trikot', helmet: 'Helm', bikeColor: 'Rahmen' }[k]}<div class="swatches" data-k="${k}">${UNLOCKS.map(u => u.lv <= lv ? `<button style="background:${u.c}" data-c="${u.c}" aria-pressed="${profile[k] === u.c}" aria-label="${u.name || u.c}" title="${u.name || ''}"></button>` : `<button class="locked" style="background:${u.c}" disabled title="Ab Level ${u.lv}" aria-label="Gesperrt bis Level ${u.lv}"><small>${u.lv}</small></button>`).join('')}${lv >= 10 ? `<input type="color" value="${profile[k]}" data-k="${k}" title="Freie Farbe">` : '<span class="small muted">Freie Farbwahl ab Level 10</span>'}</div></div>`).join('')}
       <div class="f">Hautton<div class="swatches" data-k="skin">${['#f1c7a5', '#e3b18c', '#c99272', '#9a6a4b', '#6b4532'].map(c => `<button style="background:${c}" data-c="${c}" aria-pressed="${profile.skin === c}"></button>`).join('')}</div></div>
     </div>
-    <div class="card form"><h2>Grafik</h2>
+  </section>`,
+  app: `
+  <section class="pagehead"><h1>App</h1></section>
+  <section class="grid2">
+    <div class="card form"><h2>Erscheinungsbild</h2>
+      <label class="f">Thema<select class="inp" id="appTheme">${[['dark', 'Dunkel'], ['light', 'Hell'], ['system', 'Wie das Gerät']].map(([v, l]) => `<option value="${v}" ${theme === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <div class="f">Akzentfarbe<div class="swatches" id="appAcc">${['#ff6a3d', '#3fa7f5', '#4fd18b', '#f5c542', '#b06cf0', '#ef4458', '#00c2c7'].map(c => `<button style="background:${c}" data-c="${c}" aria-pressed="${acc === c}" aria-label="Farbe ${c}"></button>`).join('')}</div></div>
+      <p class="small muted">Gilt für Menüs und Seiten. Die Anzeige während der Fahrt hat einen eigenen Stil unter <a href="#/ridesettings">Fahransicht</a>.</p>
+      <h2 style="margin-top:18px">Grafik</h2>
       <label class="f">Qualität der 3D-Welt<select class="inp" id="quality">${[['auto', 'Automatisch (' + ({ high: 'hoch', medium: 'mittel' }[autoQuality()]) + ')'], ['high', 'Hoch: Schatten, weite Sicht'], ['medium', 'Mittel: für Tablets'], ['low', 'Niedrig: für ältere Geräte']].map(([v, l]) => `<option value="${v}" ${profile.quality === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <p class="small muted">Ruckelt die Fahrt, senkt die App die Auflösung automatisch. Auf schwachen Geräten hilft zusätzlich „Mittel“ oder „Niedrig“.</p>
-      <h2 style="margin-top:18px">Daten</h2>
+    </div>
+    <div class="card form"><h2>Daten</h2>
       <p class="small muted">Gespeichert werden Profil, Einstellungen, gekoppelte Geräte und Tastenbelegung, Fahrten mit Fotos, Level, Abzeichen, Missionen, Bestzeiten, Trainingsplan-Fortschritt sowie eigene Strecken, Pläne und Workouts. Die Sicherung enthält alles davon in einer Datei, aber keine Passwörter oder Schlüssel.</p>
-      <p class="small muted">Alles wird in diesem Browser unter <b>${esc(location.origin)}</b> gespeichert. Unter einer anderen Adresse siehst du andere Daten. Sichere regelmäßig oder richte unten einen Cloud-Speicher ein (NAS, OneDrive, Google Drive, Dropbox).</p>
+      <p class="small muted">Alles wird in diesem Browser unter <b>${esc(location.origin)}</b> gespeichert. Unter einer anderen Adresse siehst du andere Daten. Sichere regelmäßig oder richte unter <a href="#/connect">Verbindungen</a> einen Cloud-Speicher ein (NAS, OneDrive, Google Drive, Dropbox).</p>
       <p class="small muted">Belegt: ${u ? (u.usage / 1048576).toFixed(1).replace('.', ',') + ' MB' : 'unbekannt'} · Dauerhafter Speicher: ${pers ? 'ja' : 'nicht bestätigt'}</p>
       <div class="row"><button class="btn" id="bk">Sicherung herunterladen</button><label class="btn">Sicherung einspielen<input type="file" id="rs" accept=".json" hidden></label></div>
       <div class="row"><button class="btn ghost danger" id="wp">Alle lokalen Daten löschen</button></div>
     </div>
   </section>
-  <section class="grid2">
-    <div class="card form"><h2>Ton</h2>
-      ${SW('soundOn', 'Ton an (in der Fahrt auch mit Taste M)')}
-      ${[['volMaster', 'Gesamtlautstärke'], ['volAmb', 'Umgebung (Wind, Reifen, Natur)'], ['volFx', 'Effekte (Countdown, Tore, Erfolge)']].map(([k, l]) => `<label class="f">${l}: <b id="${k}V">${Math.round(profile[k] * 100)} %</b><input type="range" id="${k}" min="0" max="1" step="0.05" value="${profile[k]}"></label>`).join('')}
-      <div class="row"><button class="btn sm" id="sndTest">Probehören</button></div>
-      <h2 style="margin-top:14px">Trainer-Hinweise</h2>
-      ${SW('tips', 'Tipps zu Kadenz und Fahrweise in Workouts anzeigen')}
-      ${SW('drinkTips', 'Ans Trinken erinnern (alle 15 Minuten)')}
-      ${SW('tripleSkip', 'Zwift Click: dreimal schnell Plus springt zum nächsten Intervall, dreimal Minus wiederholt es (am Anfang: eins zurück)')}
-      ${SW('ergSoft', 'Sanfter ERG-Einstieg: große Wattsprünge über 5 Sekunden hochfahren')}
-    </div>
-    <div class="card form" id="nasCard"></div>
-  </section>
-  <section class="card form" id="stravaCard"></section>`;
-  nasCard($('#nasCard', el)); stravaCard($('#stravaCard', el));
-  $('#onbAgain', el).onclick = () => import('../onboard.js').then(m => m.onboarding(true));
-  for (const k of ['soundOn', 'tips', 'drinkTips', 'tripleSkip', 'ergSoft']) $('#' + k, el).onchange = e => { profile[k] = e.target.checked; saveProfile(); sound.apply(); };
-  for (const k of ['volMaster', 'volAmb', 'volFx']) $('#' + k, el).oninput = e => { profile[k] = +e.target.value; $('#' + k + 'V', el).textContent = Math.round(profile[k] * 100) + ' %'; saveProfile(); sound.apply(); };
-  $('#sndTest', el).onclick = () => { sound.unlock(); sound.fanfare(); };
-  const num = ['ftp', 'kg', 'hrMax', 'bike', 'circ', 'maxW', 'shotEvery', 'age', 'hrRest'];
-  $('#sex', el).onchange = e => { profile.sex = e.target.value; saveProfile(); toast('Gespeichert', 1200); };
-  for (const k of ['name', ...num]) $('#' + k, el).onchange = e => { const v = num.includes(k) ? parseFloat(e.target.value) : e.target.value.trim(); if (num.includes(k) && isNaN(v)) return; if (k === 'ftp' && v !== profile.ftp) profile.ftpHistory = [...(profile.ftpHistory || []), { date: new Date().toISOString(), ftp: v, source: 'manuell' }]; profile[k] = v; saveProfile(); toast('Gespeichert', 1200); };
-  $('#cda', el).onchange = e => { profile.cda = +e.target.value; saveProfile(); };
-  $('#quality', el).onchange = e => { profile.quality = e.target.value; saveProfile(); };
-  for (const k of ['autoPause', 'autoShots']) $('#' + k, el).onchange = e => { profile[k] = e.target.checked; saveProfile(); };
-  $('#gearDiff', el).oninput = e => { profile.gearDiff = +e.target.value; $('#gdV', el).textContent = profile.gearDiff + ' %'; saveProfile(); };
-  $('#simDiff', el).oninput = e => { profile.simDiff = +e.target.value; $('#sdV', el).textContent = profile.simDiff + ' %'; saveProfile(); };
-  el.querySelectorAll('.swatches').forEach(sw => {
+  <section class="card form"><h2>Technik</h2>
+    <p class="small muted">Version ${esc(APP_VERSION)} · ${navigator.bluetooth ? 'Bluetooth verfügbar' : 'Kein Web-Bluetooth in diesem Browser (Chrome oder Edge nötig)'} · ${location.protocol === 'https:' ? 'Offline-Betrieb aktiv' : 'Offline-Betrieb nur über https'}</p>
+    <div class="row"><button class="btn sm" id="onbAgain">Einrichtung erneut starten</button><button class="btn sm" id="appReload" title="Zwischengespeicherte App-Dateien verwerfen und neu laden, Daten bleiben erhalten">App aktualisieren</button></div>
+  </section>`,
+  connect: `
+  <section class="pagehead"><h1>Verbindungen</h1></section>
+  <section class="card form" id="stravaCard"></section>
+  <section class="card form" id="nasCard"></section>`,
+  };
+  el.innerHTML = html[sec] || html.profile;
+  const on = (sel, ev, fn) => { const x = $(sel, el); if (x) x[ev] = fn; };
+  if ($('#nasCard', el)) nasCard($('#nasCard', el));
+  if ($('#stravaCard', el)) stravaCard($('#stravaCard', el));
+  on('#onbAgain', 'onclick', () => import('../onboard.js').then(m => m.onboarding(true)));
+  const num = ['ftp', 'kg', 'hrMax', 'bike', 'circ', 'maxW', 'age', 'hrRest'];
+  on('#sex', 'onchange', e => { profile.sex = e.target.value; saveProfile(); toast('Gespeichert', 1200); });
+  for (const k of ['name', ...num]) on('#' + k, 'onchange', e => { const v = num.includes(k) ? parseFloat(e.target.value) : e.target.value.trim(); if (num.includes(k) && isNaN(v)) return; if (k === 'ftp' && v !== profile.ftp) profile.ftpHistory = [...(profile.ftpHistory || []), { date: new Date().toISOString(), ftp: v, source: 'manuell' }]; profile[k] = v; saveProfile(); toast('Gespeichert', 1200); });
+  on('#appReload', 'onclick', async () => { try { for (const k of await caches.keys()) await caches.delete(k); for (const r of await navigator.serviceWorker?.getRegistrations?.() || []) await r.update(); } catch (e) { } location.reload(); });
+  on('#cda', 'onchange', e => { profile.cda = +e.target.value; saveProfile(); });
+  on('#quality', 'onchange', e => { profile.quality = e.target.value; saveProfile(); toast('Gilt ab der nächsten Fahrt', 1500); });
+  on('#appTheme', 'onchange', e => { profile.appTheme = e.target.value; saveProfile(); applyAppTheme(); });
+  on('#appAcc', 'onclick', e => { const b = e.target.closest('[data-c]'); if (!b) return; profile.appAccent = b.dataset.c; saveProfile(); applyAppTheme(); for (const x of el.querySelectorAll('#appAcc [data-c]')) x.setAttribute('aria-pressed', String(x === b)); });
+  el.querySelectorAll('.swatches[data-k]').forEach(sw => {
     sw.onclick = e => { const b = e.target.closest('[data-c]'); if (!b) return; profile[sw.dataset.k] = b.dataset.c; saveProfile(); for (const x of sw.querySelectorAll('[data-c]')) x.setAttribute('aria-pressed', String(x === b)); };
     sw.oninput = e => { if (e.target.type === 'color') { profile[sw.dataset.k] = e.target.value; saveProfile(); } };
   });
-  $('#bk', el).onclick = async () => { download('veloverse-sicherung-' + new Date().toISOString().slice(0, 10) + '.json', await backup(), 'application/json'); };
-  $('#rs', el).onchange = async e => { try { await restore(await e.target.files[0].text()); toast('Sicherung eingespielt, App wird neu geladen'); setTimeout(() => location.reload(), 1200); } catch (err) { toast('Fehler: ' + err.message, 5000); } };
-  $('#wp', el).onclick = async () => {
+  on('#bk', 'onclick', async () => { download('veloverse-sicherung-' + new Date().toISOString().slice(0, 10) + '.json', await backup(), 'application/json'); });
+  on('#rs', 'onchange', async e => { try { await restore(await e.target.files[0].text()); toast('Sicherung eingespielt, App wird neu geladen'); setTimeout(() => location.reload(), 1200); } catch (err) { toast('Fehler: ' + err.message, 5000); } });
+  on('#wp', 'onclick', async () => {
     const nas = sync.cfg?.url;
     if (!(await dialog({ title: 'Alle lokalen Daten löschen?', html: `<p>In diesem Browser werden unwiderruflich gelöscht: Fahrten, Fotos, Fortschritt, Pläne, eigene Strecken und Workouts, Einstellungen, Geräte, NAS- und Strava-Zugang sowie der App-Cache.</p><p class="muted small">${nas ? 'Die Daten auf dem NAS bleiben erhalten und lassen sich danach mit „Vom NAS laden“ zurückholen.' : 'Ohne Sicherungsdatei oder NAS sind die Daten danach weg.'}</p>`, buttons: [{ label: 'Abbrechen', value: false }, { label: 'Endgültig löschen', value: true, cls: 'danger' }] }))) return;
     await wipeAll(); location.replace(location.pathname + '#/');
     setTimeout(() => location.reload(), 50);
-  };
+  });
 }

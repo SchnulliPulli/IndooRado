@@ -15,7 +15,7 @@ const steps = [
       <li><b>Trainieren</b>: Workouts und mehrwöchige Pläne passen sich an deine FTP, Kadenz und deinen Puls an.</li>
       <li><b>Spielen</b>: Mitfahrer, Sprints und Gipfel, Zieltore, ein Geist deiner Bestfahrt, XP, Missionen, Abzeichen.</li>
       <li><b>Deine Daten</b>: bleiben im Browser, auf Wunsch auch auf deinem NAS oder in OneDrive, Google Drive oder Dropbox, Fahrten gehen auf Wunsch zu Strava.</li>
-    </ul><p class="small muted">Die Einrichtung dauert etwa zwei Minuten. Alles lässt sich später unter Profil ändern.</p>` },
+    </ul><p class="small muted">Die Einrichtung dauert etwa zwei Minuten. Alles lässt sich später unter Einstellungen ändern.</p>` },
   { t: 'Über dich', h: () => `
     <label class="f">Name<input class="inp" data-p="name" value="${esc(profile.name)}" maxlength="30"></label>
     <div class="grid2 tight"><label class="f">FTP (Watt)<input class="inp" data-p="ftp" type="number" min="50" max="600" value="${profile.ftp}"></label><label class="f">Gewicht (kg)<input class="inp" data-p="kg" type="number" min="30" max="200" step="0.5" value="${profile.kg}"></label></div>

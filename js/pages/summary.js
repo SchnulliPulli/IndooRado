@@ -4,7 +4,7 @@ import { db } from '../db.js';
 import { profile, progress, levelOf } from '../state.js';
 import { CURVE, curveLabel, bestCurve, BADGES, effort, effortLabel, calories, splits, rankOf } from '../analysis.js';
 import { multiChart, curveChart, trackMap } from '../charts.js';
-import { toFit, toTcx, fileBase } from '../export.js';
+import { toFit, toTcx, toGpx, hasTrack, fileBase } from '../export.js';
 import { deleteRide, applyFtp } from '../ridesave.js';
 import { statTiles, levelBar, ICON } from '../components.js';
 import { drawWorkout } from '../workouts.js';
@@ -66,7 +66,7 @@ export async function render(el, [id], query) {
       <div class="actmap"><canvas id="map"></canvas></div>
     </div>
     <div class="row actbtns">
-      <button class="btn sm pri" id="eStrava" title="FIT-Datei speichern und Strava-Upload öffnen">Zu Strava</button><button class="btn sm" id="eShare">Bild teilen</button><button class="btn sm" id="eFit">FIT</button><button class="btn sm" id="eTcx">TCX</button><button class="btn sm ghost" id="eRen">Umbenennen</button><button class="btn sm ghost danger" id="eDel">Löschen</button>
+      <button class="btn sm pri" id="eStrava" title="FIT-Datei speichern und Strava-Upload öffnen">Zu Strava</button><button class="btn sm" id="eShare">Bild teilen</button><button class="btn sm" id="eFit">FIT</button><button class="btn sm" id="eTcx">TCX</button>${hasTrack(ride) ? '<button class="btn sm" id="eGpx" title="Gefahrene virtuelle Strecke als GPX">GPX</button>' : ''}<button class="btn sm ghost" id="eRen">Umbenennen</button><button class="btn sm ghost danger" id="eDel">Löschen</button>
     </div>
   </section>
   ${ride.test ? `<section class="card testbox"><h2>${esc(ride.test.type)}: neue FTP ${ride.test.ftp} W</h2><p class="muted">${esc(ride.test.basis)}. Aktuell eingetragen: ${profile.ftp} W.</p>${ride.test.ftp !== profile.ftp ? '<button class="btn pri" id="ftpApply">FTP übernehmen</button>' : '<p>Bereits übernommen.</p>'}</section>` : ''}
@@ -124,7 +124,7 @@ export async function render(el, [id], query) {
       ride.stravaId = r.id; await db.put('rides', ride);
       b.textContent = 'Auf Strava ansehen'; b.disabled = false; b.onclick = () => window.open(activityUrl(r.id), '_blank', 'noopener');
       toast(r.duplicate ? 'Diese Fahrt ist schon auf Strava' : 'Auf Strava hochgeladen ✅');
-      if (manual) { const base = fileBase(ride), ov = await overviewImage(ride, ride.ftpUsed || profile.ftp); if (ov) download(base + '-strecke.jpg', ov); const bs = bestShot(shots); if (bs) setTimeout(() => download(base + '-foto.jpg', bs.blob), 500); }
+      if (manual) { gpx(); const base = fileBase(ride), ov = await overviewImage(ride, ride.ftpUsed || profile.ftp); if (ov) download(base + '-strecke.jpg', ov); const bs = bestShot(shots); if (bs) setTimeout(() => download(base + '-foto.jpg', bs.blob), 500); }
     } catch (e) { b.disabled = false; b.textContent = 'Zu Strava'; toast('Strava: ' + e.message, 6000); }
   };
   if (ride.stravaId) { $('#eStrava', el).textContent = 'Auf Strava ansehen'; }
@@ -134,12 +134,13 @@ export async function render(el, [id], query) {
     if (stravaConnected()) return direct(true);
     const title = stravaTitle(ride), text = stravaText(ride), base = fileBase(ride);
     download(base + '.fit', new Blob([toFit(ride)], { type: 'application/vnd.ant.fit' }));
+    setTimeout(gpx, 200);
     const ov = await overviewImage(ride, ride.ftpUsed || profile.ftp); if (ov) setTimeout(() => download(base + '-strecke.jpg', ov), 400);
     const bs = bestShot(shots); if (bs) setTimeout(() => download(base + '-foto.jpg', bs.blob), 800);
     let copied = false; try { await navigator.clipboard.writeText(title + '\n\n' + text); copied = true; } catch (e) { }
     await dialog({ title: 'Bei Strava hochladen', html: `
-      <p>Gespeichert: die FIT-Datei, ein Übersichtsbild der Strecke${bs ? ' und das beste Foto der Fahrt' : ''}.</p>
-      <ol class="tips small"><li>Auf Strava „Datei auswählen“ und die <b>.fit</b>-Datei wählen.</li><li>Den Titel einsetzen${copied ? ' (Titel und Beschreibung sind schon in der Zwischenablage)' : ''}.</li><li>Unter „Fotos hinzufügen“ die beiden Bilder auswählen und speichern.</li></ol>
+      <p>Gespeichert: die FIT-Datei, die virtuelle Strecke als GPX, ein Übersichtsbild der Strecke${bs ? ' und das beste Foto der Fahrt' : ''}.</p>
+      <ol class="tips small"><li>Auf Strava „Datei auswählen“ und die <b>.fit</b>-Datei wählen.</li><li>Den Titel einsetzen${copied ? ' (Titel und Beschreibung sind schon in der Zwischenablage)' : ''}.</li><li>Unter „Fotos hinzufügen“ die beiden Bilder auswählen und speichern.</li><li>Die <b>.gpx</b>-Datei enthält die virtuelle Strecke, z. B. für Komoot, Karten-Apps oder den Radcomputer.</li></ol>
       <p class="small muted">Titel:</p><input class="inp" readonly value="${esc(title)}" onclick="this.select()">
       <p class="small muted">Beschreibung:</p><textarea class="inp" rows="5" readonly onclick="this.select()">${esc(text)}</textarea>`, buttons: [{ label: 'Strava öffnen', value: true, cls: 'pri' }] });
     window.open('https://www.strava.com/upload/select', '_blank', 'noopener');
@@ -149,6 +150,8 @@ export async function render(el, [id], query) {
     if (navigator.canShare?.({ files: [file] })) { try { await navigator.share({ files: [file], title: ride.title, text: stravaText(ride) }); return; } catch (e) { if (e.name === 'AbortError') return; } }
     download(file.name, img); toast('Bild gespeichert');
   };
+  const gpx = () => { if (hasTrack(ride)) download(fileBase(ride) + '.gpx', toGpx(ride), 'application/gpx+xml'); };
+  if ($('#eGpx', el)) $('#eGpx', el).onclick = gpx;
   $('#eTcx', el).onclick = () => download(fileBase(ride) + '.tcx', toTcx(ride), 'application/vnd.garmin.tcx+xml');
   $('#eRen', el).onclick = async () => {
     let val = ride.title;

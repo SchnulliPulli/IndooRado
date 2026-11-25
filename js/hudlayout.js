@@ -33,9 +33,17 @@ export const PRESET_NAMES = Object.fromEntries(Object.entries(PRESETS).map(([k, 
 const cls = () => (innerWidth <= 820 || innerHeight <= 560) ? 'small' : 'large';
 function lay() {
   const all = profile.hudLayout ||= {}; let L = all[cls()];
-  if (L?.preset && PRESETS[L.preset]) { const P = PRESETS[L.preset]; L = all[cls()] = { w: JSON.parse(JSON.stringify(P.w)), extras: (P.extras || []).map((x, i) => ({ ...x, id: Date.now().toString(36) + i })) }; saveProfile(); }
+  if (L?.preset && PRESETS[L.preset]) { const P = PRESETS[L.preset]; L = all[cls()] = { w: JSON.parse(JSON.stringify(P.w)), extras: (P.extras || []).map((x, i) => ({ ...x, id: Date.now().toString(36) + i })), fit: L.fit }; saveProfile(); }
   if (!L || !L.w) { const old = L || {}; L = all[cls()] = { w: {}, extras: [] }; for (const k in old) if (old[k]?.x != null) L.w[k] = old[k]; }
   L.extras ||= []; return L;
+}
+// "An Fenstergröße anpassen": Werte-Widgets wachsen und schrumpfen mit dem Fenster (Bezug 1600 × 900 bzw. 900 × 560 auf kleinen Bildschirmen).
+// Karten, Höhenprofil und Verläufe speichern ihre Größe ohnehin als Anteil des Fensters.
+export const fitOn = () => !!lay().fit;
+export function fitFactor() {
+  if (!fitOn()) return 1;
+  const [bw, bh] = cls() === 'small' ? [900, 560] : [1600, 900];
+  return Math.round(clampN(Math.min(innerWidth / bw, innerHeight / bh), .55, 1.8) * 100) / 100;
 }
 const kindOf = el => el.dataset.kind || (WIDGETS.find(w => w[0] === el.dataset.drag)?.[2]) || 'zoom';
 const scaleOf = el => parseFloat(el.style.scale) || 1;
@@ -67,12 +75,13 @@ function ensureExtras(root) {
 export function applySaved(root) {
   applyTheme(root);
   ensureExtras(root);
-  const L = lay();
+  const L = lay(), F = fitFactor();
   for (const el of root.querySelectorAll('[data-drag]')) {
     const p = L.w[el.dataset.drag] || {};
     el.classList.toggle('w-hidden', !!p.hid);
     el.style.zoom = '';
-    el.style.scale = p.z && p.z !== 1 && kindOf(el) === 'zoom' ? String(p.z) : ''; el.style.setProperty('--inv', String(1 / (kindOf(el) === 'zoom' && p.z ? p.z : 1)));
+    const z = kindOf(el) === 'zoom' ? (p.z || 1) * F : 1;
+    el.style.scale = z !== 1 ? String(z) : ''; el.style.setProperty('--inv', String(1 / z));
     if (kindOf(el) === 'size' && p.w) { el.style.width = p.w * innerWidth + 'px'; el.style.height = p.h * innerHeight + 'px'; }
     else if (kindOf(el) === 'size' && p.x == null) { el.style.width = ''; el.style.height = ''; }
     if (p.x != null) place(el, p.x * innerWidth, p.y * innerHeight); else unplace(el);
@@ -83,6 +92,8 @@ export function applySaved(root) {
 function place(el, x, y) {
   // Größe festhalten, sonst fällt z. B. das Höhenprofil ohne festen Rahmen in sich zusammen
   if (kindOf(el) === 'size' && !el.style.width) { const r0 = el.getBoundingClientRect(); el.style.width = Math.max(80, r0.width) + 'px'; el.style.height = Math.max(50, r0.height) + 'px'; }
+  // Breite der Zoom-Widgets einfrieren, bevor sie aus ihrem Container gelöst werden (Workout-Widget hatte sonst Breite "auto")
+  else if (kindOf(el) === 'zoom' && !el.dataset.user && el.dataset.drag === 'wo') { const r0 = el.getBoundingClientRect(); el.style.setProperty('--ww', Math.round(r0.width / scaleOf(el)) + 'px'); }
   Object.assign(el.style, { position: 'fixed', right: 'auto', bottom: 'auto', transform: 'none', translate: 'none', margin: '0', transformOrigin: '0 0' });
   const r = el.getBoundingClientRect();
   el.style.left = clampN(x, 0, Math.max(0, innerWidth - r.width)) + 'px';
@@ -146,7 +157,7 @@ export function editMode(root, on, onDone) {
   const zb = document.createElement('div'); zb.className = 'wzoom'; zb.hidden = true;
   zb.innerHTML = '<button class="btn xs" data-z="-" title="Kleiner">−</button><b class="num" data-zv>100 %</b><button class="btn xs" data-z="+" title="Größer">+</button><button class="btn xs ghost" data-z="0" title="Ursprüngliche Größe">⟲</button>';
   root.appendChild(zb);
-  const pct = el => kindOf(el) === 'size' ? Math.round((parseFloat(el.style.width) || el.getBoundingClientRect().width) / (+el.dataset.w0 || parseFloat(el.style.width) || 1) * 100) : Math.round(scaleOf(el) * 100);
+  const pct = el => kindOf(el) === 'size' ? Math.round((parseFloat(el.style.width) || el.getBoundingClientRect().width) / (+el.dataset.w0 || parseFloat(el.style.width) || 1) * 100) : Math.round(scaleOf(el) / fitFactor() * 100);
   const showZoom = () => {
     if (!selEl || !root.contains(selEl)) { zb.hidden = true; return; }
     zb.hidden = false; const r = selEl.getBoundingClientRect(), zr = zb.getBoundingClientRect();
@@ -162,7 +173,7 @@ export function editMode(root, on, onDone) {
   const save = (el) => {
     const q = el.getBoundingClientRect(), key = el.dataset.drag, p = L.w[key] ||= {};
     p.x = q.left / innerWidth; p.y = q.top / innerHeight;
-    if (kindOf(el) === 'size') { p.w = parseFloat(el.style.width) / innerWidth; p.h = parseFloat(el.style.height) / innerHeight; } else p.z = scaleOf(el);
+    if (kindOf(el) === 'size') { p.w = parseFloat(el.style.width) / innerWidth; p.h = parseFloat(el.style.height) / innerHeight; } else p.z = Math.round(scaleOf(el) / fitFactor() * 100) / 100;
     saveProfile();
   };
   const setScale = (el, s, bw, bh) => {
@@ -190,7 +201,7 @@ export function editMode(root, on, onDone) {
     else if (b.dataset.z === '-') zoomBy(selEl, 1 / 1.1);
     else {
       const r = selEl.getBoundingClientRect(), p = L.w[selEl.dataset.drag] || {};
-      delete p.z; delete p.w; delete p.h; selEl.style.scale = ''; selEl.style.setProperty('--inv', '1');
+      delete p.z; delete p.w; delete p.h; const F = kindOf(selEl) === 'zoom' ? fitFactor() : 1; selEl.style.scale = F !== 1 ? String(F) : ''; selEl.style.setProperty('--inv', String(1 / F));
       if (kindOf(selEl) === 'size') { selEl.style.width = ''; selEl.style.height = ''; delete selEl.dataset.w0; }
       place(selEl, r.left, r.top); save(selEl); showZoom(); root.dispatchEvent(new Event('hudresize'));
     }
@@ -264,6 +275,21 @@ export function editMode(root, on, onDone) {
   root.onpointerup = end; root.onpointercancel = end;
 }
 
+// Alle Widgets ins Fenster holen: zu große verkleinern, überstehende hereinschieben, Positionen speichern
+export function fitInside(root) {
+  const L = lay(), F = fitFactor();
+  for (const el of root.querySelectorAll('[data-drag]')) {
+    if (el.classList.contains('w-hidden') || !el.getClientRects().length) continue;
+    const key = el.dataset.drag, p = L.w[key] ||= {}, r = el.getBoundingClientRect();
+    if (kindOf(el) === 'zoom') {
+      const s0 = scaleOf(el), k = Math.min(1, innerWidth * .96 / r.width, innerHeight * .9 / r.height);
+      if (k < 1) p.z = Math.max(ZMIN, Math.round(s0 * k / F * 100) / 100);
+    } else if (p.w) { p.w = Math.min(p.w, limOf(el).w[1], .96); p.h = Math.min(p.h, limOf(el).h[1], .9); }
+    if (p.x != null) { p.x = clampN(p.x, 0, Math.max(0, 1 - Math.min(r.width / innerWidth, 1))); p.y = clampN(p.y, 0, Math.max(0, 1 - Math.min(r.height / innerHeight, 1))); }
+  }
+  saveProfile();
+}
+
 // Bearbeitungsfenster: verschiebbar und einklappbar, damit Widgets dahinter erreichbar sind
 function panel(root, bar, onDone) {
   const L = lay(), names = { ...Object.fromEntries(WIDGETS.map(w => [w[0], w[1]])) };
@@ -282,6 +308,8 @@ function panel(root, bar, onDone) {
         <label class="f">Stil<select class="inp sm" id="edStyle">${Object.entries(STYLES).map(([k, v]) => `<option value="${k}" ${(profile.hudStyle || 'dark') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
       </div>
       <div class="f small">Farbe<div class="swatches sm" id="edAcc">${ACCENTS.map(c => `<button style="background:${c}" data-c="${c}" aria-pressed="${(profile.hudAccent || '#ff6a3d') === c}" aria-label="Farbe ${c}"></button>`).join('')}<input type="color" id="edAccC" value="${profile.hudAccent || '#ff6a3d'}" title="Eigene Farbe"></div></div>
+      <label class="switch sm"><input type="checkbox" id="edFit" ${L.fit ? 'checked' : ''}><span></span> An Fenstergröße anpassen <span class="muted">(Widgets wachsen und schrumpfen mit dem Fenster${L.fit ? ', gerade ' + Math.round(fitFactor() * 100) + ' %' : ''})</span></label>
+      <div class="row"><button class="btn xs" id="edFitNow" title="Alle Widgets so verkleinern bzw. verschieben, dass nichts aus dem Fenster ragt">Alles ins Fenster holen</button></div>
       <label class="f small">Deckkraft der Flächen: <b id="edOpV">${op < 0 ? 'Stil' : op + ' %'}</b><input type="range" id="edOp" min="0" max="100" step="5" value="${op < 0 ? 72 : op}"></label>
       <div class="edlist">${Object.entries(names).map(([k, n]) => `<label class="switch sm"><input type="checkbox" data-w="${k}" ${L.w[k]?.hid ? '' : 'checked'}><span></span> ${esc(n || k)}${k.startsWith('x') ? ` <button class="btn xs ghost danger" data-delx="${k.slice(1)}" title="Entfernen">✕</button>` : ''}</label>`).join('')}</div>
       <div class="row"><select class="inp sm" id="edAdd"><optgroup label="Wert">${Object.entries(METRICS).map(([k, v]) => `<option value="metric:${k}">${v}</option>`).join('')}</optgroup><optgroup label="Verlauf">${Object.entries(GRAPHS).map(([k, v]) => `<option value="graph:${k}">${v}</option>`).join('')}</optgroup></select><button class="btn sm" id="edAddBtn">+ Widget</button><button class="btn sm ghost" id="edReset">Zurücksetzen</button></div>
@@ -290,7 +318,9 @@ function panel(root, bar, onDone) {
   const reset = () => root.querySelectorAll('[data-drag]').forEach(el => { el.style.scale = ''; el.style.width = ''; el.style.height = ''; unplace(el); });
   bar.querySelector('#edDone').onclick = () => { editMode(root, false); onDone?.(); };
   bar.querySelector('#edMin').onclick = () => { P.c = !P.c; saveProfile(); bar.classList.toggle('collapsed', P.c); bar.querySelector('#edMin').textContent = P.c ? '▸' : '▾'; };
-  bar.querySelector('#edReset').onclick = () => { profile.hudLayout[cls()] = { w: {}, extras: [] }; saveProfile(); reset(); refresh(); };
+  bar.querySelector('#edReset').onclick = () => { profile.hudLayout[cls()] = { w: {}, extras: [], fit: L.fit }; saveProfile(); reset(); refresh(); };
+  bar.querySelector('#edFit').onchange = e => { L.fit = e.target.checked; saveProfile(); refresh(); root.dispatchEvent(new Event('hudresize')); };
+  bar.querySelector('#edFitNow').onclick = () => { fitInside(root); refresh(); root.dispatchEvent(new Event('hudresize')); };
   bar.querySelector('#edStyle').onchange = e => { profile.hudStyle = e.target.value; saveProfile(); applyTheme(root); root.dispatchEvent(new Event('hudresize')); };
   const setAcc = c => { profile.hudAccent = c; saveProfile(); applyTheme(root); for (const b of bar.querySelectorAll('#edAcc [data-c]')) b.setAttribute('aria-pressed', String(b.dataset.c === c)); };
   bar.querySelector('#edAcc').onclick = e => { const b = e.target.closest('[data-c]'); if (b) setAcc(b.dataset.c); };
@@ -298,7 +328,7 @@ function panel(root, bar, onDone) {
   bar.querySelector('#edOp').oninput = e => { profile.hudOpacity = +e.target.value / 100; saveProfile(); applyTheme(root); bar.querySelector('#edOpV').textContent = e.target.value + ' %'; };
   bar.querySelector('#edPreset').onchange = e => {
     const Pr = PRESETS[e.target.value]; if (!Pr) return;
-    profile.hudLayout[cls()] = { w: JSON.parse(JSON.stringify(Pr.w)), extras: (Pr.extras || []).map((x, i) => ({ ...x, id: Date.now().toString(36) + i })) };
+    profile.hudLayout[cls()] = { w: JSON.parse(JSON.stringify(Pr.w)), extras: (Pr.extras || []).map((x, i) => ({ ...x, id: Date.now().toString(36) + i })), fit: L.fit };
     saveProfile(); reset(); refresh();
   };
   bar.querySelector('.edlist').onchange = e => { const k = e.target.dataset.w; if (!k) return; (L.w[k] ||= {}).hid = e.target.checked ? 0 : 1; saveProfile(); root.querySelector(`[data-drag="${k}"]`)?.classList.toggle('w-hidden', !e.target.checked); };

@@ -12,17 +12,30 @@ const PAGES = {
   '': () => import('./pages/start.js'), ride: () => import('./pages/ride.js'), summary: () => import('./pages/summary.js'),
   workouts: () => import('./pages/workouts.js'), plans: () => import('./pages/plans.js'), routes: () => import('./pages/routes.js'), history: () => import('./pages/history.js'),
   progress: () => import('./pages/progress.js'), profile: () => import('./pages/profile.js'), devices: () => import('./pages/devices.js'), help: () => import('./pages/help.js'), editor: () => import('./pages/editor.js'), planner: () => import('./pages/planner.js'), ridesettings: () => import('./pages/ridesettings.js'), companion: () => import('./pages/companion.js'),
+  // Einstellungen: gleiche Module, anderer Ausschnitt
+  sound: () => import('./pages/ridesettings.js').then(m => ({ ...m, render: el => m.render(el, ['sound']) })),
+  appsettings: () => import('./pages/profile.js').then(m => ({ ...m, render: el => m.render(el, ['app']) })),
+  connect: () => import('./pages/profile.js').then(m => ({ ...m, render: el => m.render(el, ['connect']) })),
 };
-const NAV = [['', 'Start', 'home'], ['companion', 'Companion', 'phone'], ['plans', 'Pläne', 'plan'], ['workouts', 'Workouts', 'workout'],['routes', 'Strecken', 'route'], ['history', 'Verlauf', 'history'], ['progress', 'Fortschritt', 'progress'], ['devices', 'Geräte', 'devices'], ['ridesettings', 'Fahransicht', 'view'], ['profile', 'Profil', 'profile'], ['help', 'Anleitung', 'help']];
+// Hauptmenü: sechs Bereiche, Unterseiten als Reiter oben auf der Seite
+const NAV = [
+  { k: '', l: 'Start', i: 'home', tabs: [['', 'Übersicht'], ['companion', 'Handy-Ansicht']] },
+  { k: 'workouts', l: 'Training', i: 'workout', tabs: [['workouts', 'Workouts'], ['plans', 'Trainingspläne']], also: ['editor', 'planner'] },
+  { k: 'routes', l: 'Strecken', i: 'route' },
+  { k: 'history', l: 'Aktivitäten', i: 'history', tabs: [['history', 'Verlauf'], ['progress', 'Fortschritt']], also: ['summary'] },
+  { k: 'devices', l: 'Geräte', i: 'devices' },
+  { k: 'profile', l: 'Einstellungen', i: 'profile', tabs: [['profile', 'Profil'], ['ridesettings', 'Fahransicht'], ['sound', 'Ton'], ['appsettings', 'App'], ['connect', 'Verbindungen'], ['help', 'Anleitung']] },
+];
+const groupOf = k => NAV.find(g => g.k === k || g.tabs?.some(t => t[0] === k) || g.also?.includes(k)) || null;
 let current = null, currentKey = null;
 
 function nav() {
-  $('#nav').innerHTML = NAV.map(([k, l, i]) => `<a href="#/${k}" data-k="${k}">${ICON[i]}<span>${l}</span></a>`).join('');
+  $('#nav').innerHTML = NAV.map(g => `<a href="#/${g.k}" data-k="${g.k}">${ICON[g.i]}<span>${g.l}</span></a>`).join('');
   $('#chips').innerHTML = ['trainer', 'hr', 'cad', 'click'].map(k => `<a class="chip" href="#/devices" data-d="${k}" title="${k}">${ICON[k]}</a>`).join('');
   const upd = () => { for (const c of document.querySelectorAll('#chips .chip')) c.dataset.st = status[c.dataset.d]; };
   bus.on('dev', upd); upd();
   // Cloud-Anzeige: sichtbar, sobald Daten außerhalb des Browsers landen (NAS-Abgleich oder Strava)
-  const cc = document.createElement('a'); cc.className = 'chip cloudchip'; cc.href = '#/profile'; cc.id = 'cloudChip';
+  const cc = document.createElement('a'); cc.className = 'chip cloudchip'; cc.href = '#/connect'; cc.id = 'cloudChip';
   cc.innerHTML = '<svg viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.1 9.2 4.5 4.5 0 0 0 7 18Z"/></svg><i></i>';
   $('#chips').after(cc);
   const cloudUpd = () => {
@@ -50,7 +63,11 @@ async function route() {
   if (!parked) { try { current?.leave?.(); } catch (e) { console.error(e); } }
   resumeBar(k);
   document.body.dataset.page = k || 'start';
-  for (const a of document.querySelectorAll('#nav a')) a.classList.toggle('on', a.dataset.k === k);
+  const grp = groupOf(k);
+  for (const a of document.querySelectorAll('#nav a')) a.classList.toggle('on', a.dataset.k === grp?.k);
+  const sub = $('#subnav');
+  sub.hidden = !grp?.tabs || k === 'ride';
+  sub.innerHTML = grp?.tabs ? grp.tabs.map(([t, l]) => `<a href="#/${t}" class="${t === k ? 'on' : ''}">${l}</a>`).join('') : '';
   const el = $('#view'); el.innerHTML = '<div class="pageload"><div class="spinner"></div></div>';
   el.onclick = el.onchange = el.oninput = el.ondragover = el.ondrop = null;
   window.scrollTo(0, 0);
@@ -77,6 +94,8 @@ async function resumeBar(k) {
 
 async function init() {
   await loadState(); await loadClickMap(); await loadPlan();
+  const { applyAppTheme } = await import('./pages/profile.js'); applyAppTheme();
+  matchMedia('(prefers-color-scheme: light)').addEventListener?.('change', applyAppTheme);
   nav();
   bus.on('toast', m => toast(m));
   if (await kv.get('demo', !support().ok)) setDemo(true);
@@ -93,7 +112,7 @@ async function init() {
   reconnectKnown().catch(() => { });
   // NAS-Abgleich: neuerer Stand vom NAS wird übernommen, danach Seite neu aufbauen
   loadSync().then(() => window.__cloudUpd?.()).then(autoSync).then(async pulled => {
-    if (sync.needLogin) toast('NAS: Anmeldung abgelaufen, unter Profil neu anmelden', 5000);
+    if (sync.needLogin) toast('NAS: Anmeldung abgelaufen, unter Einstellungen › Verbindungen neu anmelden', 5000);
     if (!pulled) return;
     await loadState(); await loadPlan(); await loadClickMap(); toast(sync.info || 'Neuerer Stand vom NAS übernommen', sync.info ? 6000 : 3000); sync.info = '';
     if (currentKey !== 'ride') route();

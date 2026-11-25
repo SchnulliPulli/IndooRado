@@ -48,9 +48,13 @@ export function stepField(R, field, me, dt, running) {
     n.v = integrate(n.v, wkg * me.kg, g, dt, draft);
     n.d += n.v * dt; n.crank += n.cadence / 60 * Math.PI * 2 * dt;
     // Spurwechsel, wenn jemand Langsameres direkt vor mir ist
-    const block = all.find(o => o !== n && gapOf(R, o.d, n.d) > 0 && gapOf(R, o.d, n.d) < 4 && Math.abs(o.lat - n.lat) < .8 && o.v < n.v);
-    if (block) n.latT = clamp(n.lat + (n.lat > 1.6 ? -1.1 : 1.1), .3, 3);
-    n.lat += (n.latT - n.lat) * Math.min(1, dt * .9);
+    // Ziel nur neu setzen, wenn der alte Spurwechsel fast fertig ist (sonst Hin- und Herzucken)
+    n.latCd = Math.max(0, (n.latCd || 0) - dt);
+    const block = n.latCd <= 0 && Math.abs(n.latT - n.lat) < .15 && all.find(o => o !== n && gapOf(R, o.d, n.d) > 0 && gapOf(R, o.d, n.d) < 4 && Math.abs(o.lat - n.lat) < .8 && o.v < n.v);
+    if (block) { n.latT = clamp(n.lat + (n.lat > 1.6 ? -1.1 : 1.1), .3, 3); n.latCd = 2.5; }
+    // weich beschleunigen und abbremsen statt konstant nachziehen
+    const dl = n.latT - n.lat; n.latV = (n.latV || 0) + (clamp(dl * 1.2, -.6, .6) - (n.latV || 0)) * Math.min(1, dt * 2);
+    n.lat += n.latV * dt;
     // Strecke: Runde oder am Ende hinter den Spieler zurücksetzen
     if (R.loop) n.d = ((n.d % R.total) + R.total) % R.total;
     else if (n.d >= R.total - 5) { n.d = Math.max(0, me.d - 250 - Math.random() * 200); n.v = me.v; }

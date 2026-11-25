@@ -36,7 +36,7 @@ export async function render(el, [rid]) {
   };
   $('#rFile', el).onchange = e => load(e.target.files);
   $('#rStrava', el).onclick = async () => {
-    if (!stravaConnected()) { toast('Erst unter Profil mit Strava verbinden'); location.hash = '#/profile'; return; }
+    if (!stravaConnected()) { toast('Erst unter Einstellungen › Verbindungen mit Strava verbinden'); location.hash = '#/connect'; return; }
     let list;
     try { list = (await listStravaRoutes()).filter(r => r.type === 1 || r.type == null); } catch (err) { toast(err.message, 6000); return; }
     if (!list.length) { toast('Keine Rad-Routen in deinem Strava-Konto gefunden'); return; }

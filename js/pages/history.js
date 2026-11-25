@@ -22,7 +22,7 @@ export async function render(el) {
     catch (err) { toast(err.message, 5000); } finally { t.remove(); }
   };
   $('#stravaIn', el).onclick = async () => {
-    if (!stravaConnected()) { toast('Erst unter Profil mit Strava verbinden'); location.hash = '#/profile'; return; }
+    if (!stravaConnected()) { toast('Erst unter Einstellungen › Verbindungen mit Strava verbinden'); location.hash = '#/connect'; return; }
     const days = await dialog({ title: 'Fahrten aus Strava übernehmen', html: '<p>Welchen Zeitraum? Übernommen werden Rad- und virtuelle Fahrten (auch Zwift), schon vorhandene werden übersprungen. Strava erlaubt etwa 100 Abfragen pro 15 Minuten.</p>', buttons: [{ label: 'Abbrechen', value: 0 }, { label: '30 Tage', value: 30 }, { label: '90 Tage', value: 90, cls: 'pri' }, { label: '1 Jahr', value: 365 }] });
     if (!days) return;
     const t = document.createElement('div'); t.className = 'toast show'; t.textContent = 'Lade Liste von Strava …'; $('#toasts').appendChild(t);

@@ -61,7 +61,7 @@ export async function render(el) {
   clearInterval(timer);
   if (syncReady()) { const poll = () => liveTick(el); poll(); timer = setInterval(poll, 5000); }
 }
-function syncText() { return sync.needLogin ? '🔑 Anmeldung beim Cloud-Speicher abgelaufen, unter Profil neu anmelden' : sync.error ? '⚠ ' + sync.error : sync.last ? 'Abgeglichen: ' + fmtDate(sync.last, { dateStyle: 'short', timeStyle: 'short' }) : 'Noch nicht abgeglichen'; }
+function syncText() { return sync.needLogin ? '🔑 Anmeldung beim Cloud-Speicher abgelaufen, unter Einstellungen › Verbindungen neu anmelden' : sync.error ? '⚠ ' + sync.error : sync.last ? 'Abgeglichen: ' + fmtDate(sync.last, { dateStyle: 'short', timeStyle: 'short' }) : 'Noch nicht abgeglichen'; }
 
 async function liveTick(el) {
   const box = $('#cLive', el); if (!box) { clearInterval(timer); return; }
