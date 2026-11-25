@@ -1,5 +1,6 @@
 // Fahrt auswerten und dauerhaft speichern, Fortschritt fortschreiben
 import { db, kv } from './db.js';
+import { bus } from './util.js';
 import { profile, progress, saveProgress, saveProfile, levelOf } from './state.js';
 import { summarize, intervals, xpFor, BADGES, totals, bestCurve, bestAvg } from './analysis.js';
 import { total as woTotal } from './workouts.js';
@@ -64,6 +65,7 @@ export async function saveRide(S) {
   let k = 0;
   for (const s of S.shots) await db.put('shots', { id: id + '-' + (k++), rideId: id, blob: s.blob, caption: s.caption, t: s.t, d: s.d });
   await saveProgress();
+  bus.emit('rideSaved', id);
   return id;
 }
 

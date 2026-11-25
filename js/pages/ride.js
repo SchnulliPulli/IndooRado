@@ -13,6 +13,7 @@ import { db } from '../db.js';
 import { putLive } from '../sync.js';
 import { makeField, stepField, gapOf } from '../npc.js';
 import { rideEggs } from '../eggs.js';
+import { loggedIn } from '../online/client.js';
 import { sound, music } from '../sound.js';
 import { tipFor, cadRange } from '../coach.js';
 import { saveProfile } from '../state.js';
@@ -153,6 +154,12 @@ async function start(el) {
   await new Promise(r => setTimeout(r, 30));
   world.resize(); world.preload(0);
   if (S.npcOn) spawnField();
+  // Online: echte Fahrer auf derselben Strecke
+  if (loggedIn() && !demo.on) import('../online/live.js').then(({ joinRoute }) => {
+    if (!S?.alive) return;
+    S.live = joinRoute(route.id, () => S.state === 'riding' ? { d: Math.round(S.dist * 10) / 10, v: +S.v.toFixed(2), p: Math.round(S.p3.at(-1) || 0), wkg: +((S.p3.at(-1) || 0) / profile.kg).toFixed(1), cad: live.cadence ?? 0, look: { jersey: profile.jersey, bikeColor: profile.bikeColor, helmet: profile.helmet, skin: profile.skin, av: profile.av } } : null);
+    S.live.onChange = syncRemote;
+  });
   $('#load').hidden = true;
   if (wo) { $('#woBox').hidden = false; $('#woName').textContent = S.planLabel ? S.planLabel + ' · ' + wo.name : wo.name; }
   if (S.pacer) $('#pacerBox').hidden = false;
@@ -190,6 +197,16 @@ async function start(el) {
   };
   S.raf = requestAnimationFrame(frame);
   lockScreen();
+}
+// Echte Mitfahrer in das Feld einsortieren (die Welt baut ihre Figuren dann neu)
+function syncRemote() {
+  if (!S?.alive || !S.live) return;
+  const R = S.route, peers = S.live.peers, keep = S.field.filter(n => !n.remote || peers.has(n.id));
+  let k = 0;
+  for (const [id, p] of peers) if (!keep.some(n => n.id === id)) keep.push({ remote: true, id, i: 100 + k++, name: p.name, wkg: p.wkg || 0, d: p.d || 0, v: p.v || 0, lat: 2.3, latT: 2.3, crank: 0, cadence: p.cad || 85, gap: gapOf(R, p.d || 0, S.dist), look: { ...(p.look || {}), jersey: p.look?.jersey || '#ffffff', name: '🌐 ' + p.name } });
+  S.field = keep; if (peers.size && !S.npcOn) { S.npcOn = true; updNpcBtn(); }
+  S.world.setRiders(S.field.map(n => n.look));
+  flash(peers.size ? '🌐 ' + peers.size + ' echte' + (peers.size === 1 ? 'r Fahrer' : ' Fahrer') + ' auf der Strecke' : 'Keine echten Fahrer mehr auf der Strecke', 2200);
 }
 function spawnField() {
   const q = S.world.qKey;
@@ -379,7 +396,7 @@ async function beam(d) {
   S.dist = d; S.lastE = null; S.beamed = true; S.gateFor = null; S.world.setGate(null);
   for (const c of [...S.climbs, ...S.sprints]) c.state = d > c.from ? 'done' : 'pending';
   if (S.pacer) S.pacer.d = d;
-  if (S.npcOn) { for (const n of S.field) { const off = (n.i % 2 ? 1 : -1) * (20 + (n.i * 37) % 300); n.d = R.loop ? ((d + off) % R.total + R.total) % R.total : clamp(d + off, 0, R.total - 10); n.v = S.v; n.gap = gapOf(R, n.d, d); } }
+  if (S.npcOn) { for (const n of S.field) { if (n.remote) continue; const off = (n.i % 2 ? 1 : -1) * (20 + (n.i * 37) % 300); n.d = R.loop ? ((d + off) % R.total + R.total) % R.total : clamp(d + off, 0, R.total - 10); n.v = S.v; n.gap = gapOf(R, n.d, d); } }
   S.world.camInit = false; S.world.preload(d);
   $('#load', S.el).hidden = true; flash('Gebeamt nach km ' + fmtKm(d), 1800);
 }
@@ -491,6 +508,7 @@ function step(dt, first) {
   S.p3.push(pw); if (S.p3.length > 30) S.p3.shift();
   if (S.pacer && running) { const p = S.pacer, g = R.gradeAt(p.d); p.v += (steadySpeed(p.w, g) - p.v) * Math.min(1, dt * .8); p.d += p.v * dt; p.crank += 88 / 60 * Math.PI * 2 * dt; if (R.loop) p.d %= R.total; else p.d = Math.min(p.d, R.total); }
   // Mitfahrer
+  if (S.live?.peers.size) for (const n of S.field) if (n.remote) { const p = S.live.peers.get(n.id); if (p && p.t !== n.pt) { n.pt = p.t; n.d = p.d; n.v = p.v; n.wkg = p.wkg; n.cadence = p.cad || 85; } }
   if (S.npcOn && S.field.length) {
     const r = stepField(R, S.field, { d: S.dist, lat: 1.5, v: S.v, kg: profile.kg }, dt, running);
     S.draft = r.draft; S.wheel = r.wheel;
@@ -800,7 +818,7 @@ document.addEventListener('visibilitychange', () => { if (S?.alive && document.v
 
 export function leave() {
   if (!S) return;
-  S.alive = false; sound.silence(); music.stop(); putLive({ state: 'ended', t: Math.round(S.t), odo: Math.round(S.odo), route: S.route.name }); clearInterval(S.timer); cancelAnimationFrame(S.raf); S.ro?.disconnect();
+  S.alive = false; S.live?.leave(); sound.silence(); music.stop(); putLive({ state: 'ended', t: Math.round(S.t), odo: Math.round(S.odo), route: S.route.name }); clearInterval(S.timer); cancelAnimationFrame(S.raf); S.ro?.disconnect();
   document.removeEventListener('keydown', S.key); S.offs.forEach(f => f());
   try { S.world.dispose(); } catch (e) { }
   // Speicher freigeben: Streckendaten, Caches der Karte, Testverweis

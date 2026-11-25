@@ -13,7 +13,7 @@ const PAGES = {
   workouts: () => import('./pages/workouts.js'), plans: () => import('./pages/plans.js'), routes: () => import('./pages/routes.js'), history: () => import('./pages/history.js'),
   progress: () => import('./pages/progress.js'), profile: () => import('./pages/profile.js'), devices: () => import('./pages/devices.js'), help: () => import('./pages/help.js'), editor: () => import('./pages/editor.js'), planner: () => import('./pages/planner.js'), ridesettings: () => import('./pages/ridesettings.js'), companion: () => import('./pages/companion.js'),
   // Einstellungen: gleiche Module, anderer Ausschnitt
-  avatar: () => import('./pages/avatar.js'),
+  avatar: () => import('./pages/avatar.js'), account: () => import('./pages/account.js'), admin: () => import('./pages/admin.js'),
   sound: () => import('./pages/ridesettings.js').then(m => ({ ...m, render: el => m.render(el, ['sound']) })),
   appsettings: () => import('./pages/profile.js').then(m => ({ ...m, render: el => m.render(el, ['app']) })),
   connect: () => import('./pages/profile.js').then(m => ({ ...m, render: el => m.render(el, ['connect']) })),
@@ -25,7 +25,7 @@ const NAV = [
   { k: 'routes', l: 'Strecken', i: 'route' },
   { k: 'history', l: 'Aktivitäten', i: 'history', tabs: [['history', 'Verlauf'], ['progress', 'Fortschritt']], also: ['summary'] },
   { k: 'devices', l: 'Geräte', i: 'devices' },
-  { k: 'profile', l: 'Einstellungen', i: 'profile', tabs: [['profile', 'Profil'], ['avatar', 'Avatar'], ['ridesettings', 'Fahransicht'], ['sound', 'Ton'], ['appsettings', 'App'], ['connect', 'Verbindungen'], ['help', 'Anleitung']] },
+  { k: 'profile', l: 'Einstellungen', i: 'profile', tabs: [['profile', 'Profil'], ['avatar', 'Avatar'], ['ridesettings', 'Fahransicht'], ['sound', 'Ton'], ['appsettings', 'App'], ['connect', 'Verbindungen'], ['account', 'Konto'], ['help', 'Anleitung']], also: ['admin'] },
 ];
 const groupOf = k => NAV.find(g => g.k === k || g.tabs?.some(t => t[0] === k) || g.also?.includes(k)) || null;
 let current = null, currentKey = null;
@@ -77,6 +77,7 @@ async function route() {
     current = mod; currentKey = k;
     el.innerHTML = '';
     await mod.render(el, params.map(decodeURIComponent), query);
+    if (k === '' || k === 'companion') announce(el);
   } catch (e) {
     console.error(e);
     el.innerHTML = `<div class="card"><h2>Fehler beim Laden</h2><pre class="log">${String(e.stack || e).replace(/</g, '&lt;')}</pre></div>`;
@@ -99,6 +100,22 @@ export function isPhone() {
   return coarse && (short < 520 || (ar < .7 && innerWidth < 600)) || /iPhone|Android.+Mobile/.test(navigator.userAgent);
 }
 function wantsPhoneView() { const m = profile.phoneView || 'auto'; return m === 'always' || (m === 'auto' && isPhone()); }
+async function announce(el) {
+  const O = await import('./online/client.js'); if (!O.configured() || !O.online.ready) return;
+  try {
+    const list = await (await import('./online/sync.js')).announcements(), seen = JSON.parse(localStorage.getItem('vvAnnSeen') || '[]');
+    const box = document.createElement('div'); box.className = 'annbox';
+    box.innerHTML = list.filter(a => !seen.includes(a.id)).map(a => `<div class="card ann ${a.level}" data-id="${a.id}"><div><b>${a.level === 'event' ? '🎉 ' : a.level === 'warn' ? '⚠️ ' : '📣 '}${a.title.replace(/</g, '&lt;')}</b>${a.body ? `<p class="small">${a.body.replace(/</g, '&lt;')}</p>` : ''}</div><button class="btn xs ghost" aria-label="Ausblenden">✕</button></div>`).join('');
+    if (!box.children.length || !document.body.contains(el)) return;
+    box.onclick = e => { const c = e.target.closest('button') && e.target.closest('.ann'); if (!c) return; seen.push(+c.dataset.id); localStorage.setItem('vvAnnSeen', JSON.stringify(seen.slice(-50))); c.remove(); };
+    el.querySelector('.pagehead, .comphead')?.after(box) ?? el.prepend(box);
+  } catch (e) { }
+}
+// Online: Ankündigungen auf der Startseite und automatisches Sichern nach der Fahrt
+function onlineHooks(O) {
+  if (!O.loggedIn()) return;
+  bus.on('rideSaved', async () => { if (await kv.get('onlineAuto', true)) (await import('./online/sync.js')).pushVault().then(() => toast('☁ Online gesichert', 1500)).catch(e => toast('Online-Sicherung: ' + e.message, 4000)); });
+}
 async function init() {
   await loadState(); await loadClickMap(); await loadPlan();
   const { applyAppTheme } = await import('./pages/profile.js'); applyAppTheme();
@@ -107,6 +124,10 @@ async function init() {
   bus.on('toast', m => toast(m));
   if (await kv.get('demo', !support().ok)) setDemo(true);
   persist();
+  // VeloVerse Online (nur wenn online.json oder ein Zugang eingetragen ist). Bei Rückkehr vom Login zuerst, damit niemand sonst den ?code= nimmt
+  const O = await import('./online/client.js');
+  await O.loadSiteConfig();
+  if (O.configured()) { const p = O.initOnline().then(() => onlineHooks(O)).catch(e => console.warn('Online:', e.message)); if (O.expectingReturn()) await p; }
   // Rückkehr von OneDrive/Google/Dropbox-Anmeldung zuerst auswerten (sonst hält Strava den Code für seinen)
   await loadSync();
   try { const who = await handleCloudRedirect(); if (who) toast('Verbunden mit ' + who, 4000); } catch (e) { toast(e.message, 7000); }

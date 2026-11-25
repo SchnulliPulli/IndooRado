@@ -1,0 +1,26 @@
+# Online-Version: bei jedem Push auf main dieselben Dateien auf den Webserver kopieren und dort online.json erzeugen.
+# Die statische Version (GitHub Pages) bleibt ohne online.json und damit rein lokal.
+# Benötigte Repository-Secrets: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH, SUPABASE_URL, SUPABASE_ANON_KEY
+name: Online-Version ausrollen
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ vars.ONLINE_DEPLOY == 'on' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: online.json erzeugen
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          jq -n --arg url "$SUPABASE_URL" --arg key "$SUPABASE_ANON_KEY" '{url: $url, anonKey: $key, providers: ["google","github"]}' > online.json
+      - name: SSH-Schlüssel
+        run: |
+          mkdir -p ~/.ssh && echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+      - name: Dateien kopieren
+        run: rsync -az --delete --exclude '.git' --exclude '.github' --exclude 'supabase' --exclude 'docs' ./ "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/"

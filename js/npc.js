@@ -36,6 +36,8 @@ export function stepField(R, field, me, dt, running) {
   const all = [...field, { me: true, d: me.d, lat: me.lat, v: me.v }];
   let overtook = 0;
   for (const n of field) {
+    // Echte Mitfahrer (online): nur mit ihrem gemeldeten Tempo weiterrechnen, keine Physik, kein Neu-Einsetzen
+    if (n.remote) { n.d += n.v * dt; if (R.loop) n.d = ((n.d % R.total) + R.total) % R.total; else n.d = Math.min(n.d, R.total); n.crank += n.cadence / 60 * Math.PI * 2 * dt; n.gap = gapOf(R, n.d, me.d); continue; }
     if (!running) { n.v *= Math.pow(.3, dt); continue; }
     const g = R.gradeAt(n.d);
     // Am Berg etwas mehr, bergab weniger treten, dazu langsames Schwanken

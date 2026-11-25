@@ -1,0 +1,5 @@
+{
+  "url": "https://DEIN-PROJEKT.supabase.co",
+  "anonKey": "DEIN-ANON-PUBLIC-SCHLUESSEL",
+  "providers": ["google", "github"]
+}
