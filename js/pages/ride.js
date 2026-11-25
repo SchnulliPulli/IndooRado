@@ -183,7 +183,7 @@ async function start(el) {
   const grp = S.group;
   try { S.joinRider = JSON.parse(sessionStorage.getItem('joinRider') || 'null'); } catch (e) { } sessionStorage.removeItem('joinRider');
   if (S.joinRider) $('#startCard', el).innerHTML = `<b>🌐 Mitfahren bei ${esc(S.joinRider.name)}</b><span>Sobald die Verbindung steht, springst du direkt hinter ${esc(S.joinRider.name)}.</span><small class="livest" id="liveSt">Live: wird verbunden …</small>`;
-  if (grp) { $('#startCard', el).innerHTML = `<b>👥 ${esc(grp.title)}</b><span>Gruppenfahrt: alle starten jetzt mit denselben Einstellungen${grp.isHost ? ' (du bist Gastgeber und bestimmst das Wetter)' : ''}. Tritt in die Pedale!</span>`; }
+  if (grp) { $('#startCard', el).innerHTML = `<b>👥 ${esc(grp.title)}</b><span>Gruppenfahrt: alle starten jetzt mit denselben Einstellungen${grp.isHost ? ' (du bist Gastgeber und bestimmst das Wetter)' : ''}.${S.wo ? ` Gemeinsames Training: <b>${esc(S.wo.name)}</b>, Ziele nach deiner FTP.` : ''} Tritt in die Pedale!</span>`; }
   // Nach einem Neuladen läuft die Anmeldung evtl. noch: kurz darauf warten, dann live beitreten
   const onlineReady = online.ready ? Promise.resolve() : new Promise(r => { const off = bus.on('online', () => { off(); r(); }); setTimeout(() => { off(); r(); }, 20000); });
   onlineReady.then(() => S?.alive && loggedIn() ? import('../online/presence.js') : Promise.reject(0)).then(m => { window.__presence = m; }).then(() => import('../online/live.js')).then(({ joinRoute }) => {

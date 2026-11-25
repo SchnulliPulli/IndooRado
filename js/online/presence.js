@@ -28,7 +28,13 @@ export const onlineLook = () => profile.onlineAvatar === 'own' ? { jersey: profi
 
 // Gemeinsame Einstellungen einer Gruppenfahrt (vom Gastgeber), streng geprüft
 const TIMES = ['auto', 'morning', 'day', 'evening', 'night'], WEATHERS = ['auto', 'clear', 'cloudy', 'rain', 'fog'];
-export function cleanSettings(s = {}) { return { time: TIMES.includes(s.time) ? s.time : 'auto', weather: WEATHERS.includes(s.weather) ? s.weather : 'auto', npcs: s.npcs !== false, traffic: s.traffic === true, powerups: s.powerups !== false }; }
+// Workout: '' frei, 'plan' = jeder seine nächste Plan-Einheit, sonst Workout-ID; eigene Workouts reisen mit (woSegs)
+const cleanSegs = a => Array.isArray(a) && a.length <= 120 ? a.filter(x => +x?.dur >= 1).map(x => ({ dur: Math.min(7200, +x.dur) | 0, a: x?.a == null ? null : Math.min(3, Math.max(0, +x.a || 0)), b: x?.b == null ? null : Math.min(3, Math.max(0, +x.b || 0)), text: x?.text ? txt(x.text, 40) : undefined })).filter(x => x.dur > 0) : null;
+export function cleanSettings(s = {}) {
+  const wo = s.workout === 'plan' || /^[\w-]{1,40}$/.test(s.workout || '') ? s.workout : '';
+  const segs = wo && wo !== 'plan' ? cleanSegs(s.woSegs) : null;
+  return { time: TIMES.includes(s.time) ? s.time : 'auto', weather: WEATHERS.includes(s.weather) ? s.weather : 'auto', npcs: s.npcs !== false, traffic: s.traffic === true, powerups: s.powerups !== false, workout: wo, woName: wo ? txt(s.woName, 40) : '', ...(segs?.length ? { woSegs: segs } : {}) };
+}
 function cleanMeta(m) {
   if (!m || typeof m !== 'object') return null;
   const lob = m.host && typeof m.host === 'object' ? { id: txt(m.host.id, 24), title: txt(m.host.title, 40) || 'Gruppenfahrt', route: txt(m.host.route, 40), routeName: txt(m.host.routeName, 40), startAt: Number(m.host.startAt) || 0, race: !!m.host.race, settings: cleanSettings(m.host.settings) } : null;
@@ -84,6 +90,15 @@ function checkStart() {
   const id = P.me.joined; if (!id || started === id) return;
   const l = lobbies().find(x => x.id === id); if (!l) return;
   const ms = l.startAt - Date.now();
-  if (ms <= 0 && ms > -60e3) { started = id; sel.routeId = l.route; saveSel(); sessionStorage.setItem('groupRide', JSON.stringify({ id, title: l.title, race: l.race, hostSid: l.hostSid, isHost: !!l.mine, settings: cleanSettings(l.settings) })); if (l.race) sessionStorage.setItem('raceNext', '1'); setStatus({ joined: null, host: null }); bus.emit('groupstart', l); location.hash = '#/ride'; }
+  if (ms <= 0 && ms > -60e3) { started = id; startGroup(l); }
+}
+// Gemeinsamer Start: Strecke und Workout für alle gleich setzen, dann losfahren
+async function startGroup(l) {
+  const id = l.id, G = cleanSettings(l.settings);
+  sel.routeId = l.route;
+  if (G.workout === 'plan') { const P = await import('../plans.js'); sel.workoutId = P.nextWorkout()?.id || null; }
+  else if (G.woSegs) { const W = await import('../workouts.js'), wid = 'g-' + id; W.EXTRA_W.set(wid, { id: wid, name: G.woName || 'Gruppen-Workout', cat: 'Gruppe', desc: 'Workout der Gruppenfahrt', segs: G.woSegs, builtin: true }); sel.workoutId = wid; }
+  else sel.workoutId = G.workout || null;
+  saveSel(); sessionStorage.setItem('groupRide', JSON.stringify({ id, title: l.title, race: l.race, hostSid: l.hostSid, isHost: !!l.mine, settings: G })); if (l.race) sessionStorage.setItem('raceNext', '1'); setStatus({ joined: null, host: null }); bus.emit('groupstart', l); location.hash = '#/ride';
 }
 setInterval(checkStart, 1000);

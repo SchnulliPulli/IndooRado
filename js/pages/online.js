@@ -3,6 +3,8 @@ import { $, esc, toast, bus } from '../util.js';
 import { sel, saveSel } from '../state.js';
 import { avatarSvg } from '../components.js';
 import { listRoutes } from '../routes.js';
+import { listWorkouts, total as woTotal } from '../workouts.js';
+import { nextWorkout, plan as planState, getPlan } from '../plans.js';
 import * as O from '../online/client.js';
 import * as PR from '../online/presence.js';
 
@@ -29,7 +31,7 @@ async function gate(el) {
 }
 const who = (m, extra = '') => `<span class="who">${avatarSvg(m.look || {}, 34)}<span><b>${esc(m.name)}</b>${extra}</span></span>`;
 const TL = { auto: 'Auto', morning: 'Morgen', day: 'Tag', evening: 'Abend', night: 'Nacht', clear: 'klar', cloudy: 'Wolken', rain: 'Regen', fog: 'Nebel' };
-const setTxt = (g = {}) => `🕒 ${TL[g.time] || 'Auto'} · 🌦️ ${g.weather === 'auto' || !g.weather ? 'Auto' : TL[g.weather]} · ${g.npcs !== false ? '🚴 Mitfahrer' : '🚫 ohne Mitfahrer'}${g.powerups !== false ? ' · ⚡ Power-ups' : ''}${g.traffic ? ' · 🚗 Verkehr' : ''}`;
+const setTxt = (g = {}) => `${g.workout === 'plan' ? '📅 jeder seine nächste Plan-Einheit · ' : g.workout ? '🏋️ ' + esc(g.woName || 'Workout') + ' · ' : ''}🕒 ${TL[g.time] || 'Auto'} · 🌦️ ${g.weather === 'auto' || !g.weather ? 'Auto' : TL[g.weather]} · ${g.npcs !== false ? '🚴 Mitfahrer' : '🚫 ohne Mitfahrer'}${g.powerups !== false ? ' · ⚡ Power-ups' : ''}${g.traffic ? ' · 🚗 Verkehr' : ''}`;
 const cd = ms => ms <= 0 ? 'startet jetzt' : ms < 60e3 ? `in ${Math.ceil(ms / 1000)} s` : `in ${Math.floor(ms / 60e3)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')} min`;
 
 export async function render(el, params = []) {
@@ -40,7 +42,10 @@ export async function render(el, params = []) {
 }
 
 async function lobby(el) {
-  const tok = window.__routeTok; const routes = await listRoutes(); if (tok !== window.__routeTok) return;
+  const tok = window.__routeTok; const [routes, wos] = await Promise.all([listRoutes(), listWorkouts()]); if (tok !== window.__routeTok) return;
+  const nx = nextWorkout(), pl = planState.active && getPlan(planState.active.id);
+  const cats = [...new Set(wos.filter(w => w.builtin).map(w => w.cat))], own = wos.filter(w => !w.builtin);
+  const woOpt = w => `<option value="${esc(w.id)}">${esc(w.name)} · ${Math.round(woTotal(w) / 60)} min</option>`;
   el.innerHTML = `
   <section class="pagehead"><h1>Lobby</h1><span class="small muted" id="lbOnline"></span></section>
   <section class="grid2">
@@ -49,14 +54,17 @@ async function lobby(el) {
       <label class="f">Strecke<select class="inp" id="gRoute">${routes.map(r => `<option value="${esc(r.id)}" ${r.id === sel.routeId ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select></label>
       <div class="grid2 tight"><label class="f">Start in<select class="inp" id="gMin">${[[1, '1 Minute'], [3, '3 Minuten'], [5, '5 Minuten'], [10, '10 Minuten'], [15, '15 Minuten'], [30, '30 Minuten']].map(([v, l]) => `<option value="${v}" ${v === 5 ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label class="f">Art<select class="inp" id="gRace"><option value="0">Gemeinsam fahren</option><option value="1">Rennen (Start an der Linie, Ergebnisliste)</option></select></label></div>
+      <label class="f">Training<select class="inp" id="gWo"><option value="">Freie Fahrt (ohne Workout)</option><option value="plan">📅 Jeder fährt seine nächste Plan-Einheit${nx ? ' (bei dir: ' + esc(nx.name) + ')' : pl ? '' : ' (du hast keinen aktiven Plan)'}</option>${cats.map(c => `<optgroup label="${esc(c)}">${wos.filter(w => w.builtin && w.cat === c).map(woOpt).join('')}</optgroup>`).join('')}${own.length ? `<optgroup label="Eigene Workouts">${own.map(woOpt).join('')}</optgroup>` : ''}</select></label>
       <div class="grid2 tight"><label class="f">Tageszeit<select class="inp" id="gTime">${[['auto', 'Auto (wechselt)'], ['morning', 'Morgen'], ['day', 'Tag'], ['evening', 'Abend'], ['night', 'Nacht']].map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></label>
       <label class="f">Wetter<select class="inp" id="gWeather">${[['auto', 'Auto (wechselt)'], ['clear', 'Klar'], ['cloudy', 'Wolken'], ['rain', 'Regen'], ['fog', 'Nebel']].map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></label></div>
       <div class="row"><label class="switch sm"><input type="checkbox" id="gNpcs" checked><span></span> Computer-Mitfahrer</label><label class="switch sm"><input type="checkbox" id="gPups" checked><span></span> Power-ups</label><label class="switch sm"><input type="checkbox" id="gTraffic"><span></span> Autos und Lkw</label></div>
       <div class="row"><button class="btn pri" id="gGo">Anlegen</button></div>
-      <p class="small muted">Alle, die beitreten, starten zur gleichen Zeit auf derselben Strecke mit denselben Einstellungen und sehen sich live. Tageszeit- und Wetterwechsel bestimmt der Gastgeber für alle. Die Lobby lebt nur, solange du online bist.</p>
+      <p class="small muted">Alle, die beitreten, starten zur gleichen Zeit auf derselben Strecke mit denselben Einstellungen und sehen sich live. Mit Workout fahren alle dasselbe Training, jeweils nach der eigenen FTP; mit „Plan-Einheit“ fährt jeder seine eigene nächste Einheit, aber gemeinsam. Tageszeit- und Wetterwechsel bestimmt der Gastgeber für alle. Die Lobby lebt nur, solange du online bist.</p>
     </div>
     <div class="card"><h2>Offene Gruppenfahrten</h2><div id="lbList" class="lblist"></div></div>
   </section>`;
+  // Workout für die Lobby: eingebaute per ID, eigene mit ihren Abschnitten (die anderen haben sie nicht)
+  const woSet = v => { if (!v) return { workout: '' }; if (v === 'plan') return { workout: 'plan' }; const w = wos.find(x => x.id === v); return w ? { workout: w.id, woName: w.name, ...(w.builtin ? {} : { woSegs: w.segs.slice(0, 120) }) } : { workout: '' }; };
   const draw = () => {
     const L = PR.lobbies(), mine = PR.P.me.joined;
     $('#lbOnline', el).textContent = `🟢 ${PR.P.peers.size + 1} online`;
@@ -66,7 +74,7 @@ async function lobby(el) {
       <div class="members">${l.members.map(m => who(m, m.me ? ' <span class="muted small">(du)</span>' : '')).join('')}</div></div>`; }).join('') : '<p class="muted small">Gerade keine. Leg eine an, andere sehen sie sofort.</p>';
   };
   draw(); off.push(bus.on('presence', draw)); tick = setInterval(draw, 1000);
-  $('#gGo', el).onclick = () => { const r = routes.find(x => x.id === $('#gRoute', el).value); PR.createLobby({ title: $('#gTitle', el).value.trim() || 'Gruppenfahrt', route: r.id, routeName: r.name, minutes: +$('#gMin', el).value, race: $('#gRace', el).value === '1', settings: { time: $('#gTime', el).value, weather: $('#gWeather', el).value, npcs: $('#gNpcs', el).checked, powerups: $('#gPups', el).checked, traffic: $('#gTraffic', el).checked } }); toast('Gruppenfahrt angelegt'); draw(); };
+  $('#gGo', el).onclick = () => { const r = routes.find(x => x.id === $('#gRoute', el).value); PR.createLobby({ title: $('#gTitle', el).value.trim() || 'Gruppenfahrt', route: r.id, routeName: r.name, minutes: +$('#gMin', el).value, race: $('#gRace', el).value === '1', settings: { ...woSet($('#gWo', el).value), time: $('#gTime', el).value, weather: $('#gWeather', el).value, npcs: $('#gNpcs', el).checked, powerups: $('#gPups', el).checked, traffic: $('#gTraffic', el).checked } }); toast('Gruppenfahrt angelegt'); draw(); };
   $('#lbList', el).onclick = e => {
     const c = e.target.closest('[data-id]'); if (!c) return; const id = c.dataset.id;
     if (e.target.closest('[data-join]')) { PR.joinLobby(id); toast('Beigetreten, die Fahrt startet automatisch'); }
