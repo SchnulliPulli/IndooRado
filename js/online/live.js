@@ -20,12 +20,15 @@ export function clean(m) {
   if (!m || typeof m !== 'object' || typeof m.id !== 'string' || m.id.length > 40) return null;
   const T = ['morning', 'day', 'evening', 'night'], W = ['clear', 'cloudy', 'rain', 'fog'];
   const env = m.env && T.includes(m.env.time) && W.includes(m.env.weather) ? { time: m.env.time, weather: m.env.weather } : null;
-  return { id: m.id, name: txt(m.name, 30) || 'Fahrer', d: num(m.d, 0, 1e6), v: num(m.v, 0, 30), p: num(m.p, 0, 2500), wkg: num(m.wkg, 0, 25), cad: num(m.cad, 0, 200, 0), look: cleanLook(m.look), env, pause: m.pause === true };
+  return { id: m.id, name: txt(m.name, 30) || 'Fahrer', d: num(m.d, 0, 1e6), v: num(m.v, 0, 30), p: num(m.p, 0, 2500), wkg: num(m.wkg, 0, 25), cad: num(m.cad, 0, 200, 0), look: cleanLook(m.look), env, pause: m.pause === true, odo: num(m.odo, 0, 1e7) };
 }
 
 export function joinRoute(routeId, me) {
   const peers = new Map(); let ch = null, timer = null, sweep = null, closed = false;
-  const api = { peers, status: 'off', sent: 0, recv: 0, sendNow() { }, onChange: null, onEnv: null, onStatus: null, sendEnv(gid, env) { try { ch?.send({ type: 'broadcast', event: 'env', payload: { gid, from: sid, env } }); } catch (e) { } }, leave() { closed = true; clearInterval(timer); clearInterval(sweep); const c = ch; if (c) client().then(sb => sb.removeChannel(c)).catch(() => { }); peers.clear(); } };
+  const api = { peers, status: 'off', sent: 0, recv: 0, sendNow() { }, onChange: null, onEnv: null, onStatus: null, // Gezielte Nachrichten an einen Mitspieler (Ride On, Duell-Herausforderung)
+    emit(t, to, data = {}) { try { ch?.send({ type: 'broadcast', event: 'mp', payload: { t, to, from: sid, name: online.profile?.display_name || 'Fahrer', ...data } }); } catch (e) { } },
+    onMp: null,
+    sendEnv(gid, env) { try { ch?.send({ type: 'broadcast', event: 'env', payload: { gid, from: sid, env } }); } catch (e) { } }, leave() { closed = true; clearInterval(timer); clearInterval(sweep); const c = ch; if (c) client().then(sb => sb.removeChannel(c)).catch(() => { }); peers.clear(); } };
   if (!loggedIn() || !access().ok) { api.status = 'nologin'; return api; }
   if (online.profile?.public_profile === false) { api.status = 'private'; return api; }
   (async () => {
@@ -44,6 +47,11 @@ export function joinRoute(routeId, me) {
       if (!known) api.onChange?.();
     });
     ch.on('presence', { event: 'leave' }, ({ key }) => { if (peers.delete(key)) api.onChange?.(); });
+    ch.on('broadcast', { event: 'mp' }, ({ payload: m }) => {
+      if (!m || m.to !== sid || typeof m.from !== 'string' || m.from.length > 40 || !['rideon', 'ch'].includes(m.t)) return;
+      const kind = ['chase', 'defend', 'sprint'].includes(m.kind) ? m.kind : null;
+      api.onMp?.({ t: m.t, from: m.from, name: txt(m.name, 30) || 'Fahrer', kind, id: txt(m.id, 16) });
+    });
     // Gruppenfahrt: Tageszeit/Wetter vom Gastgeber
     ch.on('broadcast', { event: 'env' }, ({ payload: m }) => {
       const T = ['morning', 'day', 'evening', 'night'], W = ['clear', 'cloudy', 'rain', 'fog'];

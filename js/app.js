@@ -129,6 +129,7 @@ async function route() {
     await mod.render(el, params.map(decodeURIComponent), query);
     sessionStorage.removeItem('vvReloaded');
     if (k === '' || k === 'companion' || k === 'lobby') announce(el);
+    if (k === '' || k === 'companion') onlineInfo(el);
   } catch (e) {
     console.error(e);
     // Nach einem Update können kurz alte und neue Dateien gemischt im Browser liegen: einmal frisch laden
@@ -157,6 +158,26 @@ export function isPhone() {
   return coarse && (short < 520 || (ar < .7 && innerWidth < 600)) || /iPhone|Android.+Mobile/.test(navigator.userAgent);
 }
 export function wantsPhoneView() { const m = profile.phoneView || 'auto'; return m === 'always' || (m === 'auto' && isPhone()); }
+// Startseite: offene Gruppenfahrten und wer gerade fährt, mit Link zur Lobby bzw. zum Mitfahren
+async function onlineInfo(el) {
+  const O = await import('./online/client.js'); if (!O.configured()) return;
+  if (!O.online.ready) await new Promise(r => { const off = bus.on('online', () => { off(); r(); }); setTimeout(() => { off(); r(); }, 15000); });
+  if (!O.loggedIn() || !O.access().ok || !document.body.contains(el)) return;
+  const PR = await import('./online/presence.js'), { sel, saveSel } = await import('./state.js'), esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const box = document.createElement('div'); box.className = 'onlinfo'; box.hidden = true;
+  (el.querySelector('.annbox') || el.querySelector('.pagehead, .comphead'))?.after(box) ?? el.prepend(box);
+  const draw = () => {
+    if (!document.body.contains(box)) { off(); clearInterval(t); return; }
+    const L = PR.lobbies().filter(l => !l.mine), riding = [...PR.P.peers.entries()].filter(([, p]) => p.where === 'ride' && p.route);
+    const min = ms => ms <= 0 ? 'startet jetzt' : ms < 60e3 ? `startet in ${Math.ceil(ms / 1000)} s` : `startet in ${Math.ceil(ms / 60e3)} min`;
+    const items = [...L.slice(0, 3).map(l => `<div class="card onl lobby"><span>👥 <b>${esc(l.title)}</b> von ${esc(l.hostName)} · ${esc(l.routeName)} · ${min(l.startAt - Date.now())} · ${l.members.length} dabei</span><a class="btn sm pri" href="#/lobby">Zur Lobby</a></div>`),
+      ...riding.slice(0, 3).map(([k, p]) => `<div class="card onl"><span>🚴 <b>${esc(p.name)}</b> fährt gerade ${esc(p.routeName || '')}</span><button class="btn sm" data-sid="${esc(k)}" data-route="${esc(p.route)}" data-name="${esc(p.name)}">Mitfahren</button></div>`)];
+    const html = items.join(''); box.hidden = !html; if (box.innerHTML !== html) box.innerHTML = html;
+  };
+  box.onclick = e => { const b = e.target.closest('[data-sid]'); if (!b) return; sel.routeId = b.dataset.route; saveSel(); sessionStorage.setItem('joinRider', JSON.stringify({ sid: b.dataset.sid, name: b.dataset.name })); location.hash = '#/ride'; };
+  await PR.joinPresence().catch(() => { });
+  const off = bus.on('presence', draw), t = setInterval(draw, 5000); draw();
+}
 async function announce(el) {
   const O = await import('./online/client.js'); if (!O.configured()) return;
   // Beim App-Start läuft die Anmeldung noch: einmal auf das Ergebnis warten statt die Ankündigungen zu verpassen

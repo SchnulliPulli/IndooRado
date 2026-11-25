@@ -87,6 +87,12 @@ export const BADGES = [
   { id: 'sprint', name: 'Sprinter', desc: 'Eine Sprintwertung gefahren', test: (s, t, x) => x.sprints > 0 },
   { id: 'mission', name: 'Auftrag erfüllt', desc: 'Alle drei Wochenmissionen geschafft', test: (s, t, x) => x.allMissions },
   { id: 'early', name: 'Frühaufsteher', desc: 'Eine Fahrt vor 7 Uhr begonnen', test: (s, t, x) => x.hour < 7 },
+  { id: 'mp1', name: 'Gemeinsam stark', desc: 'Mit einem echten Mitspieler gefahren', test: (s, t, x) => x.mpRiders > 0 },
+  { id: 'mp30', name: 'Unzertrennlich', desc: '30 Minuten dicht mit echten Mitspielern gefahren', test: (s, t, x) => x.mpTogether >= 1800 },
+  { id: 'mpduel', name: 'Duellant', desc: 'Ein Duell gegen einen echten Mitspieler gewonnen', test: (s, t, x) => x.mpWon > 0 },
+  { id: 'mpduel3', name: 'Duellkönig', desc: '3 Duelle in einer Fahrt gewonnen', test: (s, t, x) => x.mpWon >= 3 },
+  { id: 'mpgoal', name: 'Teamgeist', desc: 'Ein Gruppenziel in einer Gruppenfahrt erreicht', test: (s, t, x) => x.mpGoal },
+  { id: 'mpro', name: 'Beliebt', desc: '5 echte Ride Ons in einer Fahrt bekommen', test: (s, t, x) => x.mpRo >= 5 },
   { id: 'night', name: 'Nachteule', desc: 'Eine Fahrt nach 21 Uhr begonnen', test: (s, t, x) => x.hour >= 21 },
 ];
 

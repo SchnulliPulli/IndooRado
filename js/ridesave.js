@@ -53,6 +53,9 @@ export async function saveRide(S) {
   const xpParts = [['Fahrt', xp]];
   if (bonus) { const b = Math.round(xp * bonus); xp += b; xpParts.push([`Serie ${tAll.streak} Tage (+${Math.round(bonus * 100)} %)`, b]); }
   if (planInfo?.first) { xp += 75; xpParts.push(['Plan-Einheit', 75]); }
+  // Multiplayer: Gruppenbonus, Duelle, echte Ride Ons
+  if (S.mp?.xp) { xp += S.mp.xp; xpParts.push(['Multiplayer: Gruppenbonus, Duelle, Ride Ons', S.mp.xp]); }
+  if (S.mp?.met.size) ride.mp = { riders: [...S.mp.met].slice(0, 20), together: Math.round(S.mp.together), won: S.mp.won, lost: S.mp.lost, roGot: S.mp.roGot, roGiven: S.mp.roGiven, goal: S.mp.goalDone ? S.mp.goal : null };
   if (S.bonusXp) { xp += S.bonusXp; xpParts.push(['Extras: Glocken, Tagesherausforderung, Zeitfahren', S.bonusXp]); }
   if (S.race?.result) { const rx = raceXp(S.race.result); xp += rx; xpParts.push([`Rennen: Platz ${S.race.result.place} von ${S.race.result.of}`, rx]); }
   // Routen-Abzeichen: einmal pro Strecke für die ganze Strecke bzw. eine volle Runde
@@ -74,7 +77,7 @@ export async function saveRide(S) {
   progress.xp += xp;
   Object.assign(ride, { xp, xpParts, lvBefore, lvAfter: levelOf(progress.xp).lv, plan: planInfo ? { name: planInfo.plan.name, finished: planInfo.finished } : null });
 
-  const x = { workoutDone, testDone: !!test && !test.auto, planFinished: planInfo?.finished ? planInfo.plan.id : false, overtakes: S.overtakes, sprints: S.sprintLog?.length || 0, allMissions: ms.every(m => m.done), hour: new Date(S.startWall).getHours() };
+  const x = { workoutDone, testDone: !!test && !test.auto, planFinished: planInfo?.finished ? planInfo.plan.id : false, overtakes: S.overtakes, sprints: S.sprintLog?.length || 0, allMissions: ms.every(m => m.done), hour: new Date(S.startWall).getHours(), mpRiders: S.mp?.met.size || 0, mpWon: S.mp?.won || 0, mpGoal: !!S.mp?.goalDone, mpRo: S.mp?.roGot || 0, mpTogether: S.mp?.together || 0 };
   for (const b of BADGES) if (!progress.badges[b.id] && b.test(sum, tAll, x)) { progress.badges[b.id] = { date: start, rideId: id }; ride.newBadges.push(b.id); }
   await db.put('rides', ride);
   let k = 0;

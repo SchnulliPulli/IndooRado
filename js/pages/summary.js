@@ -38,6 +38,7 @@ export async function render(el, [id], query) {
       ${ride.xpParts?.length > 1 ? `<div class="xpparts small">${ride.xpParts.map(([l, v]) => `<span>${esc(l)} <b class="num">+${v}</b></span>`).join('')}</div>` : ''}
       ${ride.plan ? `<div class="small" style="margin-top:6px">📅 Trainingsplan ${esc(ride.plan.name)}: ${ride.plan.finished ? '<b>komplett abgeschlossen!</b>' : 'Einheit abgehakt.'} <a href="#/plans">Zum Plan</a></div>` : ''}
       ${ride.overtakes ? `<div class="small muted" style="margin-top:4px">${ride.overtakes} Fahrer überholt</div>` : ''}
+      ${ride.mp ? `<div class="small" style="color:#9ff3ff">🌐 Mit ${ride.mp.riders.map(esc).join(', ')} gefahren · zusammen ${Math.round(ride.mp.together / 60)} min${ride.mp.won || ride.mp.lost ? ` · Duelle ${ride.mp.won}:${ride.mp.lost}` : ''}${ride.mp.goal ? ` · 🏆 Gruppenziel ${ride.mp.goal} km` : ''}</div>` : ''}
       ${ride.rideOns && (ride.rideOns.got || ride.rideOns.given) ? `<div class="small muted">👍 ${ride.rideOns.got} Ride Ons bekommen, ${ride.rideOns.given} verteilt</div>` : ''}</div>
     </section>` : ''}
   <section class="card act">

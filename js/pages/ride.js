@@ -16,6 +16,7 @@ import { rideEggs } from '../eggs.js';
 import { daily, dailyTick, bellsSetup, bellsTick, ttSetup, ttTick } from '../modes.js';
 import { plusInit, plusStep, plusHud, mods, usePup, steerKey, raceSetup, raceTick, lapReset, trafficSetup, photoMode } from '../rideplus.js';
 import { loggedIn, online } from '../online/client.js';
+import { mpInit, mpTick, mpOnMsg, mpRideOn, mpHtml } from '../multiplayer.js';
 import { sound, music } from '../sound.js';
 import { tipFor, cadRange } from '../coach.js';
 import { saveProfile } from '../state.js';
@@ -121,6 +122,7 @@ export async function render(el) {
         <div class="row small" id="bmQuick"></div>
       </div>
     </div>
+    <div class="mpch" id="mpCh" hidden></div>
     <button class="liveled" id="liveLed" hidden title="Live-Verbindung"><i></i><span id="liveLedN"></span></button>
     <div class="startcard" id="startCard"><b>Bereit</b><span>Tritt in die Pedale, die Fahrt startet automatisch.</span></div>
   </div>`;
@@ -158,7 +160,7 @@ async function start(el) {
   world.setPacer(!!S.pacer);
   world.view = clamp(profile.camView ?? 0, 0, 4); world.showNames = profile.npcNames !== false;
   if (profile.fsOnRide && !document.fullscreenElement) toggleFullscreen();
-  if (SPEED !== 1) { window.__tw = S; window.__twHud = () => hud(); } // Testhilfe
+  if (SPEED !== 1) { window.__tw = S; window.__twHud = () => hud(); window.__twMp = () => { mpInit(S); S.live.onMp = m => mpOnMsg(S, MPH, m); }; window.__twSync = () => syncRemote(); } // Testhilfe
   const plan = wo?.planId ? getPlan(wo.planId) : null;
   if (wo?.planId && progress.planAdapt) { S.wOff = progress.planAdapt; S.planAdaptMsg = true; }
   S.planLabel = plan ? `${plan.name} · Woche ${wo.week} · Einheit ${wo.n}` : null;
@@ -188,8 +190,9 @@ async function start(el) {
     if (!S?.alive) return;
     const PRm = window.__presence; PRm?.setStatus({ where: 'ride', route: route.id, routeName: route.name });
     // Position immer senden (auch in Pause oder vor dem ersten Tritt), sonst verschwindet man für die anderen
-    S.live = joinRoute(route.id, () => { const go = S.state === 'riding'; return { d: Math.round(S.dist * 10) / 10, v: go ? +S.v.toFixed(2) : 0, p: go ? Math.round(S.p3.at(-1) || 0) : 0, wkg: go ? +((S.p3.at(-1) || 0) / profile.kg).toFixed(1) : 0, cad: go && live.fresh ? Math.round(live.cadence ?? (live.power > 15 ? 85 : 0)) : 0, pause: !go, env: { time: S.env.time, weather: S.env.weather }, look: PRm ? PRm.onlineLook() : { jersey: profile.jersey, bikeColor: profile.bikeColor, helmet: profile.helmet, skin: profile.skin, av: profile.av } }; });
-    S.live.onChange = syncRemote;
+    S.live = joinRoute(route.id, () => { const go = S.state === 'riding'; return { d: Math.round(S.dist * 10) / 10, v: go ? +S.v.toFixed(2) : 0, p: go ? Math.round(S.p3.at(-1) || 0) : 0, wkg: go ? +((S.p3.at(-1) || 0) / profile.kg).toFixed(1) : 0, cad: go && live.fresh ? Math.round(live.cadence ?? (live.power > 15 ? 85 : 0)) : 0, pause: !go, odo: Math.round(S.odo), env: { time: S.env.time, weather: S.env.weather }, look: PRm ? PRm.onlineLook() : { jersey: profile.jersey, bikeColor: profile.bikeColor, helmet: profile.helmet, skin: profile.skin, av: profile.av } }; });
+    S.live.onChange = syncRemote; mpInit(S);
+    S.live.onMp = m => mpOnMsg(S, MPH, m);
     S.live.onStatus = st => { if (st === 'on') flash('🌐 Live verbunden', 1500); else if (st === 'error' && !S.liveErrShown) { S.liveErrShown = true; flash('🌐 Live-Verbindung unterbrochen, neuer Versuch …', 2500); } };
     if (S.live.status === 'private' && S.joinRider) flash('🌐 Du bist auf „unsichtbar“ gestellt (Konto › Für andere sichtbar). Mitfahren geht nur sichtbar.', 5000);
     // Mitfahren: Wetter und Tageszeit vom gewählten Fahrer, Gruppenfahrt: vom Gastgeber
@@ -247,7 +250,12 @@ function syncRemote() {
   // "Mitfahren" aus "Wer ist online": einmalig direkt hinter den gewählten Fahrer beamen
   if (S.joinRider && peers.has(S.joinRider.sid)) { const p = peers.get(S.joinRider.sid), name = S.joinRider.name; S.joinRider = null; S.joinGiveUp = 0; const d = R.loop ? ((p.d - 10) % R.total + R.total) % R.total : clamp(p.d - 10, 0, R.total - 20); setTimeout(() => { beam(d).then(() => { flash('🌐 Du fährst jetzt direkt hinter ' + name + '. Tritt in die Pedale!', 3000); $('#startCard', S.el).hidden = true; }); }, 300); }
   S.world.setRiders(S.field.map(n => n.look));
-  flash(peers.size ? '🌐 ' + peers.size + ' echte' + (peers.size === 1 ? 'r Fahrer' : ' Fahrer') + ' auf der Strecke' : 'Keine echten Fahrer mehr auf der Strecke', 2200);
+  // Benachrichtigung: wer neu dazukommt oder die Strecke verlässt
+  const was = S.peerNames || new Map(), now = new Map([...peers].map(([id, p]) => [id, p.name]));
+  const pos = p => { const g = gapOf(R, p.d || 0, S.dist), a = Math.abs(g); return a < 30 ? 'direkt bei dir' : (a < 1000 ? Math.round(a) + ' m' : (a / 1000).toFixed(1).replace('.', ',') + ' km') + (g > 0 ? ' vor dir' : ' hinter dir'); };
+  for (const [id, p] of peers) if (!was.has(id)) { flash(`🌐 ${p.name} ist deiner Fahrt beigetreten · ${pos(p)}`, 3500); sound.pass(); }
+  for (const [id, name] of was) if (!now.has(id)) flash(`👋 ${name} hat die Strecke verlassen`, 2500);
+  S.peerNames = now;
 }
 function spawnField() {
   const q = S.world.qKey;
@@ -377,7 +385,11 @@ function toggleNpcs() {
 function gotRideOn(name) { S.rideOnsGot++; flash('👍 Ride On von ' + name, 1800); xpPop('+2 XP Ride On'); sound.pass(); }
 function giveRideOn() {
   if (!S.npcOn || !S.field.length) { flash('Kein Fahrer in der Nähe', 1000); return; }
-  const n = S.field.reduce((a, b) => Math.abs(gapOf(S.route, b.d, S.dist)) < Math.abs(gapOf(S.route, a.d, S.dist)) ? b : a);
+  // Echte Mitspieler bis 300 m haben Vorrang: der Ride On kommt bei ihnen wirklich an
+  const real = S.field.filter(x => x.remote && Math.abs(gapOf(S.route, x.d, S.dist)) < 300).sort((a, b) => Math.abs(gapOf(S.route, a.d, S.dist)) - Math.abs(gapOf(S.route, b.d, S.dist)))[0];
+  if (real && S.mp) { if (S.t - (S.lastGive || -99) < 5) return; S.lastGive = S.t; S.rideOnsGiven++; mpRideOn(S, MPH, real); return; }
+  const pool = S.field.filter(x => !x.remote); if (!pool.length) { flash('Kein Fahrer in der Nähe', 1000); return; }
+  const n = pool.reduce((a, b) => Math.abs(gapOf(S.route, b.d, S.dist)) < Math.abs(gapOf(S.route, a.d, S.dist)) ? b : a);
   if (Math.abs(gapOf(S.route, n.d, S.dist)) > 150) { flash('Kein Fahrer in der Nähe', 1000); return; }
   if (S.t - (S.lastGive || -99) < 5) return;
   S.lastGive = S.t; S.rideOnsGiven++; flash('👍 Ride On an ' + n.name, 1400); xpPop('+1 XP');
@@ -395,6 +407,8 @@ const groupLocked = () => { if (S.envLead && !S.group) { flash('🌦️ Eigenes 
 // Auto: Tageszeit und Wetter wechseln während der Fahrt alle 10 bis 15 Minuten
 const envGap = () => (10 + Math.random() * 5) * 60e3;
 const TIMES = ['morning', 'day', 'evening', 'night'];
+// Hilfen für das Multiplayer-Modul
+const MPH = { flash: (t, ms) => flash(t, ms), xpPop: t => xpPop(t), sound: { pass: () => sound.pass(), fanfare: () => sound.fanfare() } };
 // Live-Status auf der Startkarte beim Mitfahren (zeigt, ob Verbindung steht und Daten fließen)
 function liveStatus() {
   if (performance.now() - (S.lsT || 0) < 1000) return; S.lsT = performance.now();
@@ -568,6 +582,7 @@ function tick() {
   if (S.state === 'riding') envCycle();
   followEnv();
   liveStatus();
+  if (S.mp) { mpTick(S, MPH, .1); if ((S.mpN = (S.mpN || 0) + 1) % 5 === 0) { const b = $('#mpCh', S.el), h = mpHtml(S); b.hidden = !h; if (h && b.innerHTML !== h) b.innerHTML = h; } }
   if (S.joinRider && S.joinGiveUp && performance.now() > S.joinGiveUp) { S.joinGiveUp = 0; flash(S.live?.status === 'on' ? '🌐 ' + S.joinRider.name + ' ist gerade nicht live auf der Strecke (Fahrt beendet?). Sobald die Fahrt weitergeht, springst du hinterher.' : '🌐 Noch keine Live-Verbindung, es wird weiter versucht …', 4000); }
   if (S.group?.isHost && performance.now() > (S.envBeat ??= performance.now() + 30e3)) { S.envBeat = performance.now() + 30e3; S.live?.sendEnv(S.group.id, S.env); }
   // Alle ~45 s: Mitfahrer außer Sicht (und neu eingesetzte) bekommen neue Namen
@@ -650,6 +665,7 @@ function step(dt, first) {
   if (S.live?.peers.size) for (const n of S.field) if (n.remote) { const p = S.live.peers.get(n.id); if (p && p.t !== n.pt) {
     // Großer Sprung = der andere hat sich gebeamt: Hinweis, wenn er jetzt in der Nähe ist
     if (n.pt && Math.abs(gapOf(S.route, p.d, n.d)) > 60) { const g = gapOf(S.route, p.d, S.dist); if (Math.abs(g) < 80) flash(`🌐 ${n.name} ist ${g < 0 ? 'direkt hinter dir' : 'direkt vor dir'} aufgetaucht`, 2500); }
+    n.trend = (n.trend || 0) * .6 + (p.v - (n.vLast ?? p.v)) * .4; n.vLast = p.v; n.pause = p.pause;
     n.pt = p.t; n.d = p.d; n.v = p.v; n.wkg = p.wkg; n.cadence = p.cad ?? 0; } }
   if (S.npcOn && S.field.length) {
     const r = stepField(R, S.field, { d: S.dist, lat: S.lat ?? 1.5, v: S.v, kg: profile.kg, race: S.race }, dt, running);
@@ -847,15 +863,22 @@ function woHud(el, f) {
 }
 function riderList(el) {
   const R = S.route;
-  const rows = S.field.map(n => ({ name: n.name, gap: gapOf(R, n.d, S.dist), wkg: n.wkg * clamp(1 + R.gradeAt(n.d) * .025, .55, 1.25), c: n.look.jersey, v: n.v }));
+  const rows = S.field.map(n => ({ n, name: n.name, remote: !!n.remote, gap: gapOf(R, n.d, S.dist), wkg: n.remote ? n.wkg : n.wkg * clamp(1 + R.gradeAt(n.d) * .025, .55, 1.25), c: n.look.jersey, v: n.v }));
   const p3 = S.p3.length ? S.p3.reduce((a, b) => a + b, 0) / S.p3.length : 0;
   rows.push({ me: true, name: profile.name, gap: 0, wkg: p3 / profile.kg, c: profile.jersey });
   rows.sort((a, b) => b.gap - a.gap);
   const mi = rows.findIndex(r => r.me), from = clamp(mi - 3, 0, Math.max(0, rows.length - 7));
-  $('#riders', el).innerHTML = rows.slice(from, from + 7).map(r => {
-    const t = r.me ? '' : Math.abs(r.gap) < 1 ? '0 m' : Math.abs(r.gap) < 1000 ? (r.gap > 0 ? '+' : '−') + Math.abs(Math.round(r.gap)) + ' m' : (r.gap > 0 ? '+' : '−') + (Math.abs(r.gap) / 1000).toFixed(1).replace('.', ',') + ' km';
-    return `<div class="rrow ${r.me ? 'me' : ''} ${S.wheel && r.name === S.wheel.name ? 'wheel' : ''}"><i style="background:${r.c}"></i><span class="nm">${esc(r.name)}</span><span class="num">${r.wkg.toFixed(1).replace('.', ',')}</span><span class="num gap">${t}</span></div>`;
-  }).join('');
+  // Echte Mitspieler immer anzeigen, auch wenn sie weit weg sind (unten angehängt)
+  const shown = rows.slice(from, from + 7), extra = rows.filter(r => r.remote && !shown.includes(r));
+  const gapTxt = r => r.me ? '' : Math.abs(r.gap) < 1 ? '0 m' : Math.abs(r.gap) < 1000 ? (r.gap > 0 ? '+' : '−') + Math.abs(Math.round(r.gap)) + ' m' : (r.gap > 0 ? '+' : '−') + (Math.abs(r.gap) / 1000).toFixed(1).replace('.', ',') + ' km';
+  // Status echter Fahrer: steht, rollt (tritt nicht), tritt; dazu schneller/langsamer
+  const st = n => n.pause || n.v < .3 ? ['⏸', 'steht'] : (n.cadence || 0) < 5 ? ['🛞', 'rollt ohne zu treten'] : ['🚴', 'tritt'];
+  const tr = n => (n.trend || 0) > .25 ? '<b class="up" title="wird schneller">▲</b>' : (n.trend || 0) < -.25 ? '<b class="dn" title="wird langsamer">▼</b>' : '';
+  const row = r => {
+    if (r.remote) { const [ic, t] = st(r.n); return `<div class="rrow remote" title="Echter Fahrer · ${t} · ${Math.round(r.v * 3.6)} km/h"><i style="background:${r.c}"></i><span class="nm">🌐 ${esc(r.name)} <span class="rst">${ic}${tr(r.n)}</span></span><span class="num">${Math.round(r.v * 3.6)}<small> km/h</small></span><span class="num gap">${gapTxt(r)}</span></div>`; }
+    return `<div class="rrow ${r.me ? 'me' : ''} ${S.wheel && r.name === S.wheel.name ? 'wheel' : ''}"><i style="background:${r.c}"></i><span class="nm">${esc(r.name)}</span><span class="num">${r.wkg.toFixed(1).replace('.', ',')}</span><span class="num gap">${gapTxt(r)}</span></div>`;
+  };
+  $('#riders', el).innerHTML = shown.map(row).join('') + (extra.length ? '<div class="rsep"></div>' + extra.map(row).join('') : '');
 }
 function drawElevStrip(cv) {
   const R = S.route, span = Math.min(R.total, 6000), back = Math.min(1000, span * .15);

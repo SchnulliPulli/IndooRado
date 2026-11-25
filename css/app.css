@@ -267,6 +267,12 @@ span.badge{display:inline-flex;padding:5px 10px;font-weight:600}span.badge svg{w
 .liveled span:empty{display:none}
 @keyframes ledblink{50%{opacity:.35}}
 @media(max-width:700px){.liveled{top:76px;right:10px;padding:5px 8px}}
+.rrow.remote{background:color-mix(in srgb,#2fe6ff 16%,transparent);box-shadow:inset 0 0 0 1px #2fe6ff;border-radius:7px}
+.rrow.remote .nm{color:#bff7ff;font-weight:700}.rrow .rst{font-size:.85em;margin-left:2px}.rrow .up{color:#4fd18b;font-size:.75em}.rrow .dn{color:#ef4458;font-size:.75em}
+.rrow small{font-size:.7em;opacity:.7}.rsep{height:1px;background:var(--hudline,rgba(255,255,255,.15));margin:3px 0;opacity:.6;background:rgba(255,255,255,.18)}
+.mpch{position:absolute;left:50%;bottom:122px;transform:translateX(-50%);z-index:6;min-width:280px;max-width:min(440px,92%);background:var(--hudbg);border-radius:12px;padding:8px 12px;box-shadow:inset 0 0 0 1px #2fe6ff;display:flex;flex-direction:column;gap:4px;font-size:14px}
+.mpch .mprow{display:flex;justify-content:space-between;gap:10px}.mpch .mprow b{color:#bff7ff}.mpbar{height:6px;border-radius:3px;background:rgba(255,255,255,.15);overflow:hidden}.mpbar i{display:block;height:100%;background:linear-gradient(90deg,#2fe6ff,#4fd18b)}
+@media(max-width:700px){.mpch{bottom:300px;font-size:12px}}
 .startcard .livest{margin-top:6px;font-size:12px;opacity:.75}
 .shotflash{position:absolute;inset:0;background:#fff;opacity:.7;animation:flash .45s ease-out forwards;pointer-events:none;z-index:30}
 @keyframes flash{to{opacity:0}}
@@ -577,6 +583,7 @@ span.badge{display:inline-flex;padding:5px 10px;font-weight:600}span.badge svg{w
 .kpi{display:flex;flex-direction:column;gap:2px}.kpi b{font-size:34px}
 .anrow{padding:6px 0;border-bottom:1px solid var(--line)}
 .annbox{display:flex;flex-direction:column;gap:8px}
+.onlinfo{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}.onl{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;border-left:4px solid #2fe6ff}.onl.lobby{border-left-color:var(--acc)}
 .ann{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;border-left:4px solid var(--cad)}
 .ann.event{border-left-color:var(--acc)}.ann.warn{border-left-color:var(--warn)}.ann p{margin:4px 0 0}
 
