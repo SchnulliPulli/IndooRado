@@ -28,6 +28,8 @@ async function gate(el) {
   return true;
 }
 const who = (m, extra = '') => `<span class="who">${avatarSvg(m.look || {}, 34)}<span><b>${esc(m.name)}</b>${extra}</span></span>`;
+const TL = { auto: 'Auto', morning: 'Morgen', day: 'Tag', evening: 'Abend', night: 'Nacht', clear: 'klar', cloudy: 'Wolken', rain: 'Regen', fog: 'Nebel' };
+const setTxt = (g = {}) => `🕒 ${TL[g.time] || 'Auto'} · 🌦️ ${g.weather === 'auto' || !g.weather ? 'Auto' : TL[g.weather]} · ${g.npcs !== false ? '🚴 Mitfahrer' : '🚫 ohne Mitfahrer'}${g.powerups !== false ? ' · ⚡ Power-ups' : ''}${g.traffic ? ' · 🚗 Verkehr' : ''}`;
 const cd = ms => ms <= 0 ? 'startet jetzt' : ms < 60e3 ? `in ${Math.ceil(ms / 1000)} s` : `in ${Math.floor(ms / 60e3)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')} min`;
 
 export async function render(el, params = []) {
@@ -47,8 +49,11 @@ async function lobby(el) {
       <label class="f">Strecke<select class="inp" id="gRoute">${routes.map(r => `<option value="${esc(r.id)}" ${r.id === sel.routeId ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select></label>
       <div class="grid2 tight"><label class="f">Start in<select class="inp" id="gMin">${[[1, '1 Minute'], [3, '3 Minuten'], [5, '5 Minuten'], [10, '10 Minuten'], [15, '15 Minuten'], [30, '30 Minuten']].map(([v, l]) => `<option value="${v}" ${v === 5 ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label class="f">Art<select class="inp" id="gRace"><option value="0">Gemeinsam fahren</option><option value="1">Rennen (Start an der Linie, Ergebnisliste)</option></select></label></div>
+      <div class="grid2 tight"><label class="f">Tageszeit<select class="inp" id="gTime">${[['auto', 'Auto (wechselt)'], ['morning', 'Morgen'], ['day', 'Tag'], ['evening', 'Abend'], ['night', 'Nacht']].map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></label>
+      <label class="f">Wetter<select class="inp" id="gWeather">${[['auto', 'Auto (wechselt)'], ['clear', 'Klar'], ['cloudy', 'Wolken'], ['rain', 'Regen'], ['fog', 'Nebel']].map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></label></div>
+      <div class="row"><label class="switch sm"><input type="checkbox" id="gNpcs" checked><span></span> Computer-Mitfahrer</label><label class="switch sm"><input type="checkbox" id="gPups" checked><span></span> Power-ups</label><label class="switch sm"><input type="checkbox" id="gTraffic"><span></span> Autos und Lkw</label></div>
       <div class="row"><button class="btn pri" id="gGo">Anlegen</button></div>
-      <p class="small muted">Alle, die beitreten, starten zur gleichen Zeit auf derselben Strecke und sehen sich live. Die Lobby lebt nur, solange du online bist.</p>
+      <p class="small muted">Alle, die beitreten, starten zur gleichen Zeit auf derselben Strecke mit denselben Einstellungen und sehen sich live. Tageszeit- und Wetterwechsel bestimmt der Gastgeber für alle. Die Lobby lebt nur, solange du online bist.</p>
     </div>
     <div class="card"><h2>Offene Gruppenfahrten</h2><div id="lbList" class="lblist"></div></div>
   </section>`;
@@ -56,12 +61,12 @@ async function lobby(el) {
     const L = PR.lobbies(), mine = PR.P.me.joined;
     $('#lbOnline', el).textContent = `🟢 ${PR.P.peers.size + 1} online`;
     $('#lbList', el).innerHTML = L.length ? L.map(l => { const ms = l.startAt - Date.now(), inIt = mine === l.id; return `<div class="lobby ${inIt ? 'in' : ''}" data-id="${esc(l.id)}">
-      <div class="row between"><div><b>${esc(l.title)}</b> <span class="prtag">${l.race ? '🏁 Rennen' : '🚴 Gruppenfahrt'}</span><div class="small muted">${esc(l.routeName)} · Start <b class="num">${cd(ms)}</b></div></div>
+      <div class="row between"><div><b>${esc(l.title)}</b> <span class="prtag">${l.race ? '🏁 Rennen' : '🚴 Gruppenfahrt'}</span><div class="small muted">${esc(l.routeName)} · Start <b class="num">${cd(ms)}</b></div><div class="small muted">${setTxt(l.settings)}</div></div>
       <span class="row">${l.mine ? `<button class="btn sm" data-now>Jetzt starten</button><button class="btn sm ghost danger" data-cancel>Absagen</button>` : inIt ? `<button class="btn sm ghost" data-leave>Verlassen</button>` : `<button class="btn sm pri" data-join>Beitreten</button>`}</span></div>
       <div class="members">${l.members.map(m => who(m, m.me ? ' <span class="muted small">(du)</span>' : '')).join('')}</div></div>`; }).join('') : '<p class="muted small">Gerade keine. Leg eine an, andere sehen sie sofort.</p>';
   };
   draw(); off.push(bus.on('presence', draw)); tick = setInterval(draw, 1000);
-  $('#gGo', el).onclick = () => { const r = routes.find(x => x.id === $('#gRoute', el).value); PR.createLobby({ title: $('#gTitle', el).value.trim() || 'Gruppenfahrt', route: r.id, routeName: r.name, minutes: +$('#gMin', el).value, race: $('#gRace', el).value === '1' }); toast('Gruppenfahrt angelegt'); draw(); };
+  $('#gGo', el).onclick = () => { const r = routes.find(x => x.id === $('#gRoute', el).value); PR.createLobby({ title: $('#gTitle', el).value.trim() || 'Gruppenfahrt', route: r.id, routeName: r.name, minutes: +$('#gMin', el).value, race: $('#gRace', el).value === '1', settings: { time: $('#gTime', el).value, weather: $('#gWeather', el).value, npcs: $('#gNpcs', el).checked, powerups: $('#gPups', el).checked, traffic: $('#gTraffic', el).checked } }); toast('Gruppenfahrt angelegt'); draw(); };
   $('#lbList', el).onclick = e => {
     const c = e.target.closest('[data-id]'); if (!c) return; const id = c.dataset.id;
     if (e.target.closest('[data-join]')) { PR.joinLobby(id); toast('Beigetreten, die Fahrt startet automatisch'); }

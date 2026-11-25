@@ -3,7 +3,7 @@
 // Alles Empfangene wird streng geprüft, bevor es angezeigt wird (fremde Daten sind nie vertrauenswürdig).
 import { online, client, loggedIn, access, realtimeAuth } from './client.js';
 
-const sid = crypto.getRandomValues(new Uint32Array(2)).join('-'); // zufällige Kennung nur für diese Sitzung
+import { sid } from './presence.js'; // dieselbe zufällige Sitzungs-ID wie in der Lobby (Gastgeber erkennbar)
 const COLOR = /^#[0-9a-f]{6}$/i;
 const col = (c, d) => COLOR.test(c || '') ? c : d;
 const num = (v, a, b, d = 0) => { v = +v; return Number.isFinite(v) ? Math.min(b, Math.max(a, v)) : d; };
@@ -23,7 +23,7 @@ export function clean(m) {
 
 export function joinRoute(routeId, me) {
   const peers = new Map(); let ch = null, timer = null, sweep = null, closed = false;
-  const api = { peers, onChange: null, leave() { closed = true; clearInterval(timer); clearInterval(sweep); try { ch?.unsubscribe(); } catch (e) { } peers.clear(); } };
+  const api = { peers, onChange: null, onEnv: null, sendEnv(gid, env) { try { ch?.send({ type: 'broadcast', event: 'env', payload: { gid, from: sid, env } }); } catch (e) { } }, leave() { closed = true; clearInterval(timer); clearInterval(sweep); try { ch?.unsubscribe(); } catch (e) { } peers.clear(); } };
   if (!loggedIn() || online.profile?.public_profile === false || !access().ok) return api;
   (async () => {
     const sb = await client(); await realtimeAuth(); if (closed) return;
@@ -37,6 +37,12 @@ export function joinRoute(routeId, me) {
       if (!known) api.onChange?.();
     });
     ch.on('presence', { event: 'leave' }, ({ key }) => { if (peers.delete(key)) api.onChange?.(); });
+    // Gruppenfahrt: Tageszeit/Wetter vom Gastgeber
+    ch.on('broadcast', { event: 'env' }, ({ payload: m }) => {
+      const T = ['morning', 'day', 'evening', 'night'], W = ['clear', 'cloudy', 'rain', 'fog'];
+      if (!m || typeof m.gid !== 'string' || typeof m.from !== 'string' || !T.includes(m.env?.time) || !W.includes(m.env?.weather)) return;
+      api.onEnv?.(m.gid, { time: m.env.time, weather: m.env.weather }, m.from);
+    });
     ch.subscribe(async st => {
       if (st !== 'SUBSCRIBED') return;
       await ch.track({ since: Date.now() });

@@ -719,3 +719,4 @@ body:not(.is-admin) .admintab:not(.on){display:none}
 .netpill[hidden]{display:none}
 .spinner.sm{width:18px;height:18px;border-width:2.5px;margin:0}
 @media(max-width:900px){.netpill{bottom:calc(74px + env(safe-area-inset-bottom))}}
+.chipb.mp{border-color:var(--ok);color:var(--ok);font-weight:700}

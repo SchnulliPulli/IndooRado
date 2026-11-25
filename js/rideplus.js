@@ -70,7 +70,7 @@ export async function plusInit(S) {
   // Mini-Profil im Anstiegskasten
   const cp = document.createElement('canvas'); cp.id = 'clProf'; cp.className = 'clprof'; $('#climbBox', el).appendChild(cp);
   // Power-ups auf der Strecke: alle 2,5 km, nicht in Tunneln
-  if (profile.powerups !== false) {
+  if (S.group ? S.group.settings?.powerups !== false : profile.powerups !== false) {
     S.pups = []; for (let d = 1200; d < R.total - 300; d += 2500) if (!R.tunnelAt(d, 30)) S.pups.push({ d, got: false, k: Object.keys(PUPS)[(S.pups.length * 7 + 3) % 3] });
     S.world.setPickups?.(S.pups.map(p => ({ d: p.d, icon: '⚡' })));
   }
@@ -95,7 +95,7 @@ export function steerKey(S, e) {
 /* ---------- Verkehr (Einstellung "Autos und Lkw") ---------- */
 const CLOSE_MSG = ['😬 Puh, nur {m} Abstand!', '🚛 Hey, 1,5 Meter!', '💨 Das war knapp: {m}', '😤 Überholt mit {m}. Danke für nichts.', '🙄 {m} Abstand. Klassiker.'];
 export function trafficSetup(S, flash) {
-  const R = S.route; S.trafficOn = profile.traffic === true && (R.surface || 'asphalt') === 'asphalt' && !R.theme.moon;
+  const R = S.route; S.trafficOn = (S.group ? S.group.settings?.traffic === true : profile.traffic === true) && (R.surface || 'asphalt') === 'asphalt' && !R.theme.moon;
   S.nextCar = 25 + Math.random() * 30;
   S.world.onPass = (t, lat) => {
     const m = Math.max(.6, (lat * (S.world.latK ?? 1)) - (t.kind === 'truck' ? 1.25 : .9) - .3), close = m < 1.3;

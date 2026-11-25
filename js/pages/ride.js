@@ -143,7 +143,10 @@ async function start(el) {
     np: { buf: [], bs: 0, s4: 0, n: 0 }, field: [], npcOn: sel.npcs !== false, odo: 0, beamed: false, lastBeep: -1, nextDrink: (profile.drinkEvery || 15) * 60,
   };
   setSurface(route); // Belag und Schwerkraft der Strecke
-  S.env = resolveEnv(); world.setEnv(S.env);
+  // Gruppenfahrt: alle übernehmen die Einstellungen des Gastgebers (nur für diese Fahrt, eigene Einstellungen bleiben)
+  S.group = (() => { try { return JSON.parse(sessionStorage.getItem('groupRide') || 'null'); } catch (e) { return null; } })(); sessionStorage.removeItem('groupRide');
+  if (S.group) { const G = S.group.settings || {}; S.npcOn = G.npcs !== false; }
+  S.env = S.group ? groupEnv(S.group) : resolveEnv(); world.setEnv(S.env);
   // Geist: beste bisherige Fahrt auf dieser Strecke (nicht gebeamt)
   if (sel.ghost !== false) {
     const cand = (await db.all('rides')).filter(r => r.routeId === route.id && !r.beamed && r.samples?.length > 120);
@@ -173,13 +176,16 @@ async function start(el) {
     $('#startCard', el).innerHTML = `<b>🏁 Rennen: ${fmtKm(S.race.dist)} km gegen ${S.field.length} Fahrer</b><span>Alle stehen an der Startlinie. Tritt in die Pedale, dann geht es los.</span>`;
   }
   // Online: echte Fahrer auf derselben Strecke
-  const grp = (() => { try { return JSON.parse(sessionStorage.getItem('groupRide') || 'null'); } catch (e) { return null; } })(); sessionStorage.removeItem('groupRide');
-  if (grp) { $('#startCard', el).innerHTML = `<b>👥 ${esc(grp.title)}</b><span>Gruppenfahrt: alle starten jetzt. Tritt in die Pedale!</span>`; }
+  const grp = S.group;
+  if (grp) { $('#startCard', el).innerHTML = `<b>👥 ${esc(grp.title)}</b><span>Gruppenfahrt: alle starten jetzt mit denselben Einstellungen${grp.isHost ? ' (du bist Gastgeber und bestimmst das Wetter)' : ''}. Tritt in die Pedale!</span>`; }
   if (loggedIn() && !demo.on) import('../online/presence.js').then(m => { window.__presence = m; }).then(() => import('../online/live.js')).then(({ joinRoute }) => {
     if (!S?.alive) return;
     const PRm = window.__presence; PRm?.setStatus({ where: 'ride', route: route.id, routeName: route.name });
     S.live = joinRoute(route.id, () => S.state === 'riding' ? { d: Math.round(S.dist * 10) / 10, v: +S.v.toFixed(2), p: Math.round(S.p3.at(-1) || 0), wkg: +((S.p3.at(-1) || 0) / profile.kg).toFixed(1), cad: live.cadence ?? 0, look: PRm ? PRm.onlineLook() : { jersey: profile.jersey, bikeColor: profile.bikeColor, helmet: profile.helmet, skin: profile.skin, av: profile.av } } : null);
     S.live.onChange = syncRemote;
+    // Gruppenfahrt: Wetter und Tageszeit kommen vom Gastgeber
+    S.live.onEnv = (gid, env, from) => { if (!S?.group || S.group.isHost || gid !== S.group.id || from !== S.group.hostSid) return; if (env.time === S.env.time && env.weather === S.env.weather) return; S.env = env; S.world.setEnv(env); updEnvPanel(); flash('👥 Gastgeber: ' + ENV_L[env.time] + ', ' + ENV_L[env.weather], 2500); };
+    if (S.group?.isHost) setTimeout(() => S?.live?.sendEnv(S.group.id, S.env), 3000);
   });
   $('#load').hidden = true;
   if (wo) { $('#woBox').hidden = false; $('#woName').textContent = S.planLabel ? S.planLabel + ' · ' + wo.name : wo.name; }
@@ -265,8 +271,8 @@ function bindUi() {
   $('#rw', el).addEventListener('hudresize', () => { S.miniCache = null; hud(); });
   $('#tMenu', el).onclick = () => { if (!S.samples.length) { leave(); location.hash = '#/'; return; } location.hash = '#/'; };
   $('#tEnv', el).onclick = () => { $('#envPanel', el).hidden = !$('#envPanel', el).hidden; };
-  $('#envTime', el).onclick = e => { const b = e.target.closest('[data-v]'); if (b) { sel.time = b.dataset.v; saveSel(); applyEnv(); } };
-  $('#envWeather', el).onclick = e => { const b = e.target.closest('[data-v]'); if (b) { sel.weather = b.dataset.v; saveSel(); applyEnv(); } };
+  $('#envTime', el).onclick = e => { const b = e.target.closest('[data-v]'); if (b && groupLocked()) return; if (b) { sel.time = b.dataset.v; saveSel(); applyEnv(); } };
+  $('#envWeather', el).onclick = e => { const b = e.target.closest('[data-v]'); if (b && groupLocked()) return; if (b) { sel.weather = b.dataset.v; saveSel(); applyEnv(); } };
   $('#tMap', el).onclick = openMap; $('#mini', el).onclick = openMap; $('#mini', el).style.pointerEvents = 'auto';
   $('#bmClose', el).onclick = closeMap;
   $('#bigMap', el).onclick = e => { if (e.target.id === 'bigMap') closeMap(); };
@@ -338,6 +344,7 @@ const MODES = { gear: 'Gänge', sim: 'Steigung', erg: 'ERG', hr: 'Puls' };
 function cycleMode() { const k = Object.keys(MODES); S.mode = k[(k.indexOf(S.mode) + 1) % k.length]; sel.mode = S.mode; saveSel(); updMode(); trainer.last = ''; flash('Widerstand: ' + { gear: 'virtuelle Gänge', sim: 'Steigung an Trainer', erg: 'feste Wattzahl', hr: 'Zielpuls, der Trainer regelt die Watt' }[S.mode]); }
 function updMode() { $('#tModeL', S.el).textContent = MODES[S.mode]; updGear(); }
 function toggleNpcs() {
+  if (S.group) { flash('👥 In der Gruppenfahrt gilt die Einstellung der Lobby (Mitfahrer ' + (S.group.settings?.npcs !== false ? 'an' : 'aus') + ')', 2200); return; }
   S.npcOn = !S.npcOn; sel.npcs = S.npcOn; saveSel();
   if (S.npcOn && !S.field.length) spawnField();
   if (!S.npcOn) { S.world.npcs.forEach(n => n.rider.root.visible = false); S.draft = 0; }
@@ -355,18 +362,25 @@ function giveRideOn() {
 }
 function toggleSound() { sound.unlock(); const on = sound.toggle(); saveProfile(); updSnd(); flash(on ? '🔊 Ton an' : '🔇 Ton aus', 900); }
 function updSnd() { const on = profile.soundOn !== false; $('#tSnd', S.el).innerHTML = (on ? ICON.sound : ICON.mute) + `<span>${on ? 'Ton' : 'Stumm'}</span>`; if (!on) sound.silence(); }
-function applyEnv() { S.env = resolveEnv(); S.world.setEnv(S.env); S.envNextAt = performance.now() + envGap(); updEnvPanel(); }
+function applyEnv() { S.env = resolveEnv(); S.world.setEnv(S.env); S.envNextAt = performance.now() + envGap(); updEnvPanel(); if (S.group?.isHost) S.live?.sendEnv(S.group.id, S.env); }
+// Gruppenfahrt: Start-Wetter für alle gleich (Auto-Wetter aus der Lobby-ID abgeleitet)
+function groupEnv(g) {
+  const G = g.settings || {}, h = [...String(g.id)].reduce((a, c) => a * 31 + c.charCodeAt(0) >>> 0, 7) / 4294967296;
+  return { time: G.time && G.time !== 'auto' ? G.time : resolveEnv().time, weather: G.weather && G.weather !== 'auto' ? G.weather : h < .55 ? 'clear' : h < .8 ? 'cloudy' : h < .92 ? 'rain' : 'fog' };
+}
+const groupLocked = () => { if (S.group && !S.group.isHost) { flash('👥 In der Gruppenfahrt bestimmt der Gastgeber Tageszeit und Wetter', 2200); return true; } if (S.group?.isHost) setTimeout(() => S?.live?.sendEnv(S.group.id, S.env), 50); return false; };
 // Auto: Tageszeit und Wetter wechseln während der Fahrt alle 10 bis 15 Minuten
 const envGap = () => (10 + Math.random() * 5) * 60e3;
 const TIMES = ['morning', 'day', 'evening', 'night'];
 function envCycle() {
-  const autoT = (sel.time || 'auto') === 'auto', autoW = (sel.weather || 'auto') === 'auto';
+  const G = S?.group?.settings, autoT = ((G ? G.time : sel.time) || 'auto') === 'auto', autoW = ((G ? G.weather : sel.weather) || 'auto') === 'auto';
+  if (S?.group && !S.group.isHost) return; // Gruppenfahrt: nur der Gastgeber wechselt, die anderen folgen per Nachricht
   if (!S || (!autoT && !autoW) || S.route.theme.moon || performance.now() < (S.envNextAt ??= performance.now() + envGap())) return;
   S.envNextAt = performance.now() + envGap();
   const env = { ...S.env };
   if (autoT) env.time = TIMES[(TIMES.indexOf(env.time) + 1) % 4];
   if (autoW) { const opts = ['clear', 'clear', 'clear', 'cloudy', 'cloudy', 'rain', 'fog'].filter(w => w !== env.weather); env.weather = opts[Math.floor(Math.random() * opts.length)]; }
-  S.env = env; S.world.setEnv(env); updEnvPanel();
+  S.env = env; S.world.setEnv(env); updEnvPanel(); if (S.group?.isHost) S.live?.sendEnv(S.group.id, env);
   flash({ morning: '🌅 Der Morgen bricht an', day: '☀️ Es wird Tag', evening: '🌇 Abendstimmung', night: '🌙 Die Nacht bricht herein' }[env.time] + (autoW ? ' · ' + { clear: 'klarer Himmel', cloudy: 'Wolken ziehen auf', rain: 'es fängt an zu regnen', fog: 'Nebel zieht auf' }[env.weather] : ''), 3000);
 }
 function updEnvPanel() {
@@ -379,7 +393,9 @@ function updEnvPanel() {
 /* ---------- Große Karte und Beamen ---------- */
 function openMap() { const m = $('#bigMap', S.el); m.hidden = false; S.mapPick = null; $('#bmGo', S.el).disabled = true; $('#bmTitle', S.el).textContent = S.route.name + (S.route.loop ? ' · Rundkurs' : '');
   const R = S.route, q = [['Start', 0], ...R.climbs.map(c => ['⛰ ' + c.name, c.from - 50]), ...R.sprints.map(c => ['🏁 ' + c.name, c.from - 50]), ...R.towns.map(t => ['🏘 ' + t.name, t.from]), ...R.tunnels.map((t, i) => ['Tunnel ' + (i + 1), t.from - 80])].filter(x => x[1] >= 0 && x[1] < R.total - 20);
-  $('#bmQuick', S.el).innerHTML = q.map(([l, d]) => `<button class="chipb" data-d="${Math.round(d)}">${esc(l)}</button>`).join('');
+  // Echte Mitspieler zuerst: zu ihnen beamen (8 m dahinter, direkt im Windschatten)
+  const mp = S.field.filter(n => n.remote).map(n => [n.name.replace(/^🌐 /, ''), R.loop ? ((n.d - 8) % R.total + R.total) % R.total : clamp(n.d - 8, 0, R.total - 20)]);
+  $('#bmQuick', S.el).innerHTML = mp.map(([l, d]) => `<button class="chipb mp" data-d="${Math.round(d)}">🌐 zu ${esc(l)}</button>`).join('') + q.map(([l, d]) => `<button class="chipb" data-d="${Math.round(d)}">${esc(l)}</button>`).join('');
   requestAnimationFrame(drawBigMap); }
 function closeMap() { const m = $('#bigMap', S?.el); if (m) m.hidden = true; }
 function mapGeo(cv) {
@@ -409,7 +425,9 @@ function drawStatic(R, G, c, d, big) {
   if (!R.loop) { c.fillStyle = '#fff'; const sx = G.X(R.x[0]), sy = G.Y(R.z[0]); c.beginPath(); c.arc(sx, sy, 4 * d, 0, 7); c.fill(); const ex = G.X(R.x[R.N]), ey = G.Y(R.z[R.N]); c.fillStyle = '#111'; c.fillRect(ex - 4 * d, ey - 4 * d, 8 * d, 8 * d); }
 }
 function dynamicLayer(R, G, c, d, big) {
-  if (S.npcOn) for (const n of S.field) { c.fillStyle = n.look.jersey; c.beginPath(); c.arc(G.X(R.xAt(n.d)), G.Y(R.zAt(n.d)), (big ? 3.5 : 2.2) * d, 0, 7); c.fill(); }
+  if (S.npcOn) for (const n of S.field) { if (n.remote) continue; c.fillStyle = n.look.jersey; c.beginPath(); c.arc(G.X(R.xAt(n.d)), G.Y(R.zAt(n.d)), (big ? 3.5 : 2.2) * d, 0, 7); c.fill(); }
+  // Echte Mitspieler hervorgehoben: großer Punkt mit weißem Ring und Name
+  for (const n of S.field) if (n.remote) { const x = G.X(R.xAt(n.d)), y = G.Y(R.zAt(n.d)); c.fillStyle = n.look.jersey; c.strokeStyle = '#fff'; c.lineWidth = 2.5 * d; c.beginPath(); c.arc(x, y, (big ? 7 : 4.5) * d, 0, 7); c.fill(); c.stroke(); if (big) { c.font = `700 ${12 * d}px Barlow, sans-serif`; c.fillStyle = '#fff'; c.strokeStyle = 'rgba(0,0,0,.7)'; c.lineWidth = 3 * d; const t = n.name.replace(/^🌐 /, ''); c.strokeText(t, x + 9 * d, y - 8 * d); c.fillText(t, x + 9 * d, y - 8 * d); } }
   if (S.pacer) { c.fillStyle = '#b06cf0'; c.beginPath(); c.arc(G.X(R.xAt(S.pacer.d)), G.Y(R.zAt(S.pacer.d)), 3.5 * d, 0, 7); c.fill(); }
   // eigene Position mit Blickrichtung
   const px = G.X(R.xAt(S.dist)), py = G.Y(R.zAt(S.dist)), hd = R.headAt(S.dist);
@@ -476,6 +494,7 @@ function liveShare() {
 function tick() {
   if (!S?.alive) return;
   if (S.state === 'riding') envCycle();
+  if (S.group?.isHost && performance.now() > (S.envBeat ??= performance.now() + 30e3)) { S.envBeat = performance.now() + 30e3; S.live?.sendEnv(S.group.id, S.env); }
   // Alle ~45 s: Mitfahrer außer Sicht (und neu eingesetzte) bekommen neue Namen
   if (S.npcOn && S.field.length && performance.now() > (S.nameAt ??= performance.now() + 45e3)) { S.nameAt = performance.now() + 45e3; for (const i of rotateNames(S.route, S.field, S.dist)) S.world.relabel(i, S.field[i].name, S.field[i].look.jersey); }
   liveShare();
@@ -807,7 +826,8 @@ function drawMiniOld(cv) {
   for (const cl of R.climbs) seg(cl.from, cl.to, '#ef4458');
   for (const s of R.sprints) seg(s.from, s.to, '#4fd18b');
   for (const t of R.towns) { const x = (R.xAt((t.from + t.to) / 2) - px) * sc, y = (R.zAt((t.from + t.to) / 2) - pz) * sc; c.fillStyle = '#ffd23f'; c.fillRect(x - 3 * d, y - 3 * d, 6 * d, 6 * d); }
-  if (S.npcOn) for (const n of S.field) { const qx = (R.xAt(n.d) - px) * sc, qy = (R.zAt(n.d) - pz) * sc; c.fillStyle = n.look.jersey; c.beginPath(); c.arc(qx, qy, 2.6 * d, 0, 7); c.fill(); }
+  if (S.npcOn) for (const n of S.field) { if (n.remote) continue; const qx = (R.xAt(n.d) - px) * sc, qy = (R.zAt(n.d) - pz) * sc; c.fillStyle = n.look.jersey; c.beginPath(); c.arc(qx, qy, 2.6 * d, 0, 7); c.fill(); }
+  for (const n of S.field) if (n.remote) { const qx = (R.xAt(n.d) - px) * sc, qy = (R.zAt(n.d) - pz) * sc; c.fillStyle = n.look.jersey; c.strokeStyle = '#fff'; c.lineWidth = 2 * d; c.beginPath(); c.arc(qx, qy, 5 * d, 0, 7); c.fill(); c.stroke(); }
   if (S.pacer) { const qx = (R.xAt(S.pacer.d) - px) * sc, qy = (R.zAt(S.pacer.d) - pz) * sc; c.fillStyle = '#b06cf0'; c.beginPath(); c.arc(qx, qy, 4 * d, 0, 7); c.fill(); }
   c.restore();
   c.fillStyle = '#ff6a3d'; c.beginPath(); c.moveTo(cx, cy - 8 * d); c.lineTo(cx + 6 * d, cy + 6 * d); c.lineTo(cx - 6 * d, cy + 6 * d); c.fill();
