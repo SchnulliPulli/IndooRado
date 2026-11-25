@@ -1,12 +1,13 @@
 // Direkte Strava-Anbindung mit eigener Strava-API-App des Nutzers.
 // Client-ID, Secret und Tokens bleiben nur in diesem Browser (kv 'strava'), sie werden nicht zum NAS übertragen.
 import { kv } from './db.js';
+import { bus } from './util.js';
 import { toFit } from './export.js';
 import { stravaTitle, stravaText } from './share.js';
 
 export const strava = { cfg: null };
 export async function loadStrava() { strava.cfg = await kv.get('strava', null); return strava.cfg; }
-const save = () => kv.set('strava', strava.cfg);
+const save = () => { bus.emit('strava'); return kv.set('strava', strava.cfg); };
 export const connected = () => !!strava.cfg?.refresh;
 export const redirectUri = () => location.origin + location.pathname;
 
@@ -25,7 +26,7 @@ export function authorize() {
   const c = strava.cfg; if (!c?.clientId) throw new Error('Client-ID fehlt');
   sessionStorage.setItem('stravaReturn', location.hash || '#/profile');
   const u = new URL('https://www.strava.com/oauth/authorize');
-  u.search = new URLSearchParams({ client_id: c.clientId, redirect_uri: redirectUri(), response_type: 'code', approval_prompt: 'auto', scope: 'activity:write,read' });
+  u.search = new URLSearchParams({ client_id: c.clientId, redirect_uri: redirectUri(), response_type: 'code', approval_prompt: 'auto', scope: 'activity:write,activity:read_all,read_all' });
   location.href = u.toString();
 }
 // Schritt 2: nach der Rückkehr den Code gegen Tokens tauschen (beim App-Start aufrufen)
@@ -39,6 +40,8 @@ export async function handleRedirect() {
   await loadStrava();
   const r = await tokenReq({ grant_type: 'authorization_code', code: q.get('code') });
   strava.cfg.athlete = r.athlete ? `${r.athlete.firstname || ''} ${r.athlete.lastname || ''}`.trim() : strava.cfg.athlete;
+  if (r.athlete?.id) strava.cfg.athleteId = r.athlete.id;
+  strava.cfg.scope = q.get('scope'); await save();
   return strava.cfg.athlete || true;
 }
 async function tokenReq(params) {
@@ -78,3 +81,30 @@ export async function uploadRide(ride, onStatus = () => { }) {
   return { id: String(j.activity_id) };
 }
 export const activityUrl = id => 'https://www.strava.com/activities/' + id;
+
+/* ---------- Lesen: Routen und Aktivitäten (z. B. von Zwift zu Strava übertragene Fahrten) ---------- */
+async function api(path) {
+  const tk = await token();
+  const res = await fetch('https://www.strava.com/api/v3' + path, { headers: { Authorization: 'Bearer ' + tk } });
+  if (res.status === 401 || res.status === 403) throw new Error('Strava erlaubt diesen Zugriff nicht. Unter Profil die Strava-Verbindung trennen und neu verbinden, damit Routen und Aktivitäten gelesen werden dürfen.');
+  if (res.status === 429) throw new Error('Strava-Abfragelimit erreicht, bitte in 15 Minuten erneut versuchen');
+  if (!res.ok) throw new Error('Strava: HTTP ' + res.status);
+  return res;
+}
+export const canRead = () => connected() && /read/.test(strava.cfg?.scope || 'read');
+export async function listRoutes() {
+  if (!strava.cfg.athleteId) { strava.cfg.athleteId = (await (await api('/athlete')).json()).id; await save(); }
+  const out = [];
+  for (let page = 1; page <= 5; page++) { const l = await (await api(`/athletes/${strava.cfg.athleteId}/routes?per_page=50&page=${page}`)).json(); out.push(...l); if (l.length < 50) break; }
+  return out.map(r => ({ id: r.id_str || String(r.id), name: r.name, dist: r.distance, asc: r.elevation_gain, type: r.type, sub: r.sub_type }));
+}
+export const routeGpx = async id => (await api(`/routes/${id}/export_gpx`)).text();
+// Rad-Aktivitäten seit einem Zeitpunkt (Sekunden seit 1970)
+export async function listActivities(after) {
+  const out = [];
+  for (let page = 1; page <= 10; page++) { const l = await (await api(`/athlete/activities?per_page=100&page=${page}&after=${after}`)).json(); out.push(...l); if (l.length < 100) break; }
+  return out.filter(a => /Ride/.test(a.sport_type || a.type));
+}
+export async function activityStreams(id) {
+  return (await api(`/activities/${id}/streams?keys=time,watts,heartrate,cadence,distance,altitude,latlng,velocity_smooth&key_by_type=true`)).json();
+}

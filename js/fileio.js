@@ -27,7 +27,7 @@ function fromText(name, text, ftp) {
   const base = name.split('/').pop();
   if (/\.json$/i.test(base) || /^\s*[{[]/.test(text)) {
     const j = JSON.parse(text);
-    if (j.veloverse === 'plan' || (j.wos && j.perWeek)) return { plan: { name: j.name || base.replace(/\.\w+$/, ''), perWeek: j.perWeek || 3, wos: j.wos } };
+    if (j.veloverse === 'plan' || (j.wos && j.perWeek)) return { plan: { name: j.name || base.replace(/\.\w+$/, ''), perWeek: j.perWeek || 3, wos: j.wos, weeksLayout: j.weeksLayout } };
     if (j.veloverse === 'workout' || j.segs) return { workout: { ...j, id: 'u-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), cat: j.cat && !/^Plan:/.test(j.cat) ? j.cat : 'Eigene', builtin: false, created: new Date().toISOString() } };
     throw new Error('Unbekanntes JSON-Format');
   }
@@ -69,3 +69,45 @@ export function toZwo(w) {
 }
 export const planToJson = p => JSON.stringify({ veloverse: 'plan', version: 1, name: p.name, perWeek: p.perWeek, wos: p.all.map(w => ({ name: w.name, desc: w.desc, segs: w.segs })) }, null, 1);
 export const workoutToJson = w => JSON.stringify({ veloverse: 'workout', version: 1, name: w.name, cat: w.cat, desc: w.desc, segs: w.segs }, null, 1);
+
+/* ---------- Plan aus eingefügtem Text (z. B. Wochenübersicht von whatsonzwift) ---------- */
+// Erkennt Wochen ("Week 3", "Week 0 Prep"), Workouts (Titel, dann Schritte bis "View %FTP"), Schritte wie
+// "10min from 76 to 196W", "3min 30sec @ 244W", "3min @ 55rpm, 257W", "2min free ride", "1hr 10min free ride",
+// Wiederholungen "10x 3min @ 271W," + nächste Zeile "1min @ 166W". Watt werden über "Update FTP (300W)" in % FTP umgerechnet.
+const T = s => { const m = String(s).trim().match(/^(?:(\d+)\s*hr)?\s*(?:(\d+)\s*min)?\s*(?:(\d+)\s*sec)?$/); return m && (m[1] || m[2] || m[3]) ? (+m[1] || 0) * 3600 + (+m[2] || 0) * 60 + (+m[3] || 0) : null; };
+function stepOf(s) {
+  s = s.trim().replace(/,$/, '');
+  let m = s.match(/^(.+?)\s+from\s+(\d+)\s+to\s+(\d+)\s*W$/i); if (m && T(m[1])) return { dur: T(m[1]), wa: +m[2], wb: +m[3] };
+  m = s.match(/^(.+?)\s+free ride$/i); if (m && T(m[1])) return { dur: T(m[1]), free: true };
+  m = s.match(/^(.+?)\s+@\s+(?:(\d+)\s*rpm,\s*)?(\d+)\s*W$/i); if (m && T(m[1])) return { dur: T(m[1]), wa: +m[3], wb: +m[3], cad: m[2] ? +m[2] : undefined };
+  return null;
+}
+export function parsePlanText(text) {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const wos = []; let week = null, cur = null, pend = null, last = '', name = '';
+  for (const l of lines) {
+    let m = l.match(/^\d+\.\s*\[Week\s+(\d+)[^\]]*\]/i) || l.match(/^Week\s+(\d+)(\s+\w+)?$/i);
+    if (m && !cur) { week = +m[1]; continue; }
+    if (!name && !/^(Plan overview|Weeks?:|Duration|Stress|Workouts?:|Total|Zone|Z\d|\d+%|Share|Select|\*|\[|\d+\.)/i.test(l) && !stepOf(l)) name = l;
+    const rep = l.match(/^(\d+)x\s+(.+),$/i);
+    if (rep && stepOf(rep[2])) { if (!cur) cur = { week, name: last, steps: [] }; pend = { n: +rep[1], on: stepOf(rep[2]) }; continue; }
+    const st = stepOf(l);
+    if (st) {
+      if (!cur) cur = { week, name: last, steps: [] };
+      if (pend) { for (let i = 0; i < pend.n; i++) cur.steps.push(pend.on, st); pend = null; } else cur.steps.push(st);
+      continue;
+    }
+    if (cur && /^View %FTP/i.test(l)) {
+      const ftp = +(l.match(/FTP\s*\((\d+)\s*W\)/i)?.[1] || 300);
+      const segs = cur.steps.map(s => s.free ? { dur: s.dur, a: null, b: null } : { dur: s.dur, a: Math.round(s.wa / ftp * 1000) / 1000, b: Math.round(s.wb / ftp * 1000) / 1000, ...(s.cad ? { cad: s.cad } : {}) });
+      if (segs.length) wos.push({ week: cur.week ?? 1, name: cur.name || 'Workout ' + (wos.length + 1), desc: '', segs });
+      cur = null; pend = null; continue;
+    }
+    if (!cur) last = l.replace(/^\d+\.\s*/, '').replace(/^\[(.+)\]\(.+\)$/, '$1');
+  }
+  if (!wos.length) throw new Error('Keine Workouts im Text erkannt');
+  // Wochen in Reihenfolge, Anzahl je Woche
+  const weeks = [...new Set(wos.map(w => w.week))].sort((a, b) => a - b);
+  const sorted = weeks.flatMap(k => wos.filter(w => w.week === k));
+  return { name: name || 'Eingefügter Plan', perWeek: Math.max(...weeks.map(k => wos.filter(w => w.week === k).length)), weeksLayout: weeks.map(k => wos.filter(w => w.week === k).length), wos: sorted.map(({ week, ...w }) => w) };
+}

@@ -5,11 +5,23 @@ import { deviceCards, levelBar, rideRow, statTiles, ICON } from '../components.j
 import { listRoutes, quickStats, THEMES } from '../routes.js';
 import { listWorkouts, stats as wStats, drawWorkout, getWorkout } from '../workouts.js';
 import { db } from '../db.js';
-import { totals } from '../analysis.js';
+import { totals, fitness } from '../analysis.js';
 import { missionCard } from '../components.js';
 import { missionState, streakBonus } from '../game.js';
 import { planProgress } from '../plans.js';
 
+// Tagesempfehlung nach Form (Frische TSB) und Plan, wie bei TrainerRoad oder Wahoo
+function todayCard(rides) {
+  const f = fitness(rides, 60).at(-1) || { tsb: 0, ctl: 0 }, tsb = Math.round(f.tsb), last = rides[0] ? (Date.now() - +new Date(rides[0].date)) / 864e5 : 99;
+  const pr = planProgress(), nx = pr?.next;
+  let head, text, pick;
+  if (tsb < -25) { head = 'Heute lieber erholen'; text = `Deine Frische liegt bei ${tsb}. Eine lockere Runde hilft mehr als harte Intervalle.`; pick = 'w-easy'; }
+  else if (tsb < -10) { head = 'Ruhige Grundlage'; text = `Etwas Müdigkeit im System (Frische ${tsb}). Gleichmäßig in Zone 2 ist heute ideal.`; pick = 'w-endu90'; }
+  else if (tsb > 10 || last > 3) { head = 'Frisch: Zeit für Intensität'; text = last > 3 ? `Deine letzte Fahrt ist ${Math.floor(last)} Tage her. Die Beine sind ausgeruht.` : `Frische ${tsb}: gute Voraussetzungen für eine harte Einheit.`; pick = 'w-vo5'; }
+  else { head = 'Solide Trainingseinheit'; text = `Form im Gleichgewicht (Frische ${tsb}). Sweet Spot bringt viel für wenig Ermüdung.`; pick = 'w-ss3'; }
+  if (nx) { pick = nx.id; text += tsb < -25 ? ` Die nächste Plan-Einheit „${esc(nx.name)}“ am besten mit 90 % Intensität fahren oder verschieben.` : ` Passend dazu als Nächstes im Plan: „${esc(nx.name)}“.`; }
+  return `<section class="card today"><div class="row between"><div><div class="small muted">Empfehlung für heute</div><h2 style="margin:2px 0">${head}</h2><p class="small muted" style="margin:0">${text}</p></div><button class="btn pri" data-plango="${pick}">Jetzt fahren</button></div></section>`;
+}
 function planOpts() {
   const pr = planProgress(); if (!pr) return '';
   const list = pr.p.all.filter(w => w.id === sel.workoutId || w.id === pr.next?.id);
@@ -53,6 +65,7 @@ export async function render(el) {
     <div><h1>Hallo ${esc(profile.name)}</h1><p class="muted">FTP ${profile.ftp} W · ${String(profile.kg).replace('.', ',')} kg · ${(profile.ftp / profile.kg).toFixed(2).replace('.', ',')} W/kg</p></div>
     <div class="hero-lv">${levelBar()}</div>
   </section>
+  ${todayCard(rides)}
   <section class="grid2">
     <div class="card"><div class="row between"><h2>Trainingsplan</h2><a href="#/plans" class="small">Alle Pläne</a></div>${planCard()}</div>
     <div class="card"><div class="row between"><h2>Wochenmissionen</h2><span class="small muted">${t.streak ? '🔥 ' + t.streak + ' Tage Serie' + (streakBonus(t.streak) ? ' · +' + Math.round(streakBonus(t.streak) * 100) + ' % XP' : '') : 'Heute fahren startet eine Serie'}</span></div>${missionCard(missionState(rides))}</div>

@@ -692,7 +692,7 @@ export class World {
       this.place(o.rider.root, n.d, n.lat);
       o.acc = (o.acc || 0) + dt;
       if (Math.abs(gap) < 35 || (this.frameN + i) % 3 === 0) { o.rider.update(n.crank, n.v, o.acc, R.gradeAt(n.d)); o.acc = 0; }
-      o.lab.visible = gap > 7 && gap < 45 && this.view !== 3;
+      o.lab.visible = this.showNames !== false && gap > 7 && gap < 45 && this.view !== 3;
     });
     // Boote schaukeln
     if (this.boats) { const t = performance.now() / 1000; for (const b of this.boats) { b.rotation.z = Math.sin(t * .9 + b.userData.ph) * .06; b.position.y = R.water + Math.sin(t * .7 + b.userData.ph) * .15; } }

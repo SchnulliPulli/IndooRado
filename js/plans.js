@@ -95,9 +95,9 @@ function registerCustom(c) {
   return { id: c.id, name: c.name, level: 'Eigener Plan', color: '#b06cf0', desc: `${all.length} importierte Workouts, ${c.perWeek} pro Woche.`, weeks, perWeek: c.perWeek, all, custom: true,
     tss: all.reduce((s, w) => s + stats(w).tss, 0), dur: all.reduce((s, w) => s + stats(w).dur, 0) };
 }
-export async function addCustomPlan(name, perWeek, wos) {
+export async function addCustomPlan(name, perWeek, wos, weeksLayout) {
   const list = await kv.get('customPlans', []);
-  const c = { id: 'cp' + Date.now().toString(36), name: name || 'Eigener Plan', perWeek: Math.max(1, perWeek | 0), created: new Date().toISOString(), wos: wos.map(w => ({ name: w.name, desc: w.desc, segs: w.segs })) };
+  const c = { id: 'cp' + Date.now().toString(36), name: name || 'Eigener Plan', perWeek: Math.max(1, perWeek | 0), created: new Date().toISOString(), wos: wos.map(w => ({ name: w.name, desc: w.desc, segs: w.segs })), weeksLayout };
   list.push(c); await kv.set('customPlans', list); CUSTOM.push(registerCustom(c)); return c.id;
 }
 // Eigenen Plan neu anlegen oder überschreiben (Plan-Editor)

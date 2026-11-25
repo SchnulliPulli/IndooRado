@@ -4,6 +4,7 @@ import { sel, saveSel, progress } from '../state.js';
 import { listRoutes, quickStats, parseGpx, saveRoute, deleteRoute, getRoute, THEMES, loadDem } from '../routes.js';
 import { profileChart, trackMap } from '../charts.js';
 import { routeMapSvg, routeSvg } from './start.js';
+import { connected as stravaConnected, listRoutes as listStravaRoutes, routeGpx } from '../strava.js';
 
 // Höhenmodell laden mit Fortschrittsanzeige
 async function terrain(r) {
@@ -16,7 +17,7 @@ export async function render(el, [rid]) {
   const routes = await listRoutes();
   const cur = routes.find(r => r.id === (rid || sel.routeId)) || routes[0];
   el.innerHTML = `
-  <section class="pagehead"><h1>Strecken</h1><label class="btn pri">GPX importieren<input type="file" id="rFile" accept=".gpx,.xml" multiple hidden></label></section>
+  <section class="pagehead"><h1>Strecken</h1><span class="row"><button class="btn" id="rStrava">Von Strava laden</button><label class="btn pri">GPX importieren<input type="file" id="rFile" accept=".gpx,.xml" multiple hidden></label></span></section>
   <div class="routes-layout">
     <div class="rlist">${routes.map(r => { const s = quickStats(r); return `<a class="ritem ${r.id === cur.id ? 'on' : ''}" href="#/routes/${esc(r.id)}">${routeMapSvg(r, 48)}<div style="flex:1;min-width:0"><div class="t">${esc(r.name)}</div><div class="small muted num">${fmtKm(s.dist)} km · ${Math.round(s.asc)} hm${r.builtin ? '' : ' · eigene'}</div></div></a>`; }).join('')}</div>
     <div class="card rdetail" id="rd"><div class="spinner"></div></div>
@@ -34,6 +35,27 @@ export async function render(el, [rid]) {
     if (n) toast(n + ' Strecke' + (n > 1 ? 'n' : '') + ' importiert');
   };
   $('#rFile', el).onchange = e => load(e.target.files);
+  $('#rStrava', el).onclick = async () => {
+    if (!stravaConnected()) { toast('Erst unter Profil mit Strava verbinden'); location.hash = '#/profile'; return; }
+    let list;
+    try { list = (await listStravaRoutes()).filter(r => r.type === 1 || r.type == null); } catch (err) { toast(err.message, 6000); return; }
+    if (!list.length) { toast('Keine Rad-Routen in deinem Strava-Konto gefunden'); return; }
+    // eigene Auswahlliste
+    const w = document.createElement('div'); w.className = 'modal on';
+    w.innerHTML = `<div class="card dlg"><h2>Strava-Route laden</h2><div class="srlist">${list.map(r => `<button class="srow" data-id="${esc(r.id)}"><b>${esc(r.name)}</b><span class="small muted num">${fmtKm(r.dist)} km · ${Math.round(r.asc || 0)} hm</span></button>`).join('')}</div><div class="row end"><button class="btn" data-x>Abbrechen</button></div></div>`;
+    document.body.appendChild(w);
+    w.onclick = async e => {
+      if (e.target === w || e.target.closest('[data-x]')) { w.remove(); return; }
+      const b = e.target.closest('[data-id]'); if (!b) return;
+      w.remove();
+      try {
+        const r = list.find(x => x.id === b.dataset.id), gpx = await routeGpx(r.id), raw = parseGpx(gpx, r.name);
+        raw.name = r.name; raw.source = 'strava';
+        try { await terrain(raw); } catch (err) { toast('Gelände nicht geladen, die Landschaft wird erzeugt', 5000); }
+        await saveRoute(raw); toast('Strava-Route „' + r.name + '“ geladen'); location.hash = '#/routes/' + raw.id;
+      } catch (err) { toast(err.message, 6000); }
+    };
+  };
   el.ondragover = e => e.preventDefault(); el.ondrop = e => { e.preventDefault(); load(e.dataTransfer.files); };
   // Details
   const R = await getRoute(cur.id), s = quickStats(cur), best = progress.routeBest[cur.id];

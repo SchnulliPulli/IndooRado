@@ -4,7 +4,7 @@
 import { db, kv } from './db.js';
 import { bus } from './util.js';
 
-const LOCAL_ONLY = new Set(['sync', 'syncMeta', 'demo', 'strava']);
+const LOCAL_ONLY = new Set(['sync', 'syncMeta', 'demo', 'strava', 'musicFiles']);
 export const sync = { cfg: null, busy: false, last: null, error: null, dirsOk: false, needLogin: false };
 
 export async function loadSync() { sync.cfg = await kv.get('sync', null); sync.last = (await kv.get('syncMeta', {})).at || null; }

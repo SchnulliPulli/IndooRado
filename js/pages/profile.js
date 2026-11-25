@@ -125,7 +125,7 @@ function loginDialog() {
 export async function render(el) {
   const u = await usage(), pers = await persist(), lv = levelOf(progress.xp).lv;
   el.innerHTML = `
-  <section class="pagehead"><h1>Profil</h1><span class="row"><button class="btn sm" id="onbAgain">Einrichtung starten</button><a class="btn sm" href="#/help">Anleitung</a></span></section>
+  <section class="pagehead"><h1>Profil</h1><span class="row"><a class="btn sm" href="#/ridesettings">Fahransicht</a><button class="btn sm" id="onbAgain">Einrichtung starten</button><a class="btn sm" href="#/help">Anleitung</a></span></section>
   <section class="grid2">
     <div class="card form"><h2>Fahrer</h2>
       ${F('name', 'Name', 'text', 'maxlength="30"')}

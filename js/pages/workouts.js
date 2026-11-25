@@ -30,7 +30,7 @@ export async function render(el) {
     const r = await readFiles([...files], profile.ftp);
     for (const w of r.workouts) await saveWorkout(w);
     let plans = 0;
-    for (const p of r.plans) { await addCustomPlan(p.name, p.perWeek, p.wos); plans++; }
+    for (const p of r.plans) { await addCustomPlan(p.name, p.perWeek, p.wos, p.weeksLayout); plans++; }
     for (const z of r.zips) {
       const asPlan = await dialog({ title: `${z.name}: ${z.wos.length} Workouts`, html: '<p>Als Trainingsplan anlegen (Reihenfolge nach Dateiname, 3 pro Woche) oder einzeln in die Bibliothek übernehmen?</p>', buttons: [{ label: 'Einzeln', value: false }, { label: 'Als Plan', value: true, cls: 'pri' }] });
       if (asPlan) { await addCustomPlan(z.name, 3, z.wos); plans++; } else for (const w of z.wos) { await saveWorkout(w); r.workouts.push(w); }

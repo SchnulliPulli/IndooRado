@@ -30,7 +30,8 @@ export async function render(el, [id], query) {
       ${ride.prs.length || ride.climbs.some(c => c.pr) ? `<div class="small" style="margin-top:6px">Neue Bestwerte: ${[...ride.prs.map(curveLabel), ...ride.climbs.filter(c => c.pr).map(c => c.name)].map(esc).join(', ')}</div>` : ''}
       ${ride.xpParts?.length > 1 ? `<div class="xpparts small">${ride.xpParts.map(([l, v]) => `<span>${esc(l)} <b class="num">+${v}</b></span>`).join('')}</div>` : ''}
       ${ride.plan ? `<div class="small" style="margin-top:6px">📅 Trainingsplan ${esc(ride.plan.name)}: ${ride.plan.finished ? '<b>komplett abgeschlossen!</b>' : 'Einheit abgehakt.'} <a href="#/plans">Zum Plan</a></div>` : ''}
-      ${ride.overtakes ? `<div class="small muted" style="margin-top:4px">${ride.overtakes} Fahrer überholt</div>` : ''}</div>
+      ${ride.overtakes ? `<div class="small muted" style="margin-top:4px">${ride.overtakes} Fahrer überholt</div>` : ''}
+      ${ride.rideOns && (ride.rideOns.got || ride.rideOns.given) ? `<div class="small muted">👍 ${ride.rideOns.got} Ride Ons bekommen, ${ride.rideOns.given} verteilt</div>` : ''}</div>
     </section>` : ''}
   <section class="sumhead">
     <div><div class="small muted">${fmtDate(ride.date, { dateStyle: 'full', timeStyle: 'short' })}</div><h1 id="title">${esc(ride.title)}</h1>

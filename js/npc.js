@@ -14,7 +14,7 @@ export function gapOf(R, a, b) {
 }
 
 export function makeField(R, profile, count) {
-  const r = rng(Date.now() & 0xffff), base = profile.ftp / profile.kg * .62;
+  const r = rng(Date.now() & 0xffff), base = profile.ftp / profile.kg * .62 + (profile.npcStrength || 0);
   // Spreizung: einige im eigenen Tempo, ein paar langsamer und schneller
   const offs = [0, .15, -.15, .3, -.3, .5, -.5, .8, -.7, 1.1, .05, -.05, .4, -.4, 1.4, -.9];
   const list = [];

@@ -19,6 +19,7 @@ export async function saveRide(S) {
   let test = null;
   if (S.wo?.test === 'ramp') { const p60 = bestAvg(S.samples.map(s => s.p), 60); if (p60) test = { type: 'Rampentest', ftp: Math.round(p60 * .75), basis: `beste Minute ${Math.round(p60)} W × 0,75` }; }
   if (S.wo?.test === 'ftp20') { const p = bestAvg(S.samples.map(s => s.p), 1200); if (p) test = { type: '20-Minuten-Test', ftp: Math.round(p * .95), basis: `20 Minuten ${Math.round(p)} W × 0,95` }; }
+  if (!test) { const P = S.samples.map(s => s.p), b20 = bestAvg(P, 1200), b8 = bestAvg(P, 480); const est = Math.round(Math.max(b20 ? b20 * .95 : 0, b8 ? b8 * .9 : 0)); if (est > profile.ftp * 1.02) test = { type: 'Erkannt aus dieser Fahrt', ftp: est, basis: b20 && b20 * .95 >= (b8 || 0) * .9 ? `beste 20 Minuten ${Math.round(b20)} W × 0,95` : `beste 8 Minuten ${Math.round(b8)} W × 0,9`, auto: true }; }
   const climbPrs = S.climbLog.filter(c => c.pr).length;
   const sprintPrs = (S.sprintLog || []).filter(c => c.pr).length;
   const lvBefore = levelOf(progress.xp).lv;
@@ -38,13 +39,13 @@ export async function saveRide(S) {
     workoutId: S.wo?.id || null, workoutName: S.wo?.name || null, workout: S.wo ? { name: S.wo.name, segs: S.wo.segs } : null, workoutDone,
     planId: S.wo?.planId || null, planWeek: S.wo?.week || null,
     mode: S.mode, sum, samples: S.samples, climbs: S.climbLog, sprints: S.sprintLog || [], intervals: intervals(S.samples, S.wo), prs, laps: S.lap, test, routePr,
-    overtakes: S.overtakes || 0, beamed: !!S.beamed, env: S.env || null, ftpUsed: profile.ftp, shots: S.shots.length, newBadges: [], missionsDone: [],
+    overtakes: S.overtakes || 0, rideOns: { got: S.rideOnsGot || 0, given: S.rideOnsGiven || 0 }, beamed: !!S.beamed, env: S.env || null, ftpUsed: profile.ftp, shots: S.shots.length, newBadges: [], missionsDone: [],
   };
 
   // XP: Basis + Serienbonus + Plan + Missionen
   const tAll = totals([...rides, ride]);
   let xp = xpFor(sum, { workoutDone, climbs: S.climbLog.length, prs: prs.length + climbPrs + sprintPrs });
-  xp += (S.overtakes || 0) + (S.sprintLog?.length || 0) * 20 + (S.gates || 0) * 5;
+  xp += (S.overtakes || 0) + (S.sprintLog?.length || 0) * 20 + (S.gates || 0) * 5 + (S.rideOnsGot || 0) * 2 + (S.rideOnsGiven || 0);
   const bonus = streakBonus(tAll.streak);
   const xpParts = [['Fahrt', xp]];
   if (bonus) { const b = Math.round(xp * bonus); xp += b; xpParts.push([`Serie ${tAll.streak} Tage (+${Math.round(bonus * 100)} %)`, b]); }
@@ -57,7 +58,7 @@ export async function saveRide(S) {
   progress.xp += xp;
   Object.assign(ride, { xp, xpParts, lvBefore, lvAfter: levelOf(progress.xp).lv, plan: planInfo ? { name: planInfo.plan.name, finished: planInfo.finished } : null });
 
-  const x = { workoutDone, testDone: !!test, planFinished: planInfo?.finished ? planInfo.plan.id : false, overtakes: S.overtakes, sprints: S.sprintLog?.length || 0, allMissions: ms.every(m => m.done), hour: new Date(S.startWall).getHours() };
+  const x = { workoutDone, testDone: !!test && !test.auto, planFinished: planInfo?.finished ? planInfo.plan.id : false, overtakes: S.overtakes, sprints: S.sprintLog?.length || 0, allMissions: ms.every(m => m.done), hour: new Date(S.startWall).getHours() };
   for (const b of BADGES) if (!progress.badges[b.id] && b.test(sum, tAll, x)) { progress.badges[b.id] = { date: start, rideId: id }; ride.newBadges.push(b.id); }
   await db.put('rides', ride);
   let k = 0;

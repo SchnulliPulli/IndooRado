@@ -64,7 +64,7 @@ export async function usage() {
 export async function backup() {
   const out = { app: 'trittwerk', version: 1, date: new Date().toISOString(), kv: {}, rides: [], shots: [], routes: [], workouts: [] };
   // Zugangsdaten (NAS-Passwort, Strava-Schlüssel) gehören nicht in die Sicherungsdatei
-  for (const k of await db.keys('kv')) if (!['sync', 'strava', 'syncMeta'].includes(k)) out.kv[k] = await db.get('kv', k);
+  for (const k of await db.keys('kv')) if (!['sync', 'strava', 'syncMeta', 'musicFiles'].includes(k)) out.kv[k] = await db.get('kv', k);
   out.rides = await db.all('rides');
   out.routes = (await db.all('routes')).map(r => ({ ...r, dem: undefined })); // Gelände wird bei Bedarf neu geladen
   out.workouts = await db.all('workouts');

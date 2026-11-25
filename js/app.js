@@ -6,14 +6,14 @@ import { kv, persist } from './db.js';
 import { ICON } from './components.js';
 import { loadPlan } from './plans.js';
 import { loadSync, autoSync, sync } from './sync.js';
-import { loadStrava, handleRedirect } from './strava.js';
+import { loadStrava, handleRedirect, strava, connected as stravaConnected } from './strava.js';
 
 const PAGES = {
   '': () => import('./pages/start.js'), ride: () => import('./pages/ride.js'), summary: () => import('./pages/summary.js'),
   workouts: () => import('./pages/workouts.js'), plans: () => import('./pages/plans.js'), routes: () => import('./pages/routes.js'), history: () => import('./pages/history.js'),
-  progress: () => import('./pages/progress.js'), profile: () => import('./pages/profile.js'), devices: () => import('./pages/devices.js'), help: () => import('./pages/help.js'), editor: () => import('./pages/editor.js'), planner: () => import('./pages/planner.js'),
+  progress: () => import('./pages/progress.js'), profile: () => import('./pages/profile.js'), devices: () => import('./pages/devices.js'), help: () => import('./pages/help.js'), editor: () => import('./pages/editor.js'), planner: () => import('./pages/planner.js'), ridesettings: () => import('./pages/ridesettings.js'),
 };
-const NAV = [['', 'Start', 'home'], ['plans', 'Pläne', 'plan'], ['workouts', 'Workouts', 'workout'],['routes', 'Strecken', 'route'], ['history', 'Verlauf', 'history'], ['progress', 'Fortschritt', 'progress'], ['devices', 'Geräte', 'devices'], ['profile', 'Profil', 'profile'], ['help', 'Anleitung', 'help']];
+const NAV = [['', 'Start', 'home'], ['plans', 'Pläne', 'plan'], ['workouts', 'Workouts', 'workout'],['routes', 'Strecken', 'route'], ['history', 'Verlauf', 'history'], ['progress', 'Fortschritt', 'progress'], ['devices', 'Geräte', 'devices'], ['ridesettings', 'Fahransicht', 'view'], ['profile', 'Profil', 'profile'], ['help', 'Anleitung', 'help']];
 let current = null, currentKey = null;
 
 function nav() {
@@ -21,6 +21,19 @@ function nav() {
   $('#chips').innerHTML = ['trainer', 'hr', 'cad', 'click'].map(k => `<a class="chip" href="#/devices" data-d="${k}" title="${k}">${ICON[k]}</a>`).join('');
   const upd = () => { for (const c of document.querySelectorAll('#chips .chip')) c.dataset.st = status[c.dataset.d]; };
   bus.on('dev', upd); upd();
+  // Cloud-Anzeige: sichtbar, sobald Daten außerhalb des Browsers landen (NAS-Abgleich oder Strava)
+  const cc = document.createElement('a'); cc.className = 'chip cloudchip'; cc.href = '#/profile'; cc.id = 'cloudChip';
+  cc.innerHTML = '<svg viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.1 9.2 4.5 4.5 0 0 0 7 18Z"/></svg><i></i>';
+  $('#chips').after(cc);
+  const cloudUpd = () => {
+    const nas = sync.cfg && (sync.cfg.mode === 'dsm' ? sync.cfg.host : sync.cfg.url), st = stravaConnected();
+    cc.hidden = !nas && !st;
+    const state = !nas ? 'strava' : sync.busy ? 'busy' : sync.needLogin ? 'login' : sync.error ? 'error' : sync.last ? 'on' : 'off';
+    cc.dataset.st = state;
+    const when = sync.last ? new Date(sync.last).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : 'noch nie';
+    cc.title = [nas ? `NAS-Speicher (${sync.cfg.mode === 'dsm' ? 'Synology' : 'WebDAV'}): ${{ busy: 'Abgleich läuft', login: 'Anmeldung abgelaufen', error: 'Fehler: ' + sync.error, on: 'zuletzt abgeglichen ' + when, off: 'noch nicht abgeglichen' }[state]}` : '', st ? `Strava verbunden${strava.cfg?.auto ? ', Fahrten werden automatisch hochgeladen' : ''}` : ''].filter(Boolean).join(' · ');
+  };
+  bus.on('sync', cloudUpd); bus.on('strava', cloudUpd); setInterval(cloudUpd, 30000); cloudUpd(); window.__cloudUpd = cloudUpd;
   // Vollbild-Knopf in der Kopfleiste
   const fs = $('#fsBtn'), fsUpd = () => { const on = !!(document.fullscreenElement || document.webkitFullscreenElement); fs.innerHTML = on ? '<svg viewBox="0 0 24 24"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>' : ICON.full; fs.title = on ? 'Vollbild beenden' : 'Vollbild'; fs.dataset.st = on ? 'on' : 'off'; };
   fs.onclick = toggleFullscreen; document.addEventListener('fullscreenchange', fsUpd); document.addEventListener('webkitfullscreenchange', fsUpd); fsUpd();
@@ -68,7 +81,7 @@ async function init() {
   bus.on('toast', m => toast(m));
   if (await kv.get('demo', !support().ok)) setDemo(true);
   persist();
-  await loadStrava();
+  await loadStrava(); window.__cloudUpd?.();
   try { const who = await handleRedirect(); if (who) toast('Mit Strava verbunden' + (typeof who === 'string' && who ? ': ' + who : '')); }
   catch (e) { toast(e.message, 6000); }
   window.addEventListener('hashchange', route);
@@ -76,7 +89,7 @@ async function init() {
   import('./onboard.js').then(m => m.onboarding()).catch(e => console.error(e));
   reconnectKnown().catch(() => { });
   // NAS-Abgleich: neuerer Stand vom NAS wird übernommen, danach Seite neu aufbauen
-  loadSync().then(autoSync).then(async pulled => {
+  loadSync().then(() => window.__cloudUpd?.()).then(autoSync).then(async pulled => {
     if (sync.needLogin) toast('NAS: Anmeldung abgelaufen, unter Profil neu anmelden', 5000);
     if (!pulled) return;
     await loadState(); await loadPlan(); await loadClickMap(); toast('Daten vom NAS übernommen');
