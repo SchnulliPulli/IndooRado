@@ -30,9 +30,18 @@ async function dsmJson(params, opt) {
 }
 // Anmeldung mit DSM-Konto. Bei aktivierter 2FA zuerst ohne Code (Fehler 403), dann mit Code.
 // "Gerät merken" (device token) erspart den Code bei späteren Anmeldungen.
+// NAS-Adresse vereinheitlichen: immer https, Standardport 443 (kein Port nötig), ohne Pfad am Ende
+export function normalizeHost(v) {
+  let s = String(v || '').trim();
+  if (!s) return s;
+  if (!/^[a-z]+:\/\//i.test(s)) s = 'https://' + s;
+  s = s.replace(/^http:\/\//i, 'https://');
+  try { const u = new URL(s); if (u.port === '443') u.port = ''; return (u.origin + u.pathname).replace(/\/+$/, ''); } catch (e) { return s.replace(/\/+$/, ''); }
+}
 export async function dsmLogin({ host, folder, user, pass, otp, remember, auto }) {
   const prev = sync.cfg || {};
-  sync.cfg = { mode: 'dsm', host: host.trim().replace(/\/+$/, ''), folder: '/' + folder.trim().replace(/^\/+|\/+$/g, ''), user: user.trim(), auto: !!auto, remember: !!remember, did: prev.host === host ? prev.did : null, sid: null };
+  host = location.protocol === 'https:' ? normalizeHost(host) : host.trim().replace(/\/+$/, ''); // lokal (http) zum Testen unverändert
+  sync.cfg = { mode: 'dsm', host, folder: '/' + folder.trim().replace(/^\/+|\/+$/g, ''), user: user.trim(), auto: !!auto, remember: !!remember, did: prev.host === host ? prev.did : null, sid: null };
   const p = { api: 'SYNO.API.Auth', version: '6', method: 'login', account: user.trim(), passwd: pass, session: 'FileStation', format: 'sid', enable_device_token: 'yes', device_name: 'VeloVerse' };
   if (otp) p.otp_code = otp.trim();
   if (sync.cfg.did) p.device_id = sync.cfg.did;

@@ -24,7 +24,10 @@ export async function render(el) {
     <li><b>Karte</b> (Minikarte antippen oder Taste K): ganze Strecke, Schnellziele und <b>Beamen</b> an jede Stelle. Gebeamte Fahrten zählen nicht als Streckenbestzeit.</li>
     <li><b>Menü</b>: pausiert die Fahrt und öffnet das Startmenü. Mit dem Balken „Zurück zur Fahrt“ geht es weiter, treten setzt die Fahrt fort.</li>
     <li><b>Wetter</b> (Taste W): Morgen, Tag, Abend, Nacht und klar, Wolken, Regen, Nebel oder automatisch nach Uhrzeit.</li>
-    <li><b>Anordnen</b>: Anzeigen per Ziehen verschieben (eigene Anordnung für kleine und große Bildschirme), „Zurücksetzen“ stellt alles zurück. Die Workout-Box lässt sich durch Antippen der Kopfzeile einklappen.</li>
+    <li><b>Anordnen</b>: Anzeigen ziehen, über die Ecke unten rechts vergrößern, einzeln ein- und ausblenden und eigene Widgets hinzufügen (z. B. NP, TSS, Uhrzeit, Abstand zum Geist, Leistungs- und Pulskurve). Es gibt Vorlagen (Kompakt, Minimal, Rennen, Workout-Fokus, Datenfreak) und Stile (Dunkel, Glas, Kontrast, Hell, Durchsichtig). Die Knopfleiste bleibt unten rechts, ihre Breite stellst du am linken Rand ein. Die Anordnung gilt getrennt für kleine und große Bildschirme.</li>
+    <li><b>Geist</b>: Auf einer bereits gefahrenen Strecke fährt ein halbdurchsichtiger Fahrer deine Bestfahrt nach. Der Abstand steht im Widget „Abstand zum Geist“.</li>
+    <li><b>Puls-Ziel</b>: Widerstandsart, bei der der Trainer die Watt alle 5 Sekunden so nachregelt, dass dein Puls am Zielwert bleibt. Mit + und − den Zielpuls ändern.</li>
+    <li><b>Sanfter ERG-Einstieg</b>: Bei großen Sprüngen nach oben fährt der Trainer die Leistung über 5 Sekunden hoch.</li>
     <li><b>Ton</b> (Taste M): Fahrtwind, Reifen, Kette und Kurbel, Natur, Countdown und Fanfaren. Lautstärken unter Profil.</li>
   </ul>`)}
   ${S('tasten', 'Tasten und Zwift Click', `<table class="tbl"><tr><th>Taste</th><th>Funktion</th></tr>${[['↑ / + und ↓ / −', 'Schalten, im ERG ±10 W, im Workout Intensität ±2 %'], ['Leertaste', 'Pause / weiter'], ['C oder 1–5', 'Kamera'], ['P', 'Foto'], ['K', 'Karte und Beamen'], ['W', 'Wetter und Tageszeit'], ['M', 'Ton an/aus'], ['N', 'Mitfahrer an/aus'], ['Esc', 'Karte und Fenster schließen']].map(([a, b]) => `<tr><td><b>${a}</b></td><td>${b}</td></tr>`).join('')}</table>
@@ -33,6 +36,8 @@ export async function render(el) {
     <li>Ziele sind Prozent deiner FTP. Ändert sich die FTP (z. B. nach einem FTP-Test), passen sich alle Workouts und Pläne an.</li>
     <li><b>Adaptiv</b>: Bricht die Kadenz ein, wird der Widerstand kurz gesenkt. Ist der Puls lange am Anschlag, sinkt die Intensität um 3 %. Schafft der Trainer das Ziel nicht, gibt es einen Hinweis. Umschalten mit dem Feld „adaptiv“.</li>
     <li>Jedes Intervall zeigt einen <b>Tipp</b> zu Kadenz und Fahrweise sowie einen Kadenz-Zielbereich.</li>
+    <li><b>Workout-Editor</b> (Workouts → „Neues Workout“ oder „Anpassen“): aus Bausteinen wie Aufwärmen, Konstant, Intervalle, Rampe, Frei und Ausrollen ein eigenes Workout bauen, mit Kadenz und Hinweis je Baustein.</li>
+    <li><b>Plan-Editor</b> (Pläne → „+ Neuer Plan“, oder „Anpassen“ bei einem eingebauten Plan): Wochen anlegen, je Woche beliebig viele Einheiten aus deiner Workout-Bibliothek einplanen, Wochen kopieren und verschieben.</li>
     <li><b>Pläne</b> führen Woche für Woche durch passende Workouts. Eine Einheit zählt ab 90 % als erledigt, du kannst Einheiten überspringen.</li>
   </ul>`)}
   ${S('import', 'Dateien importieren und exportieren', `<table class="tbl"><tr><th>Format</th><th>Wo</th><th>Hinweis</th></tr>

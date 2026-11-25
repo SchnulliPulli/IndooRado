@@ -8,7 +8,7 @@ import { stats, drawWorkout, parseZwo } from '../workouts.js';
 export async function render(el) {
   const pr = planProgress();
   el.innerHTML = `
-  <section class="pagehead"><h1>Trainingspläne</h1></section>
+  <section class="pagehead"><h1>Trainingspläne</h1><a class="btn pri" href="#/planner">+ Neuer Plan</a></section>
   <p class="muted">Jeder Plan ist eine Folge von Workouts, Woche für Woche. Alle Ziele hängen an deiner FTP (${profile.ftp} W) und passen sich automatisch an, wenn sie sich ändert. Eine Einheit zählt als erledigt, wenn du mindestens 90 % davon fährst.</p>
   ${pr ? active(pr) : ''}
   <section class="card form"><h2>Plan importieren</h2>
@@ -23,7 +23,7 @@ export async function render(el) {
       <p class="small muted">${esc(p.desc)}</p>
       <div class="pweeks">${p.weeks.map((w, i) => `<i style="height:${Math.round(18 + 42 * w.reduce((s, x) => s + stats(x).tss, 0) / Math.max(...p.weeks.map(ww => ww.reduce((s, x) => s + stats(x).tss, 0))))}px" title="Woche ${i + 1}"></i>`).join('')}</div>
       <div class="row between small muted num"><span>${fmtDur(p.dur)} gesamt</span><span>${p.all.length} Einheiten · TSS ${p.tss}</span></div>
-      <div class="row end"><button class="btn sm ghost" data-expplan="${p.id}" title="Plan als Datei speichern">Export</button>${p.custom ? `<button class="btn sm ghost danger" data-delplan="${p.id}">Löschen</button>` : ''}${pr?.p.id === p.id ? '<span class="small" style="color:var(--ok)">Aktiv</span>' : `<button class="btn sm pri" data-start="${p.id}">Plan starten</button>`}</div>
+      <div class="row end"><a class="btn sm ghost" href="#/planner/${p.id}">${p.custom ? 'Bearbeiten' : 'Anpassen'}</a><button class="btn sm ghost" data-expplan="${p.id}" title="Plan als Datei speichern">Export</button>${p.custom ? `<button class="btn sm ghost danger" data-delplan="${p.id}">Löschen</button>` : ''}${pr?.p.id === p.id ? '<span class="small" style="color:var(--ok)">Aktiv</span>' : `<button class="btn sm pri" data-start="${p.id}">Plan starten</button>`}</div>
     </article>`).join('')}</section>`;
 
   $('#cpFiles', el).onchange = async e => {

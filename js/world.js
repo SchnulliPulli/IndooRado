@@ -648,6 +648,15 @@ export class World {
     this.lamp.intensity = time === 'night' ? 30 : time === 'evening' && (cloudy || fog) ? 10 : 0;
     if (this.water) this.water.material.color.setHex(time === 'night' ? 0x0a1c2c : cloudy ? 0x2f4f63 : 0x1f5f8f);
   }
+  // Geist der eigenen Bestfahrt: halbdurchsichtiger Fahrer
+  setGhost(on) {
+    if (on && !this.ghost) {
+      this.ghost = new Rider({ jersey: '#9fe8ff', bikeColor: '#cfefff', helmet: '#e8fbff', skin: '#d8f3ff' });
+      this.ghost.root.traverse(o => { if (o.material) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = .42; o.material.depthWrite = false; o.material.emissive?.set('#2a6f88'); } o.castShadow = false; });
+      this.scene.add(this.ghost.root);
+    }
+    if (!on && this.ghost) { this.scene.remove(this.ghost.root); this.ghost = null; }
+  }
   setColors(p) { this.rider.setColors(p); }
   cycleView() { this.view = (this.view + 1) % 5; this.camInit = false; return this.view; }
   // Kurzer Kameraschwenk (z. B. am Zieltor), danach zurück zur gewählten Ansicht
@@ -664,6 +673,7 @@ export class World {
     this.place(this.rider.root, d, 1.5); this.rider.root.visible = this.view !== 4;
     this.rider.update(st.crank, st.v, dt, R.gradeAt(d));
     if (this.pacer && st.pacerDist != null) { this.place(this.pacer.root, st.pacerDist, .6); this.pacer.update(st.pacerCrank, st.pacerV, dt, R.gradeAt(st.pacerDist)); }
+    if (this.ghost && st.ghostDist != null) { this.place(this.ghost.root, st.ghostDist, 2.4); this.ghost.update(st.crank * 1.02, st.v, dt, R.gradeAt(st.ghostDist)); }
     // Dynamische Auflösung: bei Rucklern Pixeldichte senken, bei Luft wieder anheben
     this.frameAvg = (this.frameAvg ?? 16) * .95 + dt * 1000 * .05; this.frameN = (this.frameN || 0) + 1;
     if (this.frameN % 90 === 0) {

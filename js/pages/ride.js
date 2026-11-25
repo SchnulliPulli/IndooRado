@@ -1,5 +1,5 @@
 // Fahransicht: 3D-Welt, HUD, Steuerung des Trainers, Mitfahrer, Aufzeichnung, Screenshots
-import { $, esc, fmtT, fmtKm, clamp, bus, toast, dialog, fitCanvas, zoneColor, ZONES } from '../util.js';
+import { $, esc, fmtT, fmtKm, clamp, bus, toast, dialog, fitCanvas, zoneColor, ZONES, HRZONES } from '../util.js';
 import { profile, sel, live, progress, saveSel, levelOf } from '../state.js';
 import { setPower, setGrade, control, trainer, status, demo, click } from '../ble.js';
 import { GEARS, gearPower, integrate, steadySpeed } from '../physics.js';
@@ -9,12 +9,13 @@ import { getPlan } from '../plans.js';
 import { profileChart } from '../charts.js';
 import { ICON } from '../components.js';
 import { saveRide } from '../ridesave.js';
+import { db } from '../db.js';
 import { makeField, stepField, gapOf } from '../npc.js';
 import { sound } from '../sound.js';
 import { tipFor, cadRange } from '../coach.js';
 import { saveProfile } from '../state.js';
-import { rng, toggleFullscreen } from '../util.js';
-import { applySaved, arrange, editMode } from '../hudlayout.js';
+import { rng, toggleFullscreen, smooth } from '../util.js';
+import { applySaved, arrange, editMode, updateExtras } from '../hudlayout.js';
 const layout = () => { const w = $('#rw', S?.el); if (w) { applySaved(w); arrange(w); } };
 
 // Tageszeit und Wetter: fest gewählt oder automatisch (Uhrzeit, Wetter des Tages)
@@ -48,8 +49,8 @@ export async function render(el) {
       </div>
       <div class="hud-sub num small" id="hSub"></div>
     </div>
-    <div class="hud-left" data-drag="left">
-      <div class="hud-wo" id="woBox" hidden>
+    <div class="hud-left">
+      <div class="hud-wo" id="woBox" data-drag="wo" hidden>
         <div class="row between"><div style="flex:1"><div class="small muted" id="woName"></div><div class="wo-step" id="woStep"></div></div><div class="wo-left num" id="woLeft"></div></div>
         <div class="bar thin"><i id="woSegBar"></i></div>
         <div class="wo-target"><span class="num" id="woTgt">–</span><span class="small">Ziel W</span><span class="wo-cad small" id="woCad"></span><span class="wo-next small muted" id="woNext"></span></div>
@@ -60,7 +61,7 @@ export async function render(el) {
         <div class="row between small num"><span id="woTot"></span><span id="woSegN"></span></div>
         <div class="row between small"><span>Intensität <b id="woOff">100</b> % <span class="adapt" id="adapt" title="Adaptive Steuerung"></span></span><span class="row" style="gap:4px"><button class="btn xs" id="woM">−</button><button class="btn xs" id="woP">+</button><button class="btn xs" id="woSkip">Weiter</button></span></div>
       </div>
-      <div class="riders" id="riders"></div>
+      <div class="riders" id="riders" data-drag="riders"></div>
     </div>
     <div class="hud-right" data-drag="right">
       <div class="gradebox"><b class="num" id="hGrade">0,0</b><span>% Steigung</span><div class="gradeicon" id="gIcon"></div></div>
@@ -73,9 +74,10 @@ export async function render(el) {
       <div class="banner" id="banner"></div>
       <div class="xpfloat" id="xpFloat"></div>
     </div>
-    <div class="editbar" id="editBar" hidden><span>Elemente ziehen, um sie zu verschieben</span><button class="btn sm ghost" id="edReset">Zurücksetzen</button><button class="btn sm pri" id="edDone">Fertig</button></div>
+    <div class="xlayer"></div>
+    <div class="editbar" id="editBar" hidden></div>
     <div class="hud-bottom">
-      <canvas id="mini" class="minimap" title="Karte öffnen (K)" data-drag="mini"></canvas>
+      <div class="miniwrap" data-drag="mini"><canvas id="mini" class="minimap" title="Karte öffnen (K)"></canvas></div>
       <div class="elevwrap" data-drag="elev"><canvas id="elev"></canvas><div class="elevtxt small" id="elevTxt"></div></div>
     </div>
     <div class="toolbar">
@@ -131,6 +133,12 @@ async function start(el) {
     np: { buf: [], bs: 0, s4: 0, n: 0 }, field: [], npcOn: sel.npcs !== false, odo: 0, beamed: false, lastBeep: -1, nextDrink: 900,
   };
   S.env = resolveEnv(); world.setEnv(S.env);
+  // Geist: beste bisherige Fahrt auf dieser Strecke (nicht gebeamt)
+  if (sel.ghost !== false) {
+    const cand = (await db.all('rides')).filter(r => r.routeId === route.id && !r.beamed && r.samples?.length > 120);
+    const best = progress.routeBest[route.id] && cand.find(r => r.id === progress.routeBest[route.id].rideId) || cand.sort((a, b) => b.sum.avgV - a.sum.avgV)[0];
+    if (best) { S.ghost = { d: Float32Array.from(best.samples, s => s.d), date: best.date }; world.setGhost(true); }
+  }
   world.setPacer(!!S.pacer);
   if (SPEED !== 1) { window.__tw = S; window.__twHud = () => hud(); } // Testhilfe
   const plan = wo?.planId ? getPlan(wo.planId) : null;
@@ -170,7 +178,8 @@ async function start(el) {
     let npcs = null;
     if (S.npcOn) npcs = S.field.map(n => { const d = smoothD(n, 'rd', n.d, n.v); n.rc = (n.rc || 0) + (moving ? n.cadence / 60 * Math.PI * 2 * dt : 0); return { d, lat: n.lat, v: n.v, crank: n.rc }; });
     const pd = S.pacer ? smoothD(S.pacer, 'rd', S.pacer.d, S.pacer.v) : null;
-    world.update({ dist, v: S.v, crank: S.rcrank, pacerDist: pd, pacerV: S.pacer?.v, pacerCrank: S.pacer?.crank, npcs }, dt);
+    const ghostDist = S.ghost && S.ghostPos != null ? smoothD(S, 'rghost', S.ghostPos, S.v) : null;
+    world.update({ dist, ghostDist, v: S.v, crank: S.rcrank, pacerDist: pd, pacerV: S.pacer?.v, pacerCrank: S.pacer?.crank, npcs }, dt);
     if (now - S.lastHud > 200) { S.lastHud = now; hud(); }
   };
   S.raf = requestAnimationFrame(frame);
@@ -200,7 +209,8 @@ function bindUi() {
   // Workout-Box einklappen (Kopfzeile antippen)
   $('#woBox', el).classList.toggle('collapsed', !!profile.woCollapsed);
   $('#woName', el).parentElement.parentElement.onclick = () => { profile.woCollapsed = !profile.woCollapsed; saveProfile(); $('#woBox', el).classList.toggle('collapsed', profile.woCollapsed); requestAnimationFrame(layout); };
-  $('#tLayout', el).onclick = () => { $('#editBar', el).hidden = false; editMode($('#rw', el), true, () => { $('#editBar', el).hidden = true; layout(); }); };
+  $('#tLayout', el).onclick = () => { closeMap(); $('#envPanel', el).hidden = true; editMode($('#rw', el), true, () => layout()); };
+  $('#rw', el).addEventListener('hudresize', () => { S.miniCache = null; hud(); });
   $('#tMenu', el).onclick = () => { if (!S.samples.length) { leave(); location.hash = '#/'; return; } location.hash = '#/'; };
   $('#tEnv', el).onclick = () => { $('#envPanel', el).hidden = !$('#envPanel', el).hidden; };
   $('#envTime', el).onclick = e => { const b = e.target.closest('[data-v]'); if (b) { sel.time = b.dataset.v; saveSel(); applyEnv(); } };
@@ -257,6 +267,7 @@ function shift(dir) {
   const w = S.wo && S.state !== 'ready' ? woAt(S.wo, S.wT) : null, log = k => { (S.shiftLog = (S.shiftLog || []).slice(-5)).push({ t: performance.now(), dir, k }); };
   if (w && !w.done && w.target != null) { S.wOff = clamp(S.wOff + dir * 2, -40, 40); log('woff'); flash(`Intensität ${100 + S.wOff} %`, 700); return; }
   if (S.mode === 'erg') { S.ergW = clamp(S.ergW + dir * 10, 30, profile.maxW); sel.ergW = S.ergW; saveSel(); log('erg'); flash(S.ergW + ' W', 700); return; }
+  if (S.mode === 'hr') { sel.hrTarget = clamp((sel.hrTarget || 140) + dir * 2, 80, profile.hrMax - 5); saveSel(); updGear(); flash('Zielpuls ' + sel.hrTarget, 700); return; }
   if (S.mode === 'sim') { flash('Im Steigungsmodus gibt es keine virtuellen Gänge', 1200); return; }
   const g0 = S.gear; S.gear = clamp(S.gear + dir, 0, GEARS.length - 1); if (S.gear !== g0) log('gear'); sel.gear = S.gear; updGear(); sound.shift(dir > 0);
   flash((dir > 0 ? '▲ ' : '▼ ') + 'Gang ' + (S.gear + 1), 600);
@@ -265,10 +276,11 @@ function updGear() {
   const el = S.el;
   if (S.mode === 'erg') { $('#hGear', el).textContent = S.ergW; $('#hGearSub', el).textContent = 'W fix'; }
   else if (S.mode === 'sim') { $('#hGear', el).textContent = '–'; $('#hGearSub', el).textContent = 'Steigung'; }
+  else if (S.mode === 'hr') { $('#hGear', el).textContent = sel.hrTarget || 140; $('#hGearSub', el).textContent = 'Zielpuls · ' + Math.round(S.hrW || 0) + ' W'; }
   else { $('#hGear', el).textContent = S.gear + 1; $('#hGearSub', el).textContent = 'Gang · ' + GEARS[S.gear].toFixed(2).replace('.', ','); }
 }
-const MODES = { gear: 'Gänge', sim: 'Steigung', erg: 'ERG' };
-function cycleMode() { const k = Object.keys(MODES); S.mode = k[(k.indexOf(S.mode) + 1) % k.length]; sel.mode = S.mode; saveSel(); updMode(); trainer.last = ''; flash('Widerstand: ' + { gear: 'virtuelle Gänge', sim: 'Steigung an Trainer', erg: 'feste Wattzahl' }[S.mode]); }
+const MODES = { gear: 'Gänge', sim: 'Steigung', erg: 'ERG', hr: 'Puls' };
+function cycleMode() { const k = Object.keys(MODES); S.mode = k[(k.indexOf(S.mode) + 1) % k.length]; sel.mode = S.mode; saveSel(); updMode(); trainer.last = ''; flash('Widerstand: ' + { gear: 'virtuelle Gänge', sim: 'Steigung an Trainer', erg: 'feste Wattzahl', hr: 'Zielpuls, der Trainer regelt die Watt' }[S.mode]); }
 function updMode() { $('#tModeL', S.el).textContent = MODES[S.mode]; updGear(); }
 function toggleNpcs() {
   S.npcOn = !S.npcOn; sel.npcs = S.npcOn; saveSel();
@@ -413,12 +425,25 @@ function step(dt, first) {
   let target = null, wi = null;
   if (S.wo && S.state !== 'ready') {
     wi = woAt(S.wo, S.wT);
-    if (wi && !wi.done && wi.target != null) { target = wi.target * profile.ftp * (1 + S.wOff / 100); target = adaptTarget(target, wi, dt, cad, running); }
+    if (wi && !wi.done && wi.target != null) {
+      target = wi.target * profile.ftp * (1 + S.wOff / 100); target = adaptTarget(target, wi, dt, cad, running);
+      // Sanfter ERG-Einstieg: große Sprünge nach oben über 5 s hochfahren, damit die Beine nicht "stehen bleiben"
+      if (S.softSeg !== wi.i) { S.softSeg = wi.i; S.softFrom = S.lastTarget ?? null; }
+      const into = S.wT - wi.start;
+      if (profile.ergSoft !== false && S.softFrom != null && target - S.softFrom > profile.ftp * .15 && into < 5) target = S.softFrom + (target - S.softFrom) * smooth(0, 5, into);
+    }
   }
   let gearMode = false;
   if (target == null && S.mode === 'erg') target = S.ergW;
+  // Puls-Modus: Watt langsam so nachregeln, dass der Zielpuls gehalten wird
+  if (target == null && S.mode === 'hr') {
+    S.hrW ??= profile.ftp * .6; S.hrAcc = (S.hrAcc || 0) + dt;
+    const hr = live.heart;
+    if (hr && S.hrAcc >= 5 && running) { S.hrAcc = 0; S.hrW = clamp(S.hrW + clamp(((sel.hrTarget || 140) - hr) * .7, -12, 12), 40, Math.min(profile.maxW, profile.ftp * 1.1)); }
+    target = S.hrW;
+  }
   if (target == null && S.mode === 'gear') { gearMode = true; const gp = gearPower(cad, S.gear, grade * profile.gearDiff / 100) * (1 - S.draft * .8); S.curP += (gp - S.curP) * Math.min(1, dt * 2.5); target = S.curP; }
-  S.target = target; S.wi = wi;
+  S.target = target; S.wi = wi; if (target != null) S.lastTarget = target;
   // an Trainer senden (oder Demo)
   if (first && now - S.lastSend > 500 && S.state !== 'paused') {
     S.lastSend = now;
@@ -439,6 +464,12 @@ function step(dt, first) {
   S.v = integrate(S.v, pw, grade, dt, S.draft);
   const prev = S.dist;
   S.dist += S.v * dt; S.odo += S.v * dt; S.t += dt; S.kj += pw * dt / 1000;
+  if (S.ghost) {
+    const G = S.ghost.d, i = Math.min(G.length - 1, Math.floor(S.t)), j = Math.min(G.length - 1, i + 1), gd = G[i] + (G[j] - G[i]) * (S.t - Math.floor(S.t));
+    S.ghostGap = gd - S.odo; S.ghostPos = R.loop ? gd % R.total : Math.min(gd, R.total);
+    if (!S.ghostLead && S.ghostGap < -5 && S.t > 30) { S.ghostLead = true; flash('👻 Du liegst vor deiner Bestfahrt!', 2000); }
+    else if (S.ghostLead && S.ghostGap > 5) S.ghostLead = false;
+  }
   if (profile.drinkTips !== false && S.t > S.nextDrink) { S.nextDrink += 900; flash('💧 Kurz trinken', 2000); }
   if (S.wo) S.wT += dt;
   if (S.dist >= R.total) {
@@ -540,6 +571,23 @@ function hud() {
   if (S.pacer) { const gap = (S.pacer.d - S.dist); $('#hPacer', el).textContent = (gap >= 0 ? '+' : '−') + Math.abs(Math.round(gap)) + ' m'; }
   if (S.npcOn && (S.rlN = (S.rlN || 0) + 1) % 3 === 0) riderList(el);
   if ((S.lyN = (S.lyN || 0) + 1) % 5 === 0) arrange($('#rw', el));
+  // Zusatz-Widgets
+  if ($('.xlayer', el).childElementCount) {
+    const wi = S.wi, tgt = S.target, ftp = profile.ftp, hrv = live.heart;
+    const pz = Math.max(0, ZONES.findIndex(z => p3 / ftp < z.max)), hz = hrv ? HRZONES.findIndex(z => hrv / (profile.hrMax * .93) < z.max) : -1;
+    const tss = S.np.n ? Math.round(S.t * (np / ftp) ** 2 / 36) : 0, tot = S.wo ? woTotal(S.wo) : 0;
+    const gg = S.ghost ? S.ghostGap : null;
+    const vals = {
+      p3: [Math.round(p3) + ' W', zoneColor(p3 / ftp)], wkg: [f(p3 / profile.kg)], hr: [hrv ?? '–'], cad: [live.cadence != null ? Math.round(live.cadence) : '–'],
+      spd: [f(S.v * 3.6) + ' km/h'], dist: [f(S.odo / 1000, 2) + ' km'], time: [fmtT(S.t)], asc: [Math.round(S.asc) + ' m'], avg: [Math.round(avg) + ' W'], np: [Math.round(np) + ' W'],
+      kj: [Math.round(S.kj)], kcal: [Math.round(S.kj / .24 / 4.184)], grade: [f(g) + ' %'], target: [tgt != null && S.wo ? Math.round(tgt) + ' W' : '–', tgt ? zoneColor(tgt / ftp) : ''],
+      left: [wi && !wi.done ? fmtT(wi.left) : '–'], woLeft: [S.wo ? fmtT(Math.max(0, tot - S.wT)) : '–'], xp: ['+' + xp], clock: [new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })],
+      tss: [tss], ghost: [gg == null ? 'kein Geist' : (gg >= 0 ? '−' : '+') + Math.abs(Math.round(gg)) + ' m', gg == null ? '' : gg > 0 ? '#ff8b97' : '#4fd18b'],
+      hrz: [hz >= 0 ? HRZONES[hz].n : '–', hz >= 0 ? HRZONES[hz].c : ''], pz: [ZONES[pz].n.split(' ')[0], ZONES[pz].c],
+    };
+    const tail = (k, n) => S.samples.slice(-n).map(s => s[k]);
+    updateExtras($('#rw', el), vals, { gp: tail('p', 120), gh: tail('hr', 300), gc: tail('cad', 120) });
+  }
   drawElevStrip($('#elev', el));
   drawMini($('#mini', el));
 }

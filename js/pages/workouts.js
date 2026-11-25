@@ -8,14 +8,14 @@ import { addCustomPlan } from '../plans.js';
 export async function render(el) {
   const wos = await listWorkouts(), cats = [...new Set(wos.map(w => w.cat))];
   el.innerHTML = `
-  <section class="pagehead"><h1>Workouts</h1><label class="btn pri">Dateien importieren<input type="file" id="wFile" accept=".zwo,.erg,.mrc,.json,.zip,.xml,.txt" multiple hidden></label></section>
+  <section class="pagehead"><h1>Workouts</h1><span class="row"><a class="btn" href="#/editor">+ Neues Workout</a><label class="btn pri">Dateien importieren<input type="file" id="wFile" accept=".zwo,.erg,.mrc,.json,.zip,.xml,.txt" multiple hidden></label></span></section>
   <p class="muted">Import: Zwift-Workouts (.zwo), .erg und .mrc, VeloVerse-Dateien (.json) und ZIP-Archive mit solchen Dateien. Ziele werden aus deiner FTP von ${profile.ftp} W berechnet. Dateien auch per Drag & Drop auf diese Seite ziehen. Alles bleibt im Browser gespeichert. <a href="#/help">Anleitung</a></p>
   <div class="chips-row" id="cats"><button class="chipb on" data-c="">Alle</button>${cats.map(c => `<button class="chipb" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div>
   <div class="wgrid" id="wList">${wos.map(w => { const s = stats(w); return `
     <article class="wcard ${w.id === sel.workoutId ? 'on' : ''}" data-cat="${esc(w.cat)}" data-id="${esc(w.id)}">
       <div class="row between"><span class="tag">${esc(w.cat)}</span><span class="small muted num">${fmtDur(s.dur)} · TSS ${s.tss}</span></div>
       <h3>${esc(w.name)}</h3><canvas class="wc"></canvas><p class="small muted">${esc(w.desc || '')}</p>
-      <div class="row end"><button class="btn sm ghost" data-exp title="Als .zwo speichern">Export</button>${w.builtin ? '' : '<button class="btn sm ghost danger" data-del>Löschen</button>'}<button class="btn sm ${w.id === sel.workoutId ? '' : 'pri'}" data-sel>${w.id === sel.workoutId ? 'Ausgewählt' : 'Auswählen'}</button><button class="btn sm" data-go>Jetzt fahren</button></div>
+      <div class="row end"><a class="btn sm ghost" href="#/editor/${esc(w.id)}" title="${w.builtin ? 'Als Vorlage für ein eigenes Workout' : 'Bearbeiten'}">${w.builtin ? 'Anpassen' : 'Bearbeiten'}</a><button class="btn sm ghost" data-exp title="Als .zwo speichern">Export</button>${w.builtin ? '' : '<button class="btn sm ghost danger" data-del>Löschen</button>'}<button class="btn sm ${w.id === sel.workoutId ? '' : 'pri'}" data-sel>${w.id === sel.workoutId ? 'Ausgewählt' : 'Auswählen'}</button><button class="btn sm" data-go>Jetzt fahren</button></div>
     </article>`; }).join('')}</div>`;
   el.querySelectorAll('.wcard').forEach(c => drawWorkout(c.querySelector('canvas'), wos.find(w => w.id === c.dataset.id)));
   $('#cats', el).onclick = e => { const b = e.target.closest('[data-c]'); if (!b) return; for (const x of $('#cats', el).children) x.classList.toggle('on', x === b); el.querySelectorAll('.wcard').forEach(c => c.hidden = b.dataset.c && c.dataset.cat !== b.dataset.c); };

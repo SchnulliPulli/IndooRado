@@ -84,8 +84,10 @@ export const PLANS = PLAN_DEF.map(p => {
 export const CUSTOM = [];
 function registerCustom(c) {
   const weeks = [];
+  // Wochenaufteilung: feste Anzahl pro Woche oder (Plan-Editor) eigene Anzahl je Woche
+  const pos = []; if (c.weeksLayout) c.weeksLayout.forEach((cnt, wi) => { for (let n = 1; n <= cnt; n++) pos.push([wi + 1, n]); });
   c.wos.forEach((w, k) => {
-    const wk = Math.floor(k / c.perWeek) + 1, n = k % c.perWeek + 1, id = `p-${c.id}-${wk}-${n}`;
+    const [wk, n] = pos[k] || [Math.floor(k / c.perWeek) + 1, k % c.perWeek + 1], id = `p-${c.id}-${wk}-${n}`;
     const wo = { id, name: w.name, cat: 'Plan: ' + c.name, desc: w.desc || `${c.name}, Woche ${wk}, Einheit ${n}.`, segs: w.segs, builtin: true, planId: c.id, week: wk, n };
     EXTRA_W.set(id, wo); (weeks[wk - 1] = weeks[wk - 1] || []).push(wo);
   });
@@ -98,6 +100,17 @@ export async function addCustomPlan(name, perWeek, wos) {
   const c = { id: 'cp' + Date.now().toString(36), name: name || 'Eigener Plan', perWeek: Math.max(1, perWeek | 0), created: new Date().toISOString(), wos: wos.map(w => ({ name: w.name, desc: w.desc, segs: w.segs })) };
   list.push(c); await kv.set('customPlans', list); CUSTOM.push(registerCustom(c)); return c.id;
 }
+// Eigenen Plan neu anlegen oder überschreiben (Plan-Editor)
+export async function saveCustomPlan(c) {
+  const list = await kv.get('customPlans', []), i = list.findIndex(x => x.id === c.id);
+  const rec = { id: c.id || 'cp' + Date.now().toString(36), name: c.name || 'Eigener Plan', perWeek: Math.max(1, c.perWeek | 0), created: c.created || new Date().toISOString(), wos: c.wos.map(w => ({ name: w.name, desc: w.desc, segs: w.segs, src: w.src })), weeksLayout: c.weeksLayout };
+  if (i >= 0) list[i] = rec; else list.push(rec);
+  await kv.set('customPlans', list);
+  const j = CUSTOM.findIndex(p => p.id === rec.id), reg = registerCustom(rec);
+  if (j >= 0) CUSTOM[j] = reg; else CUSTOM.push(reg);
+  return rec.id;
+}
+export const customRecord = async id => (await kv.get('customPlans', [])).find(c => c.id === id);
 export async function deleteCustomPlan(id) {
   await kv.set('customPlans', (await kv.get('customPlans', [])).filter(c => c.id !== id));
   const i = CUSTOM.findIndex(p => p.id === id); if (i >= 0) CUSTOM.splice(i, 1);

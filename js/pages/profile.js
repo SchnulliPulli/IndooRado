@@ -4,7 +4,7 @@ import { profile, saveProfile, progress, levelOf } from '../state.js';
 import { UNLOCKS } from '../game.js';
 import { backup, restore, wipeAll, usage, persist } from '../db.js';
 import { autoQuality } from '../world.js';
-import { sync, saveSyncCfg, testConnection, pushNow, pullNow, dsmLogin, dsmLogout } from '../sync.js';
+import { sync, saveSyncCfg, testConnection, pushNow, pullNow, dsmLogin, dsmLogout, normalizeHost } from '../sync.js';
 import { sound } from '../sound.js';
 import { strava, connected as stravaConnected, setApp as setStravaApp, setAuto as setStravaAuto, authorize as stravaAuthorize, disconnect as stravaDisconnect } from '../strava.js';
 
@@ -61,6 +61,7 @@ function nasCard(box) {
         <li>Im selben Eintrag unter „Benutzerdefinierte Kopfzeile“ hinzufügen:<br><code>Access-Control-Allow-Origin</code> = <code>${esc(location.origin)}</code>${mode === 'webdav' ? '<br><code>Access-Control-Allow-Methods</code> = <code>GET, PUT, DELETE, MKCOL, PROPFIND, OPTIONS</code><br><code>Access-Control-Allow-Headers</code> = <code>Authorization, Content-Type, Depth</code>' : ''}</li>
         <li>${mode === 'dsm' ? 'Als NAS-Adresse dann <code>https://nas-api.deine-domain.de</code> eintragen. Als Ordner z. B. <code>/home/Drive/VeloVerse</code> (erscheint in Synology Drive unter „Meine Dateien“) oder einen freigegebenen Ordner wie <code>/Sport/VeloVerse</code>.' : 'Das Paket „WebDAV Server“ installieren und die Ordner-Adresse über den Reverse Proxy eintragen.'}</li>
         <li>Am besten ein eigenes DSM-Konto nur mit Zugriff auf diesen Ordner und auf File Station verwenden.</li>
+        <li><b>NAS hinter einem eigenen Server (VPS, Tunnel)</b>: Die Kopfzeile dann im Proxy auf dem VPS setzen statt in DSM, die NAS-Adresse ist die öffentliche Subdomain (Port 443).<br>nginx: <code>add_header Access-Control-Allow-Origin "${esc(location.origin)}" always;</code>${mode === 'webdav' ? ' <code>add_header Access-Control-Allow-Methods "GET, PUT, DELETE, MKCOL, PROPFIND, OPTIONS" always; add_header Access-Control-Allow-Headers "Authorization, Content-Type, Depth" always;</code>' : ''}<br>Caddy: <code>header Access-Control-Allow-Origin "${esc(location.origin)}"</code><br>Weiterleiten muss der Proxy dabei mindestens den Pfad <code>/webapi/</code> an DSM (Port 5001).</li>
       </ol>
     </details>`;
   const stat = () => { const s = box.querySelector('#nStat'); if (s) s.innerHTML = status(); };
@@ -73,7 +74,7 @@ function nasCard(box) {
   box.querySelector('#nLogout')?.addEventListener('click', async () => { await dsmLogout(); nasCard(box); toast('Abgemeldet'); });
   box.querySelector('#nLogin')?.addEventListener('click', async () => { if (await loginDialog()) { toast('Angemeldet, Verbindung klappt'); nasCard(box); pushNow().catch(() => { }); } });
   box.querySelector('#nSave')?.addEventListener('click', async () => {
-    const cfg = { mode: 'webdav', url: box.querySelector('#nUrl').value.trim(), user: box.querySelector('#nUser').value.trim(), pass: box.querySelector('#nPass').value, auto: box.querySelector('#nAuto').checked };
+    const cfg = { mode: 'webdav', url: normalizeHost(box.querySelector('#nUrl').value), user: box.querySelector('#nUser').value.trim(), pass: box.querySelector('#nPass').value, auto: box.querySelector('#nAuto').checked };
     if (!/^https?:\/\//.test(cfg.url)) { toast('Bitte eine vollständige Adresse mit https:// eingeben'); return; }
     if (location.protocol === 'https:' && cfg.url.startsWith('http:')) { toast('Die App läuft über https, das NAS muss auch über https erreichbar sein', 5000); return; }
     await saveSyncCfg(cfg); sync.error = null;
@@ -89,7 +90,7 @@ function loginDialog() {
     const w = document.createElement('div'); w.className = 'modal on';
     w.innerHTML = `<form class="card dlg form syno" autocomplete="on">
       <div class="syno-head"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><circle cx="7" cy="7.5" r="1"/><circle cx="7" cy="16.5" r="1"/></svg><div><h2 style="margin:0">Beim NAS anmelden</h2><div class="small muted">Synology DSM-Konto</div></div></div>
-      <label class="f">NAS-Adresse<input class="inp" name="host" type="url" required placeholder="https://nas-api.deine-domain.de" value="${esc(c.host || '')}"></label>
+      <label class="f">NAS-Adresse (HTTPS, Port 443)<input class="inp" name="host" type="text" inputmode="url" required placeholder="nas.deine-domain.de" value="${esc(c.host || '')}"></label>
       <label class="f">Ordner für VeloVerse<input class="inp" name="folder" required placeholder="/home/Drive/VeloVerse" value="${esc(c.folder || '/home/Drive/VeloVerse')}"></label>
       <label class="f">Benutzername<input class="inp" name="user" required autocomplete="username" value="${esc(c.user || '')}"></label>
       <label class="f">Passwort<input class="inp" name="pass" type="password" required autocomplete="current-password"></label>
@@ -107,7 +108,8 @@ function loginDialog() {
     f.onsubmit = async e => {
       e.preventDefault();
       const v = Object.fromEntries(new FormData(f)); v.remember = !!f.remember.checked; v.auto = !!f.auto.checked;
-      if (!/^https:\/\//.test(v.host) && location.protocol === 'https:') { msg.innerHTML = '<span style="color:#ff8b97">Die Adresse muss mit https:// beginnen.</span>'; return; }
+      if (location.protocol === 'https:') v.host = normalizeHost(v.host); f.host.value = v.host;
+
       msg.textContent = 'Anmelden …'; f.querySelector('[type=submit]').disabled = true;
       try { await dsmLogin(v); msg.textContent = 'Verbindung wird geprüft …'; await testConnection(); close(true); }
       catch (err) {
@@ -123,7 +125,7 @@ function loginDialog() {
 export async function render(el) {
   const u = await usage(), pers = await persist(), lv = levelOf(progress.xp).lv;
   el.innerHTML = `
-  <section class="pagehead"><h1>Profil</h1><a class="btn sm" href="#/help">Anleitung</a></section>
+  <section class="pagehead"><h1>Profil</h1><span class="row"><button class="btn sm" id="onbAgain">Einrichtung starten</button><a class="btn sm" href="#/help">Anleitung</a></span></section>
   <section class="grid2">
     <div class="card form"><h2>Fahrer</h2>
       ${F('name', 'Name', 'text', 'maxlength="30"')}
@@ -167,12 +169,14 @@ export async function render(el) {
       ${SW('tips', 'Tipps zu Kadenz und Fahrweise in Workouts anzeigen')}
       ${SW('drinkTips', 'Ans Trinken erinnern (alle 15 Minuten)')}
       ${SW('tripleSkip', 'Zwift Click: dreimal schnell Plus springt zum nächsten Intervall, dreimal Minus wiederholt es (am Anfang: eins zurück)')}
+      ${SW('ergSoft', 'Sanfter ERG-Einstieg: große Wattsprünge über 5 Sekunden hochfahren')}
     </div>
     <div class="card form" id="nasCard"></div>
   </section>
   <section class="card form" id="stravaCard"></section>`;
   nasCard($('#nasCard', el)); stravaCard($('#stravaCard', el));
-  for (const k of ['soundOn', 'tips', 'drinkTips', 'tripleSkip']) $('#' + k, el).onchange = e => { profile[k] = e.target.checked; saveProfile(); sound.apply(); };
+  $('#onbAgain', el).onclick = () => import('../onboard.js').then(m => m.onboarding(true));
+  for (const k of ['soundOn', 'tips', 'drinkTips', 'tripleSkip', 'ergSoft']) $('#' + k, el).onchange = e => { profile[k] = e.target.checked; saveProfile(); sound.apply(); };
   for (const k of ['volMaster', 'volAmb', 'volFx']) $('#' + k, el).oninput = e => { profile[k] = +e.target.value; $('#' + k + 'V', el).textContent = Math.round(profile[k] * 100) + ' %'; saveProfile(); sound.apply(); };
   $('#sndTest', el).onclick = () => { sound.unlock(); sound.fanfare(); };
   const num = ['ftp', 'kg', 'hrMax', 'bike', 'circ', 'maxW', 'shotEvery'];

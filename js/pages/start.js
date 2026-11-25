@@ -1,5 +1,5 @@
 // Startseite: Geräte, Fahrt einrichten, Fortschritt
-import { $, esc, fmtKm, fmtDur, bus } from '../util.js';
+import { $, esc, fmtKm, fmtDur, bus, clamp } from '../util.js';
 import { profile, sel, saveSel, progress, levelOf } from '../state.js';
 import { deviceCards, levelBar, rideRow, statTiles, ICON } from '../components.js';
 import { listRoutes, quickStats, THEMES } from '../routes.js';
@@ -74,12 +74,14 @@ export async function render(el) {
       </div>
       <div>
         <h3 class="sub">Widerstand bei freier Fahrt</h3>
-        <div class="seg" id="modeSeg">${[['gear', 'Virtuelle Gänge'], ['sim', 'Steigung'], ['erg', 'ERG fix']].map(([k, l]) => `<button data-m="${k}" aria-pressed="${sel.mode === k}">${l}</button>`).join('')}</div>
+        <div class="seg" id="modeSeg">${[['gear', 'Virtuelle Gänge'], ['sim', 'Steigung'], ['erg', 'ERG fix'], ['hr', 'Puls-Ziel']].map(([k, l]) => `<button data-m="${k}" aria-pressed="${sel.mode === k}">${l}</button>`).join('')}</div>
         <p class="small muted" id="modeTxt"></p>
+        <label class="f small" id="hrBox" ${sel.mode === 'hr' ? '' : 'hidden'}>Zielpuls (bpm)<input class="inp sm" id="hrT" type="number" min="80" max="200" value="${sel.hrTarget || Math.round(profile.hrMax * .72)}"></label>
         <h3 class="sub">Schrittmacher</h3>
         <div class="seg" id="pacerSeg">${[0, 2, 2.5, 3, 3.5, 4].map(v => `<button data-p="${v}" aria-pressed="${sel.pacer === v}">${v ? String(v).replace('.', ',') + ' W/kg' : 'Aus'}</button>`).join('')}</div>
         <div class="form" style="margin-top:12px">
           <label class="switch"><input type="checkbox" id="optNpc" ${sel.npcs !== false ? 'checked' : ''}><span></span> Mitfahrer auf der Strecke (Windschatten, Überholen)</label>
+          <label class="switch"><input type="checkbox" id="optGhost" ${sel.ghost !== false ? 'checked' : ''}><span></span> Gegen meine Bestfahrt auf dieser Strecke fahren (Geist)</label>
           <label class="switch"><input type="checkbox" id="optAdapt" ${sel.adaptive !== false ? 'checked' : ''}><span></span> Workouts adaptiv an Kadenz, Puls und Trainer anpassen</label>
         </div>
       </div>
@@ -101,8 +103,9 @@ export async function render(el) {
     if (b.dataset.plango) location.hash = '#/ride'; else render(el);
   });
   $('#routePick', el).onclick = e => { const b = e.target.closest('[data-rid]'); if (!b) return; sel.routeId = b.dataset.rid; saveSel(); for (const x of el.querySelectorAll('.rcard')) x.classList.toggle('on', x === b); };
-  const modeTxt = { gear: 'Wie draußen schalten: Trittfrequenz, Gang, Steigung und Gewicht bestimmen die Leistung, der Trainer stellt sie im ERG-Modus ein. Ideal mit Zwift Cog und Click.', sim: 'Die Steigung geht direkt an den Trainer (beim D100 bis etwa 6 %). Schalten nur mit echter Kassette.', erg: 'Feste Wattzahl, mit + und − in 10-W-Schritten verstellbar.' };
-  const updMode = () => { for (const b of $('#modeSeg', el).children) b.setAttribute('aria-pressed', String(b.dataset.m === sel.mode)); $('#modeTxt', el).textContent = modeTxt[sel.mode]; };
+  const modeTxt = { gear: 'Wie draußen schalten: Trittfrequenz, Gang, Steigung und Gewicht bestimmen die Leistung, der Trainer stellt sie im ERG-Modus ein. Ideal mit Zwift Cog und Click.', sim: 'Die Steigung geht direkt an den Trainer (beim D100 bis etwa 6 %). Schalten nur mit echter Kassette.', erg: 'Feste Wattzahl, mit + und − in 10-W-Schritten verstellbar.', hr: 'Du gibst einen Zielpuls vor, der Trainer regelt die Watt alle 5 Sekunden nach. Ideal für ruhige Grundlagenfahrten. Braucht einen Pulsgurt.' };
+  const updMode = () => { for (const b of $('#modeSeg', el).children) b.setAttribute('aria-pressed', String(b.dataset.m === sel.mode)); $('#modeTxt', el).textContent = modeTxt[sel.mode]; $('#hrBox', el).hidden = sel.mode !== 'hr'; };
+  $('#hrT', el).onchange = e => { sel.hrTarget = clamp(+e.target.value || 140, 80, 200); saveSel(); };
   updMode();
   $('#modeSeg', el).onclick = e => { const b = e.target.closest('[data-m]'); if (b) { sel.mode = b.dataset.m; saveSel(); updMode(); } };
   $('#pacerSeg', el).onclick = e => { const b = e.target.closest('[data-p]'); if (!b) return; sel.pacer = +b.dataset.p; saveSel(); for (const x of $('#pacerSeg', el).children) x.setAttribute('aria-pressed', String(x === b)); };
@@ -112,7 +115,8 @@ export async function render(el) {
     if (w) { drawWorkout(cv, w); const s = wStats(w); $('#woInfo', el).textContent = `${fmtDur(s.dur)} · TSS ${s.tss} · IF ${s.IF.toFixed(2).replace('.', ',')} · ${w.desc || ''}`; }
   };
   $('#optNpc', el).onchange = e => { sel.npcs = e.target.checked; saveSel(); };
-  $('#optAdapt', el).onchange = e => { sel.adaptive = e.target.checked; saveSel(); };
+  $('#optGhost', el).onchange = e => { sel.ghost = e.target.checked; saveSel(); };
+  $('#optAdapt', el).onchange =e => { sel.adaptive = e.target.checked; saveSel(); };
   $('#woSel', el).onchange =e => { sel.workoutId = e.target.value || null; saveSel(); updWo(); };
   updWo();
 }

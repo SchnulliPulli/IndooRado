@@ -11,7 +11,7 @@ import { loadStrava, handleRedirect } from './strava.js';
 const PAGES = {
   '': () => import('./pages/start.js'), ride: () => import('./pages/ride.js'), summary: () => import('./pages/summary.js'),
   workouts: () => import('./pages/workouts.js'), plans: () => import('./pages/plans.js'), routes: () => import('./pages/routes.js'), history: () => import('./pages/history.js'),
-  progress: () => import('./pages/progress.js'), profile: () => import('./pages/profile.js'), devices: () => import('./pages/devices.js'), help: () => import('./pages/help.js'),
+  progress: () => import('./pages/progress.js'), profile: () => import('./pages/profile.js'), devices: () => import('./pages/devices.js'), help: () => import('./pages/help.js'), editor: () => import('./pages/editor.js'), planner: () => import('./pages/planner.js'),
 };
 const NAV = [['', 'Start', 'home'], ['plans', 'Pläne', 'plan'], ['workouts', 'Workouts', 'workout'],['routes', 'Strecken', 'route'], ['history', 'Verlauf', 'history'], ['progress', 'Fortschritt', 'progress'], ['devices', 'Geräte', 'devices'], ['profile', 'Profil', 'profile'], ['help', 'Anleitung', 'help']];
 let current = null, currentKey = null;
@@ -73,6 +73,7 @@ async function init() {
   catch (e) { toast(e.message, 6000); }
   window.addEventListener('hashchange', route);
   await route();
+  import('./onboard.js').then(m => m.onboarding()).catch(e => console.error(e));
   reconnectKnown().catch(() => { });
   // NAS-Abgleich: neuerer Stand vom NAS wird übernommen, danach Seite neu aufbauen
   loadSync().then(autoSync).then(async pulled => {
