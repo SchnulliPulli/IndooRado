@@ -886,7 +886,7 @@ function drawElevStrip(cv) {
   if (!R.loop) { from = clamp(from, 0, Math.max(0, R.total - span)); to = from + span; }
   const n = 200, dist = [], ele = [];
   for (let i = 0; i <= n; i++) { const d = from + (to - from) * i / n; dist.push(d - from); ele.push(R.eleAt(d)); }
-  const res = profileChart(cv, dist, ele, { pos: S.dist - from, ghost: S.pacer ? clamp(S.pacer.d - from, 0, span) : null, top: 18 });
+  const res = profileChart(cv, dist, ele, { pos: S.dist - from, ghost: S.pacer ? clamp(S.pacer.d - from, 0, span) : null, top: clamp(cv.clientHeight * .24, 14, 40) }); // Platz für die mitwachsende Beschriftung
   // Tunnel, Orte und Mitfahrer im Profil markieren
   if (res) {
     const { w, h, d: dpr } = fitCanvas(cv), c = cv.getContext('2d'), X = v => v / span * w;

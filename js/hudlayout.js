@@ -34,7 +34,8 @@ const cls = () => (innerWidth <= 820 || innerHeight <= 560) ? 'small' : 'large';
 function lay() {
   const all = profile.hudLayout ||= {}; let L = all[cls()];
   if (L?.preset && PRESETS[L.preset]) { const P = PRESETS[L.preset]; L = all[cls()] = { w: JSON.parse(JSON.stringify(P.w)), extras: (P.extras || []).map((x, i) => ({ ...x, id: Date.now().toString(36) + i })), fit: L.fit }; saveProfile(); }
-  if (!L || !L.w) { const old = L || {}; L = all[cls()] = { w: {}, extras: [] }; for (const k in old) if (old[k]?.x != null) L.w[k] = old[k]; }
+  // Neues Gerät oder neuer Browser ohne gespeicherte Anordnung: automatisch anordnen und an die Fenstergröße anpassen
+  if (!L || !L.w) { const old = L || {}; L = all[cls()] = { w: {}, extras: [], fit: cls() === 'large' }; for (const k in old) if (old[k]?.x != null) L.w[k] = old[k]; }
   L.extras ||= []; return L;
 }
 // "An Fenstergröße anpassen": Werte-Widgets wachsen und schrumpfen mit dem Fenster (Bezug 1600 × 900 bzw. 900 × 560 auf kleinen Bildschirmen).
@@ -72,19 +73,23 @@ function ensureExtras(root) {
 }
 
 // Gespeicherte Anordnung anwenden (Positionen und Größen als Anteile der Fenstergröße)
+// Positionen gelten für das Seitenverhältnis, auf dem sie gespeichert wurden. Auf einem deutlich anderen Bildschirm
+// (z. B. Anordnung vom 16:9-Monitor, jetzt Tablet 4:3) ordnen sich die Widgets automatisch, Größen und Sichtbarkeit bleiben.
+const ar = () => innerWidth / innerHeight;
+export const posValid = L => !L.ar || Math.abs(L.ar - ar()) / L.ar < .18;
 export function applySaved(root) {
   applyTheme(root);
   ensureExtras(root);
-  const L = lay(), F = fitFactor();
+  const L = lay(), F = fitFactor(), usePos = posValid(L);
   for (const el of root.querySelectorAll('[data-drag]')) {
     const p = L.w[el.dataset.drag] || {};
     el.classList.toggle('w-hidden', !!p.hid);
     el.style.zoom = '';
     const z = kindOf(el) === 'zoom' ? (p.z || 1) * F : 1;
     el.style.scale = z !== 1 ? String(z) : ''; el.style.setProperty('--inv', String(1 / z));
-    if (kindOf(el) === 'size' && p.w) { el.style.width = p.w * innerWidth + 'px'; el.style.height = p.h * innerHeight + 'px'; }
-    else if (kindOf(el) === 'size' && p.x == null) { el.style.width = ''; el.style.height = ''; }
-    if (p.x != null) place(el, p.x * innerWidth, p.y * innerHeight); else unplace(el);
+    if (kindOf(el) === 'size' && p.w) { el.style.width = Math.min(p.w * innerWidth, innerWidth * .96) + 'px'; el.style.height = Math.min(p.h * innerHeight, innerHeight * .9) + 'px'; }
+    else if (kindOf(el) === 'size' && (p.x == null || !usePos)) { el.style.width = ''; el.style.height = ''; }
+    if (p.x != null && usePos) place(el, p.x * innerWidth, p.y * innerHeight); else unplace(el);
   }
   const tb = root.querySelector('.toolbar');
   if (tb) { tb.style.width = L.tbw ? Math.min(innerWidth - 24, L.tbw * innerWidth) + 'px' : ''; tb.style.maxWidth = L.tbw ? 'none' : ''; }
@@ -172,6 +177,9 @@ export function editMode(root, on, onDone) {
   };
   const save = (el) => {
     const q = el.getBoundingClientRect(), key = el.dataset.drag, p = L.w[key] ||= {};
+    // Beim ersten Verschieben auf einem Bildschirm mit anderem Seitenverhältnis: die übrigen (automatisch platzierten) Widgets an ihrer jetzigen Stelle festhalten
+    if (!posValid(L)) for (const o of root.querySelectorAll('[data-drag]')) { if (o === el || o.classList.contains('w-hidden') || !o.getClientRects().length) continue; const r = o.getBoundingClientRect(), po = L.w[o.dataset.drag] ||= {}; po.x = r.left / innerWidth; po.y = r.top / innerHeight; }
+    L.ar = Math.round(ar() * 100) / 100;
     p.x = q.left / innerWidth; p.y = q.top / innerHeight;
     if (kindOf(el) === 'size') { p.w = parseFloat(el.style.width) / innerWidth; p.h = parseFloat(el.style.height) / innerHeight; } else p.z = Math.round(scaleOf(el) / fitFactor() * 100) / 100;
     saveProfile();
@@ -298,22 +306,41 @@ function panel(root, bar, onDone) {
   bar.classList.toggle('collapsed', !!P.c);
   if (P.x != null) Object.assign(bar.style, { left: clampN(P.x, 0, innerWidth - 120) + 'px', top: clampN(P.y, 0, innerHeight - 48) + 'px', transform: 'none' });
   else Object.assign(bar.style, { left: '', top: '', transform: '' });
-  const op = Math.round((profile.hudOpacity ?? -1) * 100);
+  const op = Math.round((profile.hudOpacity ?? -1) * 100), tab = P.t || 'w';
+  const ICO = { top: '📊', wo: '🏋️', riders: '🚴', right: '⛰️', mini: '🗺️', elev: '📈', msg: '💬', ring: '⭕' };
   bar.innerHTML = `
-    <div class="edhead" title="Ziehen zum Verschieben"><span class="edgrip">⠿</span><b>Anzeige anordnen</b><span class="row"><button class="btn xs ghost" id="edMin" title="Einklappen">${P.c ? '▸' : '▾'}</button><button class="btn xs pri" id="edDone">Fertig</button></span></div>
+    <div class="edhead" title="Ziehen zum Verschieben"><span class="edgrip">⠿</span><b>Anzeige anordnen</b><span class="edscr muted small">${cls() === 'small' ? 'kleiner Bildschirm' : 'großer Bildschirm'}</span><span class="row"><button class="btn xs ghost" id="edMin" title="Einklappen">${P.c ? '▸' : '▾'}</button><button class="btn xs pri" id="edDone">Fertig</button></span></div>
     <div class="edbody">
-      <div class="small muted">Ziehen verschiebt. Größe: an jeder Kante oder Ecke ziehen, mit zwei Fingern auf dem Widget oder mit dem Mausrad. Antippen zeigt − / + zum Zoomen und ⟲ für die ursprüngliche Größe. Gilt für ${cls() === 'small' ? 'kleine' : 'große'} Bildschirme.</div>
-      <div class="edgrid">
-        <label class="f">Vorlage<select class="inp sm" id="edPreset"><option value="">– wählen –</option>${Object.entries(PRESETS).map(([k, v]) => `<option value="${k}">${v.n}</option>`).join('')}</select></label>
-        <label class="f">Stil<select class="inp sm" id="edStyle">${Object.entries(STYLES).map(([k, v]) => `<option value="${k}" ${(profile.hudStyle || 'dark') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
-      </div>
-      <div class="f small">Farbe<div class="swatches sm" id="edAcc">${ACCENTS.map(c => `<button style="background:${c}" data-c="${c}" aria-pressed="${(profile.hudAccent || '#ff6a3d') === c}" aria-label="Farbe ${c}"></button>`).join('')}<input type="color" id="edAccC" value="${profile.hudAccent || '#ff6a3d'}" title="Eigene Farbe"></div></div>
-      <label class="switch sm"><input type="checkbox" id="edFit" ${L.fit ? 'checked' : ''}><span></span> An Fenstergröße anpassen <span class="muted">(Widgets wachsen und schrumpfen mit dem Fenster${L.fit ? ', gerade ' + Math.round(fitFactor() * 100) + ' %' : ''})</span></label>
-      <div class="row"><button class="btn xs" id="edFitNow" title="Alle Widgets so verkleinern bzw. verschieben, dass nichts aus dem Fenster ragt">Alles ins Fenster holen</button></div>
-      <label class="f small">Deckkraft der Flächen: <b id="edOpV">${op < 0 ? 'Stil' : op + ' %'}</b><input type="range" id="edOp" min="0" max="100" step="5" value="${op < 0 ? 72 : op}"></label>
-      <div class="edlist">${Object.entries(names).map(([k, n]) => `<label class="switch sm"><input type="checkbox" data-w="${k}" ${L.w[k]?.hid ? '' : 'checked'}><span></span> ${esc(n || k)}${k.startsWith('x') ? ` <button class="btn xs ghost danger" data-delx="${k.slice(1)}" title="Entfernen">✕</button>` : ''}</label>`).join('')}</div>
-      <div class="row"><select class="inp sm" id="edAdd"><optgroup label="Wert">${Object.entries(METRICS).map(([k, v]) => `<option value="metric:${k}">${v}</option>`).join('')}</optgroup><optgroup label="Verlauf">${Object.entries(GRAPHS).map(([k, v]) => `<option value="graph:${k}">${v}</option>`).join('')}</optgroup></select><button class="btn sm" id="edAddBtn">+ Widget</button><button class="btn sm ghost" id="edReset">Zurücksetzen</button></div>
+      <div class="seg sm edtabs" id="edTabs">${[['w', 'Widgets'], ['a', 'Aussehen'], ['h', 'Hilfe']].map(([k, l]) => `<button data-t="${k}" aria-pressed="${tab === k}">${l}</button>`).join('')}</div>
+      <section class="edsec" data-tab="w" ${tab === 'w' ? '' : 'hidden'}>
+        <h4>Vorlage</h4>
+        <div class="edchips" id="edPreset">${Object.entries(PRESETS).map(([k, v]) => `<button class="chipb" data-p="${k}">${v.n}</button>`).join('')}</div>
+        <h4>Sichtbare Widgets</h4>
+        <div class="edwgrid edlist">${Object.entries(names).map(([k, n]) => `<label class="edw ${L.w[k]?.hid ? '' : 'on'}"><input type="checkbox" data-w="${k}" ${L.w[k]?.hid ? '' : 'checked'}><span class="edwi">${ICO[k] || (k.startsWith('x') ? '➕' : '▫️')}</span><span class="edwn">${esc(n || k)}</span>${k.startsWith('x') ? `<button class="btn xs ghost danger" data-delx="${k.slice(1)}" title="Entfernen">✕</button>` : ''}</label>`).join('')}</div>
+        <h4>Widget hinzufügen</h4>
+        <div class="row edadd"><select class="inp sm" id="edAdd"><optgroup label="Wert">${Object.entries(METRICS).map(([k, v]) => `<option value="metric:${k}">${v}</option>`).join('')}</optgroup><optgroup label="Verlauf">${Object.entries(GRAPHS).map(([k, v]) => `<option value="graph:${k}">${v}</option>`).join('')}</optgroup></select><button class="btn sm" id="edAddBtn">+ Hinzufügen</button></div>
+      </section>
+      <section class="edsec" data-tab="a" ${tab === 'a' ? '' : 'hidden'}>
+        <h4>Stil</h4>
+        <div class="edchips" id="edStyle">${Object.entries(STYLES).map(([k, v]) => `<button class="chipb" data-s="${k}" aria-pressed="${(profile.hudStyle || 'dark') === k}">${v}</button>`).join('')}</div>
+        <h4>Akzentfarbe</h4>
+        <div class="swatches sm" id="edAcc">${ACCENTS.map(c => `<button style="background:${c}" data-c="${c}" aria-pressed="${(profile.hudAccent || '#ff6a3d') === c}" aria-label="Farbe ${c}"></button>`).join('')}<input type="color" id="edAccC" value="${profile.hudAccent || '#ff6a3d'}" title="Eigene Farbe"></div>
+        <h4>Deckkraft der Flächen <b id="edOpV" class="num">${op < 0 ? 'wie Stil' : op + ' %'}</b></h4>
+        <input type="range" id="edOp" min="0" max="100" step="5" value="${op < 0 ? 72 : op}">
+        <label class="switch sm"><input type="checkbox" id="edFit" ${L.fit ? 'checked' : ''}><span></span><div class="swt">An Fenstergröße anpassen<small class="muted">Widgets wachsen und schrumpfen mit dem Fenster${L.fit ? ' (gerade ' + Math.round(fitFactor() * 100) + ' %)' : ''}</small></div></label>
+      </section>
+      <section class="edsec small" data-tab="h" ${tab === 'h' ? '' : 'hidden'}>
+        <ul class="edhelp">
+          <li><b>Verschieben:</b> Widget ziehen.</li>
+          <li><b>Größe:</b> an einer Kante oder Ecke ziehen, mit zwei Fingern auf dem Widget oder mit dem Mausrad.</li>
+          <li><b>Antippen:</b> zeigt − / + zum Zoomen und ⟲ für die ursprüngliche Größe.</li>
+          <li><b>Dieses Fenster:</b> an der Kopfzeile verschieben oder mit ▾ einklappen.</li>
+          <li>Die Anordnung gilt für ${cls() === 'small' ? 'kleine' : 'große'} Bildschirme. Auf Geräten mit anderem Seitenverhältnis ordnen sich die Widgets automatisch.</li>
+        </ul>
+      </section>
+      <div class="row edfoot"><button class="btn sm" id="edFitNow" title="Alle Widgets so verkleinern bzw. verschieben, dass nichts aus dem Fenster ragt">Alles ins Fenster holen</button><button class="btn sm ghost danger" id="edReset">Zurücksetzen</button></div>
     </div>`;
+  bar.querySelector('#edTabs').onclick = e => { const b = e.target.closest('[data-t]'); if (!b) return; P.t = b.dataset.t; saveProfile(); for (const x of bar.querySelectorAll('#edTabs [data-t]')) x.setAttribute('aria-pressed', String(x === b)); for (const sct of bar.querySelectorAll('.edsec')) sct.hidden = sct.dataset.tab !== P.t; };
   const refresh = () => { applySaved(root); editMode(root, true, onDone); };
   const reset = () => root.querySelectorAll('[data-drag]').forEach(el => { el.style.scale = ''; el.style.width = ''; el.style.height = ''; unplace(el); });
   bar.querySelector('#edDone').onclick = () => { editMode(root, false); onDone?.(); };
@@ -321,17 +348,17 @@ function panel(root, bar, onDone) {
   bar.querySelector('#edReset').onclick = () => { profile.hudLayout[cls()] = { w: {}, extras: [], fit: L.fit }; saveProfile(); reset(); refresh(); };
   bar.querySelector('#edFit').onchange = e => { L.fit = e.target.checked; saveProfile(); refresh(); root.dispatchEvent(new Event('hudresize')); };
   bar.querySelector('#edFitNow').onclick = () => { fitInside(root); refresh(); root.dispatchEvent(new Event('hudresize')); };
-  bar.querySelector('#edStyle').onchange = e => { profile.hudStyle = e.target.value; saveProfile(); applyTheme(root); root.dispatchEvent(new Event('hudresize')); };
+  bar.querySelector('#edStyle').onclick = e => { const b = e.target.closest('[data-s]'); if (!b) return; profile.hudStyle = b.dataset.s; saveProfile(); applyTheme(root); for (const x of bar.querySelectorAll('#edStyle [data-s]')) x.setAttribute('aria-pressed', String(x === b)); root.dispatchEvent(new Event('hudresize')); };
   const setAcc = c => { profile.hudAccent = c; saveProfile(); applyTheme(root); for (const b of bar.querySelectorAll('#edAcc [data-c]')) b.setAttribute('aria-pressed', String(b.dataset.c === c)); };
   bar.querySelector('#edAcc').onclick = e => { const b = e.target.closest('[data-c]'); if (b) setAcc(b.dataset.c); };
   bar.querySelector('#edAccC').oninput = e => setAcc(e.target.value);
   bar.querySelector('#edOp').oninput = e => { profile.hudOpacity = +e.target.value / 100; saveProfile(); applyTheme(root); bar.querySelector('#edOpV').textContent = e.target.value + ' %'; };
-  bar.querySelector('#edPreset').onchange = e => {
-    const Pr = PRESETS[e.target.value]; if (!Pr) return;
+  bar.querySelector('#edPreset').onclick = e => {
+    const b = e.target.closest('[data-p]'), Pr = b && PRESETS[b.dataset.p]; if (!Pr) return;
     profile.hudLayout[cls()] = { w: JSON.parse(JSON.stringify(Pr.w)), extras: (Pr.extras || []).map((x, i) => ({ ...x, id: Date.now().toString(36) + i })), fit: L.fit };
     saveProfile(); reset(); refresh();
   };
-  bar.querySelector('.edlist').onchange = e => { const k = e.target.dataset.w; if (!k) return; (L.w[k] ||= {}).hid = e.target.checked ? 0 : 1; saveProfile(); root.querySelector(`[data-drag="${k}"]`)?.classList.toggle('w-hidden', !e.target.checked); };
+  bar.querySelector('.edlist').onchange = e => { const k = e.target.dataset.w; if (!k) return; (L.w[k] ||= {}).hid = e.target.checked ? 0 : 1; saveProfile(); e.target.closest('.edw')?.classList.toggle('on', e.target.checked); root.querySelector(`[data-drag="${k}"]`)?.classList.toggle('w-hidden', !e.target.checked); };
   bar.querySelector('.edlist').onclick = e => { const b = e.target.closest('[data-delx]'); if (!b) return; e.preventDefault(); L.extras = L.extras.filter(x => x.id !== b.dataset.delx); delete L.w['x' + b.dataset.delx]; saveProfile(); refresh(); };
   bar.querySelector('#edAddBtn').onclick = () => { const [type, metric] = bar.querySelector('#edAdd').value.split(':'); L.extras.push({ id: Date.now().toString(36), type, metric }); saveProfile(); refresh(); };
   // Fenster an der Kopfzeile ziehen
