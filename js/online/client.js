@@ -162,6 +162,15 @@ export async function diagnose(onStep) {
   await step('Zugang (has_access)', async () => { const { data, error } = await sb.rpc('has_access'); if (error) throw error; return data ? 'ja' : 'nein'; });
   await step('Admin (is_admin, braucht 2FA)', async () => { const { data, error } = await sb.rpc('is_admin'); if (error) throw error; return data ? 'ja' : 'nein'; });
   await step('Speicher (Ordner lesen)', async () => { const { data, error } = await sb.storage.from('vault').list(online.user.id, { limit: 5 }); if (error) throw error; return data.length + ' Einträge'; });
+  await step('Live-Dienst: Verbindung öffnen', () => new Promise((res, rej) => {
+    const rt = sb.realtime; let done = false; const fin = (ok, m) => { if (done) return; done = true; ok ? res(m) : rej(new Error(m)); };
+    if (rt.isConnected?.()) return fin(true, 'schon verbunden');
+    rt.onOpen?.(() => fin(true, 'verbunden'));
+    rt.onClose?.(ev => fin(false, `geschlossen (Code ${ev?.code ?? '?'}${ev?.reason ? ', ' + ev.reason : ''})`));
+    rt.onError?.(ev => fin(false, 'Fehler: ' + (ev?.message || ev?.type || 'WebSocket-Fehler')));
+    try { rt.connect(); } catch (e) { fin(false, e.message); }
+    setTimeout(() => fin(false, 'keine Antwort nach 8 s'), 8000);
+  }));
   await step('Live-Dienst erreichbar (öffentlicher Testkanal)', () => new Promise((res, rej) => { const ch = sb.channel('diag-public-' + Math.random().toString(36).slice(2, 6)); ch.subscribe((st, err) => { if (st === 'SUBSCRIBED') { ch.unsubscribe(); res('verbunden'); } else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') { ch.unsubscribe(); rej(new Error(st + (err?.message ? ': ' + err.message : '') + ' (bei ausgeschaltetem „Allow public access“ ist ❌ hier normal)')); } }); }));
   await step('Anmeldeschlüssel an Live-Dienst', async () => (await realtimeAuth()) ? 'gesetzt' : 'keine Sitzung');
   await step('Live-Kanal (Strecke)', () => new Promise((res, rej) => { const ch = sb.channel('ride:diagnose', { config: { private: true } }); ch.subscribe((st, err) => { if (st === 'SUBSCRIBED') { ch.unsubscribe(); res('verbunden'); } else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') { ch.unsubscribe(); rej(new Error(st + (err?.message ? ': ' + err.message : ''))); } }); }));

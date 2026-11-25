@@ -58,14 +58,14 @@ function nav() {
   const lb = document.createElement('a'); lb.className = 'btn sm loginbtn'; lb.href = '#/account'; lb.hidden = true;
   document.querySelector('.ridebtn').before(lb);
   const loginUpd = async () => {
-    const O = await import('./online/client.js');
+    const O = await import('./online/client.js'); lb.__O = O;
     if (!O.configured()) { lb.hidden = true; return; }
     lb.hidden = false;
     if (O.loggedIn()) {
       const n = O.online.profile?.display_name || 'Konto', mfa = O.needsMfa();
-      lb.className = 'loginbtn in'; lb.title = 'Angemeldet als ' + n + (mfa ? ' (2FA-Code fehlt noch)' : ''); lb.href = '#/account';
+      lb.className = 'loginbtn in'; lb.title = 'Angemeldet als ' + n + (mfa ? ' (2FA-Code fehlt noch)' : ''); lb.removeAttribute('href'); lb.setAttribute('role', 'button'); lb.tabIndex = 0;
       lb.innerHTML = `${avatarSvg(profile, 34)}${mfa ? '<i class="lbdot" title="2FA-Code fehlt"></i>' : ''}`;
-    } else { lb.className = 'btn sm loginbtn'; lb.title = 'Anmelden oder registrieren'; lb.href = '#/account'; lb.innerHTML = ICON.profile + '<span>Anmelden</span>'; }
+    } else { lb.className = 'btn sm loginbtn'; lb.title = 'Anmelden oder registrieren'; lb.href = '#/account'; lb.removeAttribute('role'); lb.innerHTML = ICON.profile + '<span>Anmelden</span>'; }
   };
   bus.on('online', loginUpd); bus.on('profile', loginUpd); window.__loginUpd = loginUpd;
   // Wie viele andere sind online? (nur angemeldet)
@@ -73,8 +73,8 @@ function nav() {
   bus.on('presence', async () => { const PR = await import('./online/presence.js'); const n = PR.P.peers.size; oc.hidden = !PR.P.ready; oc.innerHTML = `<i class="odot"></i><b>${n}</b>`; oc.title = n === 1 ? '1 anderer Spieler online' : n + ' andere Spieler online'; });
   // Angemeldet: Klick auf den Avatar öffnet ein kleines Menü
   const um = document.createElement('div'); um.className = 'usermenu'; um.hidden = true; document.body.appendChild(um);
-  lb.addEventListener('click', async e => {
-    const O = await import('./online/client.js'); if (!O.loggedIn()) return;
+  lb.addEventListener('click', e => {
+    const O = lb.__O; if (!O?.loggedIn()) return; // abgemeldet: normaler Link zum Konto
     e.preventDefault(); if (!um.hidden) { um.hidden = true; return; }
     const n = (O.online.profile?.display_name || 'Fahrer').replace(/</g, '&lt;'), mail = (O.online.user?.email || '').replace(/</g, '&lt;');
     um.innerHTML = `<div class="umhead">${avatarSvg(profile, 44)}<div><b>${n}</b><small>${mail}</small></div></div><a href="#/account">👤 Konto und Datenschutz</a><a href="#/avatar">🎨 Avatar gestalten</a>${O.isAdmin() ? '<a href="#/admin">🛠️ Admin-Konsole</a>' : ''}<button data-um-out>↩︎ Abmelden</button>`;
@@ -83,6 +83,7 @@ function nav() {
   um.addEventListener('click', async e => { if (e.target.closest('[data-um-out]')) { const O = await import('./online/client.js'); await O.signOut(); toast('Abgemeldet'); loginUpd(); if (currentKey === 'account') route(); } um.hidden = true; });
   document.addEventListener('click', e => { if (!e.target.closest('.usermenu,.loginbtn')) um.hidden = true; });
   addEventListener('hashchange', () => um.hidden = true);
+  lb.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && lb.__O?.loggedIn()) { e.preventDefault(); lb.click(); } });
   // Handy: Sensoren, Cloud und Vollbild in einem Status-Knopf mit Ausklappmenü bündeln
   const box = document.createElement('div'); box.className = 'tbx'; box.id = 'tbx';
   $('#chips').before(box); box.append($('#chips'), cc, fs);
