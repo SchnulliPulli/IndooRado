@@ -4,9 +4,10 @@ import { $, esc, toast, dialog, fmtDate } from '../util.js';
 import * as O from '../online/client.js';
 
 export async function render(el) {
+  const tok = window.__routeTok, gone = () => tok !== window.__routeTok;
   await O.loadSiteConfig();
   if (!O.configured()) { location.hash = '#/account'; return; }
-  if (!O.online.ready) await O.initOnline().catch(() => { });
+  if (!O.online.ready) await O.initOnline().catch(() => { }); if (gone()) return;
   if (!O.loggedIn() || !O.isAdmin()) { el.innerHTML = '<section class="card"><h2>Kein Zugriff</h2><p class="muted">Nur für Administratoren.</p><a class="btn" href="#/account">Zum Konto</a></section>'; return; }
   if (O.online.aal?.currentLevel !== 'aal2') { el.innerHTML = '<section class="card"><h2>2FA erforderlich</h2><p class="muted">Admin-Funktionen sind nur mit bestätigter Zwei-Faktor-Anmeldung nutzbar.</p><a class="btn pri" href="#/account">2FA einrichten oder bestätigen</a></section>'; return; }
   const sb = await O.client();

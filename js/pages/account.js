@@ -20,10 +20,12 @@ const loading = (el, txt = 'Konto wird geladen …') => { if (!el.querySelector(
 let lastKey = '';
 export async function render(el) {
   off?.(); off = null;
+  const tok = window.__routeTok, gone = () => tok !== window.__routeTok;
   if (!el.firstElementChild || el.querySelector('.pageload')) loading(el);
-  await O.loadSiteConfig();
+  await O.loadSiteConfig(); if (gone()) return;
   if (!O.configured()) return renderSetup(el);
   try { if (!O.online.ready) { loading(el, 'Verbinde …'); await O.initOnline(); } } catch (e) { el.innerHTML = `<section class="card"><h2>Verbindung fehlgeschlagen</h2><p class="muted">${esc(e.message)}</p></section>`; return; }
+  if (gone()) return;
   lastKey = stateKey();
   off = bus.on('online', () => { if (document.body.contains(el) && stateKey() !== lastKey) render(el); });
   if (O.online.recovery && O.loggedIn()) return renderNewPassword(el);
@@ -204,9 +206,11 @@ async function renderMfaChallenge(el) {
 
 /* ---------- Angemeldet ---------- */
 async function renderAccount(el) {
+  const tok = window.__routeTok;
   loading(el);
   // alles parallel laden, die 2FA-Liste kurz zwischenspeichern
   const [factors, S, OS] = await Promise.all([O.mfaFactorsCached().catch(() => []), import('../sync.js'), import('../online/sync.js'), O.refreshProfile().catch(() => { })]);
+  if (tok !== window.__routeTok) return;
   document.body.classList.toggle('is-admin', O.isAdmin() && !O.needsMfa());
   const u = O.online.user, p = O.online.profile || {}, verified = factors.filter(f => f.status === 'verified'), stale = factors.filter(f => f.status !== 'verified');
   const P = await OS.prefs(), lv = levelOf(progress.xp).lv;

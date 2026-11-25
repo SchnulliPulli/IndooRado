@@ -10,11 +10,12 @@ let off = [], tick = null;
 export function leave() { off.forEach(f => f()); off = []; clearInterval(tick); }
 
 async function gate(el) {
-  await O.loadSiteConfig();
+  const tok = window.__routeTok, gone = () => tok !== window.__routeTok;
+  await O.loadSiteConfig(); if (gone()) return false;
   if (!O.configured()) { el.innerHTML = '<section class="pagehead"><h1>Online</h1></section><section class="card"><p class="muted">VeloVerse Online ist nicht eingerichtet.</p><a class="btn" href="#/account">Zum Konto</a></section>'; return false; }
-  if (!O.online.ready) await O.initOnline().catch(() => { });
+  if (!O.online.ready) await O.initOnline().catch(() => { }); if (gone()) return false;
   if (!O.loggedIn()) { el.innerHTML = '<section class="pagehead"><h1>Online</h1></section><section class="card form"><h2>Mit anderen fahren</h2><p class="muted">Melde dich an, um zu sehen, wer gerade online ist, Gruppenfahrten zu starten und live mit anderen zu fahren.</p><div class="row"><a class="btn pri" href="#/account">Anmelden oder registrieren</a></div></section>'; return false; }
-  await O.refreshProfile().catch(() => { }); // Rolle und Freischaltung frisch vom Server (z. B. nach Änderung im Dashboard)
+  await O.refreshProfile().catch(() => { }); if (gone()) return false; // Rolle und Freischaltung frisch vom Server (z. B. nach Änderung im Dashboard)
   document.body.classList.toggle('is-admin', O.isAdmin() && !O.needsMfa());
   const A = O.access();
   if (!A.ok) {
@@ -22,7 +23,7 @@ async function gate(el) {
     el.innerHTML = `<section class="pagehead"><h1>Online</h1></section><section class="card accbox bad"><b>⏳ Kein Online-Zugang</b><p class="small muted">${why}</p><div class="row"><a class="btn sm" href="#/account">Zum Konto (dort: Verbindungstest)</a><button class="btn sm ghost" id="oRetry">Erneut prüfen</button></div>${O.online.profileError ? `<p class="small" style="color:var(--hr)">Fehler beim Laden des Profils: ${esc(O.online.profileError)}</p>` : ''}</section>`;
     el.querySelector('#oRetry').onclick = () => render(el, []); return false;
   }
-  await PR.joinPresence();
+  await PR.joinPresence(); if (gone()) return false;
   return true;
 }
 const who = (m, extra = '') => `<span class="who">${avatarSvg(m.look || {}, 34)}<span><b>${esc(m.name)}</b>${extra}</span></span>`;
@@ -36,7 +37,7 @@ export async function render(el, params = []) {
 }
 
 async function lobby(el) {
-  const routes = await listRoutes();
+  const tok = window.__routeTok; const routes = await listRoutes(); if (tok !== window.__routeTok) return;
   el.innerHTML = `
   <section class="pagehead"><h1>Lobby</h1><span class="small muted" id="lbOnline"></span></section>
   <section class="grid2">

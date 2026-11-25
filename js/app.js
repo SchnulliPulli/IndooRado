@@ -118,6 +118,7 @@ async function route() {
   const sub = $('#subnav');
   sub.hidden = !grp?.tabs || k === 'ride';
   sub.innerHTML = grp?.tabs ? grp.tabs.map(([t, l]) => `<a href="#/${t}" class="${t === k ? 'on' : ''}${t === 'admin' ? ' admintab' : ''}">${l}</a>`).join('') : '';
+  window.__routeTok = (window.__routeTok || 0) + 1; // langsame Seiten prüfen damit, ob sie noch angezeigt werden sollen
   const el = $('#view'); el.innerHTML = '<div class="pageload"><div class="spinner"></div></div>';
   el.onclick = el.onchange = el.oninput = el.ondragover = el.ondrop = null;
   window.scrollTo(0, 0);
