@@ -1,0 +1,169 @@
+// VeloVerse Online: Verbindung zu Supabase (Login, Profil, 2FA). Ohne Konfiguration bleibt alles aus und die App läuft rein lokal.
+// Die Supabase-Bibliothek wird erst geladen, wenn Online wirklich genutzt wird.
+import { bus } from '../util.js';
+import { CONFIG } from './config.js';
+
+const LS = 'vvOnline';
+export const online = { client: null, session: null, user: null, profile: null, aal: null, ready: false };
+
+// Reihenfolge: online.json neben der App (Server-Version) > Eintrag im Browser > config.js
+// So bleibt eine Codebasis: ohne online.json (z. B. GitHub Pages) ist die App rein lokal, mit online.json auf dem Webserver online.
+let site = null;
+export async function loadSiteConfig() {
+  if (site) return site;
+  try { const r = await fetch('online.json', { cache: 'no-cache' }); site = r.ok ? await r.json() : {}; } catch (e) { site = {}; }
+  return site;
+}
+export function config() {
+  let o = {}; try { o = JSON.parse(localStorage.getItem(LS) || '{}'); } catch (e) { }
+  const s = site || {};
+  return { url: s.url || o.url || CONFIG.url, anonKey: s.anonKey || o.anonKey || CONFIG.anonKey, providers: s.providers || CONFIG.providers, site: !!s.url };
+}
+export function setConfig(url, anonKey) { localStorage.setItem(LS, JSON.stringify({ url: url.trim().replace(/\/$/, ''), anonKey: anonKey.trim() })); online.client = null; }
+export const configured = () => { const c = config(); return !!(c.url && c.anonKey); };
+
+// "Angemeldet bleiben": Sitzung in localStorage (bleibt, bis du dich abmeldest; das Token wird automatisch erneuert),
+// sonst in sessionStorage (endet, wenn der Tab bzw. Browser geschlossen wird)
+export const remember = () => localStorage.getItem('vvRemember') !== '0';
+export function setRemember(on) {
+  localStorage.setItem('vvRemember', on ? '1' : '0');
+  // vorhandene Sitzung in den passenden Speicher umziehen
+  const [from, to] = on ? [sessionStorage, localStorage] : [localStorage, sessionStorage];
+  for (const k of Object.keys(from)) if (k.startsWith('vv-auth')) { to.setItem(k, from.getItem(k)); from.removeItem(k); }
+}
+const authStore = {
+  getItem: k => (remember() ? localStorage : sessionStorage).getItem(k) ?? sessionStorage.getItem(k) ?? localStorage.getItem(k),
+  setItem: (k, v) => { (remember() ? localStorage : sessionStorage).setItem(k, v); (remember() ? sessionStorage : localStorage).removeItem(k); },
+  removeItem: k => { localStorage.removeItem(k); sessionStorage.removeItem(k); },
+};
+// Sperre nur innerhalb dieses Tabs statt navigator.locks: die browserweite Sperre bleibt bekanntermaßen manchmal hängen
+// (Tab im Hintergrund, mehrere Tabs), dann wartet jede Anfrage ewig. Notfalls geht es nach 5 s ohne Sperre weiter.
+let lockChain = Promise.resolve();
+async function tabLock(name, timeout, fn) {
+  const prev = lockChain; let release; lockChain = new Promise(r => release = r);
+  try { await Promise.race([prev, new Promise(r => setTimeout(r, 5000))]); return await fn(); } finally { release(); }
+}
+// Live-Dienst braucht den Anmelde-Schlüssel für private Kanäle
+export async function realtimeAuth() { const sb = await client(); const { data } = await sb.auth.getSession(); if (data.session) await sb.realtime.setAuth(data.session.access_token); return !!data.session; }
+export async function client() {
+  if (online.client) return online.client;
+  if (!configured()) throw new Error('VeloVerse Online ist nicht eingerichtet');
+  const { createClient } = await import('../../vendor/supabase.esm.js');
+  const c = config();
+  online.client = createClient(c.url, c.anonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: loginReturn(), flowType: 'pkce', storageKey: 'vv-auth', storage: authStore, lock: tabLock } });
+  // Laut Supabase-Doku keine Supabase-Aufrufe direkt im Callback (kann blockieren): erst danach ausführen
+  online.client.auth.onAuthStateChange((ev, session) => {
+    if (ev === 'PASSWORD_RECOVERY') online.recovery = true;
+    const was = online.user?.id; online.session = session; online.user = session?.user || null;
+    // Gleicher Nutzer (Token erneuert, 2FA in einem anderen Tab bestätigt): nur den 2FA-Status neu lesen, das ist lokal und schnell
+    if (ev === 'TOKEN_REFRESHED' || ev === 'MFA_CHALLENGE_VERIFIED' || (ev === 'SIGNED_IN' && was === online.user?.id && online.profile)) {
+      setTimeout(async () => { try { online.aal = (await online.client.auth.mfa.getAuthenticatorAssuranceLevel()).data; } catch (e) { } bus.emit('online', ev); }); return;
+    }
+    setTimeout(() => refresh().catch(() => { }).finally(() => bus.emit('online', ev)), 0);
+  });
+  addEventListener('storage', e => { if (e.key === 'vv-auth' && online.client) setTimeout(async () => { try { const { data } = await online.client.auth.getSession(); const was = online.user?.id; online.session = data.session; online.user = data.session?.user || null; if (online.user?.id !== was) await refresh(); else online.aal = (await online.client.auth.mfa.getAuthenticatorAssuranceLevel()).data; bus.emit('online', 'storage'); } catch (er) { } }); });
+  return online.client;
+}
+// Beim App-Start: Sitzung wiederherstellen (auch nach OAuth-Rückkehr mit ?code=...)
+// Ohne gespeicherte Anmeldung und ohne Rückkehr vom Login wird Supabase gar nicht erst kontaktiert (keine Datenflüsse ohne Login)
+const loginReturn = () => expectingReturn() && new URLSearchParams(location.search).has('code');
+export const hasStoredSession = () => [localStorage, sessionStorage].some(s => { try { return !!s.getItem('vv-auth'); } catch (e) { return false; } });
+export async function initOnline() {
+  await loadSiteConfig();
+  if (!configured() || (!hasStoredSession() && !loginReturn())) { online.ready = true; online.user = null; online.session = null; return null; }
+  const sb = await client();
+  const { data } = await withTimeout(sb.auth.getSession(), 8000, 'Anmeldung');
+  if (expectingReturn() && new URLSearchParams(location.search).has('code')) { localStorage.removeItem('vvOnlineReturn'); history.replaceState(null, '', location.pathname + (location.hash || '#/account')); }
+  online.session = data.session; online.user = data.session?.user || null;
+  await refresh(); online.ready = true; bus.emit('online', 'init');
+  return online.user;
+}
+export const refreshProfile = () => refresh();
+// Nichts darf die Oberfläche ewig blockieren: Serveraufrufe mit Zeitlimit
+export const withTimeout = (p, ms = 8000, what = 'Server') => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(what + ' antwortet nicht (Zeitüberschreitung)')), ms))]);
+async function refresh() {
+  const sb = online.client; if (!sb || !online.user) { online.profile = null; online.aal = null; return; }
+  const [aal, prof] = await Promise.all([withTimeout(sb.auth.mfa.getAuthenticatorAssuranceLevel(), 8000, '2FA-Status'), withTimeout(sb.from('profiles').select('*').eq('id', online.user.id).maybeSingle(), 8000, 'Profil')]);
+  online.aal = aal.data; online.profileError = prof.error?.message || null;
+  let p = prof.data;
+  // Kein Profil (Konto älter als die Datenbank-Einrichtung): einmal anlegen lassen
+  if (!p) { await sb.rpc('ensure_profile'); ({ data: p } = await sb.from('profiles').select('*').eq('id', online.user.id).maybeSingle()); }
+  online.profile = p;
+  if (p && (!p.last_seen || Date.now() - new Date(p.last_seen) > 5 * 60e3)) sb.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', online.user.id).then(() => { });
+}
+export const loggedIn = () => !!online.user;
+export const isAdmin = () => online.profile?.role === 'admin';
+export const needsMfa = () => online.aal && online.aal.nextLevel === 'aal2' && online.aal.currentLevel !== 'aal2';
+
+/* ---------- Anmeldung ---------- */
+const back = () => location.origin + location.pathname + '#/account';
+// Merker, damit der App-Start den ?code= aus der Rückleitung Supabase zuordnet (Strava und Cloud nutzen denselben Parameter)
+const mark = () => localStorage.setItem('vvOnlineReturn', String(Date.now()));
+export const expectingReturn = () => Date.now() - (+localStorage.getItem('vvOnlineReturn') || 0) < 30 * 60e3;
+export async function signUp(email, password, name) { mark(); const { error } = await (await client()).auth.signUp({ email, password, options: { data: { name }, emailRedirectTo: back() } }); if (error) throw error; }
+export async function signIn(email, password) { const { data, error } = await (await client()).auth.signInWithPassword({ email, password }); if (error) throw error; online.session = data.session; online.user = data.user || data.session?.user || null; await refresh(); }
+export async function magicLink(email) { mark(); const { error } = await (await client()).auth.signInWithOtp({ email, options: { emailRedirectTo: back() } }); if (error) throw error; }
+export async function oauth(provider) { mark(); const { error } = await (await client()).auth.signInWithOAuth({ provider, options: { redirectTo: back() } }); if (error) throw error; }
+export async function resetPassword(email) { mark(); const { error } = await (await client()).auth.resetPasswordForEmail(email, { redirectTo: back() }); if (error) throw error; }
+export async function signOut(scope = 'local') { await (await client()).auth.signOut({ scope }); online.profile = null; bus.emit('online', 'out'); }
+
+/* ---------- Zwei-Faktor (TOTP, z. B. Google Authenticator, 1Password, Aegis) ---------- */
+// Alle TOTP-Faktoren, auch halb eingerichtete (data.totp enthält nur bestätigte)
+export async function mfaFactors() { const { data, error } = await (await client()).auth.mfa.listFactors(); if (error) throw error; return (data.all || data.totp || []).filter(f => (f.factor_type || 'totp') === 'totp'); }
+// 2FA-Liste für 60 s zwischenspeichern (spart einen Serveraufruf bei jedem Seitenaufbau)
+let fCache = null;
+export async function mfaFactorsCached() { if (fCache && Date.now() - fCache.t < 60e3) return fCache.list; const list = await mfaFactors(); fCache = { t: Date.now(), list }; return list; }
+export const dropFactorCache = () => { fCache = null; };
+// QR-Code als sichere data:-Adresse (Supabase liefert rohes SVG mit Anführungszeichen, das in einem HTML-Attribut zerbricht)
+export function qrSrc(q) { if (!q) return ''; const m = /^data:image\/svg\+xml;(?:utf-8|charset=utf-8),(.*)$/s.exec(q); const svg = m ? m[1] : q.trim().startsWith('<svg') ? q : null; return svg ? 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg) : q; }
+export async function mfaEnroll() { dropFactorCache(); const { data, error } = await (await client()).auth.mfa.enroll({ factorType: 'totp', friendlyName: 'VeloVerse ' + new Date().toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) + ' ' + Math.random().toString(36).slice(2, 6) }); if (error) throw error; return data; } // { id, totp: { qr_code, secret, uri } }
+export async function mfaVerify(factorId, code) { dropFactorCache();
+  const sb = await client();
+  const { data: ch, error: e1 } = await sb.auth.mfa.challenge({ factorId }); if (e1) throw e1;
+  const { error: e2 } = await sb.auth.mfa.verify({ factorId, challengeId: ch.id, code: code.replace(/\s/g, '') }); if (e2) throw e2;
+  await refresh(); bus.emit('online', 'mfa');
+}
+export async function mfaRemove(factorId) { dropFactorCache(); const { error } = await (await client()).auth.mfa.unenroll({ factorId }); if (error) throw error; await refresh(); }
+
+export async function updateProfile(patch) {
+  const { data, error } = await (await client()).from('profiles').update(patch).eq('id', online.user.id).select().single(); if (error) throw error; online.profile = data; return data;
+}
+
+/* ---------- Konto verwalten ---------- */
+export async function resendSignup(email) { mark(); const { error } = await (await client()).auth.resend({ type: 'signup', email, options: { emailRedirectTo: back() } }); if (error) throw error; }
+export async function verifyPassword(password) { const { error } = await (await client()).auth.signInWithPassword({ email: online.user.email, password }); if (error) throw new Error('Aktuelles Passwort stimmt nicht'); await refresh(); }
+export async function reauthenticate() { const { error } = await (await client()).auth.reauthenticate(); if (error) throw error; }
+// Liefert 'reauth', wenn Supabase einen Bestätigungscode per E-Mail verlangt (Einstellung "Secure password change")
+export async function updatePassword(password, nonce) {
+  const { error } = await (await client()).auth.updateUser(nonce ? { password, nonce } : { password });
+  if (error) { if (/reauth|nonce/i.test(error.message)) return 'reauth'; throw error; }
+  online.recovery = false; return 'ok';
+}
+export async function updateEmail(email) { mark(); const { error } = await (await client()).auth.updateUser({ email }, { emailRedirectTo: back() }); if (error) throw error; }
+
+// Online-Zugang: Admin, freigeschaltet oder in der 7-tägigen Testphase. Ältere Datenbank ohne diese Spalten = Zugang.
+export function access() {
+  const p = online.profile; if (!p) return { ok: false, noProfile: true };
+  if (p.role === 'banned') return { ok: false, banned: true };
+  if (p.role === 'admin') return { ok: true, admin: true };
+  if (p.approved === undefined || p.approved) return { ok: true, approved: true };
+  const left = (new Date(p.trial_until) - Date.now()) / 864e5;
+  return { ok: left > 0, trial: true, daysLeft: Math.max(0, Math.ceil(left)), until: p.trial_until };
+}
+
+/* ---------- Verbindungsdiagnose: jeden Schritt einzeln mit Dauer und Fehler ---------- */
+export async function diagnose(onStep) {
+  const step = async (name, fn) => { const t0 = performance.now(); try { const r = await withTimeout(fn(), 10000, name); onStep({ name, ok: true, ms: Math.round(performance.now() - t0), info: r }); return r; } catch (e) { onStep({ name, ok: false, ms: Math.round(performance.now() - t0), info: e.message || String(e) }); return null; } };
+  const sb = await client();
+  await step('Anmeldung (Sitzung)', async () => { const { data, error } = await sb.auth.getSession(); if (error) throw error; if (!data.session) throw new Error('keine Sitzung, bitte anmelden'); return 'angemeldet als ' + data.session.user.email; });
+  await step('2FA-Status', async () => { const { data, error } = await sb.auth.mfa.getAuthenticatorAssuranceLevel(); if (error) throw error; return `aktuell ${data.currentLevel}, möglich ${data.nextLevel}`; });
+  await step('Profil direkt (ohne Bibliothek)', async () => { const { data } = await sb.auth.getSession(); const c = config(); const r = await fetch(`${c.url}/rest/v1/profiles?id=eq.${online.user.id}&select=role,approved`, { headers: { apikey: c.anonKey, Authorization: 'Bearer ' + data.session.access_token } }); const j = await r.json(); if (!r.ok) throw new Error('HTTP ' + r.status + ': ' + (j.message || JSON.stringify(j))); return j.length ? `Rolle ${j[0].role}, freigeschaltet ${j[0].approved}` : 'leer (Regel verhindert Lesen?)'; });
+  await step('Profil lesen', async () => { const { data, error } = await sb.from('profiles').select('role,approved,trial_until,display_name').eq('id', online.user.id).maybeSingle(); if (error) throw error; if (!data) throw new Error('kein Profil vorhanden'); return `Rolle ${data.role}, freigeschaltet ${data.approved}, Test bis ${data.trial_until ? new Date(data.trial_until).toLocaleString('de-DE') : '–'}`; });
+  await step('Zugang (has_access)', async () => { const { data, error } = await sb.rpc('has_access'); if (error) throw error; return data ? 'ja' : 'nein'; });
+  await step('Admin (is_admin, braucht 2FA)', async () => { const { data, error } = await sb.rpc('is_admin'); if (error) throw error; return data ? 'ja' : 'nein'; });
+  await step('Speicher (Ordner lesen)', async () => { const { data, error } = await sb.storage.from('vault').list(online.user.id, { limit: 5 }); if (error) throw error; return data.length + ' Einträge'; });
+  await step('Live-Dienst erreichbar (öffentlicher Testkanal)', () => new Promise((res, rej) => { const ch = sb.channel('diag-public-' + Math.random().toString(36).slice(2, 6)); ch.subscribe((st, err) => { if (st === 'SUBSCRIBED') { ch.unsubscribe(); res('verbunden'); } else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') { ch.unsubscribe(); rej(new Error(st + (err?.message ? ': ' + err.message : '') + ' (bei ausgeschaltetem „Allow public access“ ist ❌ hier normal)')); } }); }));
+  await step('Anmeldeschlüssel an Live-Dienst', async () => (await realtimeAuth()) ? 'gesetzt' : 'keine Sitzung');
+  await step('Live-Kanal (Strecke)', () => new Promise((res, rej) => { const ch = sb.channel('ride:diagnose', { config: { private: true } }); ch.subscribe((st, err) => { if (st === 'SUBSCRIBED') { ch.unsubscribe(); res('verbunden'); } else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') { ch.unsubscribe(); rej(new Error(st + (err?.message ? ': ' + err.message : ''))); } }); }));
+  await step('Live-Kanal mit Berechtigung (lobby)', () => new Promise((res, rej) => { const ch = sb.channel('lobby', { config: { private: true } }); ch.subscribe((st, err) => { if (st === 'SUBSCRIBED') { ch.unsubscribe(); res('verbunden'); } else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') { ch.unsubscribe(); rej(new Error(st + (err?.message ? ': ' + err.message : ''))); } }); }));
+}

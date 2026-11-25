@@ -1,0 +1,16 @@
+{
+  "name": "VeloVerse",
+  "short_name": "VeloVerse",
+  "description": "Indoor-Radtraining im Browser",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#14181c",
+  "theme_color": "#14181c",
+  "shortcuts": [{ "name": "Companion", "short_name": "Companion", "url": "./#/companion" }, { "name": "Fahrt starten", "short_name": "Fahren", "url": "./#/ride" }],
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

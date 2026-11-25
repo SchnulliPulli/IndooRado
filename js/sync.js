@@ -1,0 +1,344 @@
+// Abgleich mit dem NAS, zusätzlich zum Browser-Speicher.
+// Zwei Wege: Synology-Anmeldung (DSM-Konto inkl. 2FA, File Station API) oder WebDAV.
+// Aufbau im Ordner: state.json (Einstellungen, Fortschritt, eigene Strecken/Workouts), rides/<id>.json, shots/<id>.jpg
+import { SCHEMA } from './store.js';
+import { db, kv } from './db.js';
+import { bus } from './util.js';
+import { PROVIDERS, isOAuth, backend, finishOAuth, fresh } from './cloud.js';
+
+const LOCAL_ONLY = new Set(['sync', 'syncMeta', 'demo', 'strava', 'musicFiles', 'device', 'kvTimes', 'cloudApps']);
+// Listen gelöschter Einträge: werden zwischen den Geräten zusammengeführt, nicht überschrieben
+const TOMBS = ['deletedRides', 'deletedWorkouts', 'deletedRoutes', 'deletedPlans'];
+export const sync = { online: false, cfg: null, busy: false, last: null, error: null, dirsOk: false, needLogin: false, rev: null, devices: {}, device: null, info: '' };
+
+/* ---------- VeloVerse Online als Speicherort ----------
+   Solange man online angemeldet ist, läuft der Abgleich über den privaten Supabase-Ordner des Kontos;
+   NAS, WebDAV, OneDrive, Google Drive und Dropbox pausieren. Gleiches Verfahren, eigene Versionsnummer. */
+let ON = null; // { sb, uid }
+const META = () => ON ? 'syncMetaOnline' : 'syncMeta';
+export async function setOnlineBackend(o) {
+  const was = !!ON; ON = o && o.uid ? o : null; sync.online = !!ON; sync.dirsOk = false; sync.needLogin = false; sync.error = null;
+  if (was !== !!ON) { const m = await kv.get(META(), {}); sync.last = m.at || null; sync.rev = m.rev ?? null; sync.devices = m.devices || {}; }
+  bus.emit('sync');
+}
+export const nasPaused = () => !!ON && !!(sync.cfg && (sync.cfg.host || sync.cfg.url || sync.cfg.clientId));
+const SBK = {
+  p: rel => `${ON.uid}/sync/${rel}`.replace(/\/+$/, ''),
+  async mkdir() { },
+  async put(rel, body, type) { const { error } = await ON.sb.storage.from('vault').upload(SBK.p(rel), body instanceof Blob ? body : new Blob([body], { type: type || 'application/octet-stream' }), { upsert: true, contentType: type || 'application/octet-stream' }); if (error) throw new Error('Online: ' + error.message); },
+  async get(rel) { const { data, error } = await ON.sb.storage.from('vault').download(SBK.p(rel)); if (error) { if (/not.?found|404|400|Object not found/i.test(error.message || '') || error.statusCode == 404 || error.status === 400) return null; throw new Error('Online: ' + error.message); } return data; },
+  async list(rel) {
+    const out = []; for (let off = 0; ; off += 1000) { const { data, error } = await ON.sb.storage.from('vault').list(SBK.p(rel), { limit: 1000, offset: off }); if (error) throw new Error('Online: ' + error.message); out.push(...data.map(f => f.name).filter(n => n !== '.emptyFolderPlaceholder')); if (data.length < 1000) break; }
+    return out;
+  },
+  async del(rel) { await ON.sb.storage.from('vault').remove([SBK.p(rel)]); },
+};
+// Was online landen darf (Einstellungen › Konto › Daten online)
+export const PREF_DEFAULT = { rides: 'full', hr: true, cad: true, power: true, gps: true, shots: false, leaderboard: true };
+const prefs = async () => ({ ...PREF_DEFAULT, ...(await kv.get('onlinePrefs', {})) });
+async function filterRide(r) {
+  const P = await prefs(); if (!ON) return r;
+  if (P.rides === 'summary') return { ...r, samples: [], samplesOmitted: true };
+  if (P.hr && P.cad && P.power && P.gps) return r;
+  const samples = (r.samples || []).map(x => { const y = { ...x }; if (!P.hr) y.hr = null; if (!P.cad) y.cad = null; if (!P.power) y.p = 0; if (!P.gps) { delete y.la; delete y.lo; } return y; });
+  const sum = { ...r.sum }; if (!P.hr) { sum.avgHr = null; sum.maxHr = null; sum.hrz = []; }
+  return { ...r, samples, sum, intervals: P.hr ? r.intervals : (r.intervals || []).map(v => ({ ...v, hr: null })) };
+}
+
+export async function loadSync() {
+  sync.cfg = await kv.get('sync', null);
+  const m = await kv.get(META(), {}); sync.last = m.at || null; sync.rev = m.rev ?? null; sync.devices = m.devices || {};
+  sync.device = await kv.get('device', null);
+  if (!sync.device) { sync.device = { id: Math.random().toString(36).slice(2, 10), name: deviceName() }; await kv.set('device', sync.device); }
+  kvT = await kv.get('kvTimes', {});
+}
+// Kurzer Gerätename aus dem Browser, z. B. „Windows · Chrome“ oder „Android · Chrome“
+function deviceName() {
+  const u = navigator.userAgent, os = /Android/.test(u) ? 'Android' : /iPhone|iPad/.test(u) ? 'iPhone/iPad' : /Windows/.test(u) ? 'Windows' : /Mac/.test(u) ? 'Mac' : /Linux/.test(u) ? 'Linux' : 'Gerät';
+  const br = /Edg\//.test(u) ? 'Edge' : /Firefox/.test(u) ? 'Firefox' : /Chrome/.test(u) ? 'Chrome' : /Safari/.test(u) ? 'Safari' : 'Browser';
+  return os + ' · ' + br;
+}
+export async function renameDevice(name) { sync.device.name = name.trim().slice(0, 40) || deviceName(); await kv.set('device', sync.device); schedulePush(1000); }
+// Änderungszeit je Einstellung, damit beim Abgleich die jeweils neuere Seite gewinnt
+let kvT = {}, applying = false, tSave = null;
+bus.on('dbchange', ({ s, k }) => {
+  if (s !== 'kv' || applying || LOCAL_ONLY.has(k)) return;
+  kvT[k] = Date.now(); clearTimeout(tSave); tSave = setTimeout(() => kv.set('kvTimes', kvT), 300);
+});
+export async function saveSyncCfg(cfg) {
+  const key = c => c ? [c.mode, c.host, c.folder, c.url, c.clientId].join('|') : '';
+  // Anderes Ziel: zählt als erstes Verbinden, damit dort zuerst nur gelesen wird
+  if (key(cfg) !== key(sync.cfg)) { sync.rev = null; sync.last = null; sync.devices = {}; await kv.set('syncMeta', {}); }
+  sync.cfg = cfg; sync.dirsOk = false; await kv.set('sync', cfg);
+}
+const configured = () => !!ON || !!(sync.cfg && (isOAuth(sync.cfg.mode) ? sync.cfg.refresh || sync.cfg.access : sync.cfg.mode === 'dsm' ? sync.cfg.host && sync.cfg.folder : sync.cfg.url));
+export const isConfigured = configured;
+// Anzeigename des Speichers: Synology, WebDAV, OneDrive, Google Drive, Dropbox
+export const providerName = (m = ON ? 'online' : sync.cfg?.mode) => m === 'online' ? 'VeloVerse Online' : PROVIDERS[m]?.name || (m === 'webdav' ? 'WebDAV' : m === 'dsm' ? 'Synology' : 'Cloud');
+// Rückkehr von der Anmeldung bei OneDrive, Google oder Dropbox
+export async function handleCloudRedirect() {
+  const cfg = await finishOAuth(); if (!cfg) return null;
+  const apps = await kv.get('cloudApps', {}); apps[cfg.mode] = { clientId: cfg.clientId, secret: cfg.secret }; await kv.set('cloudApps', apps);
+  await saveSyncCfg(cfg); sync.needLogin = false; sync.error = null; bus.emit('sync');
+  return providerName(cfg.mode) + (cfg.account ? ': ' + cfg.account : '');
+}
+
+/* ---------- Synology DSM (File Station API) ---------- */
+const DSM_ERR = { 400: 'Benutzername oder Passwort falsch', 401: 'Konto deaktiviert', 402: 'Keine Berechtigung', 403: '2FA-Code nötig', 404: '2FA-Code falsch', 406: 'Für dieses Konto muss erst 2FA eingerichtet werden', 407: 'IP-Adresse gesperrt (zu viele Fehlversuche)', 408: 'Ordner oder Datei nicht gefunden', 119: 'Anmeldung abgelaufen', 106: 'Anmeldung abgelaufen', 105: 'Keine Berechtigung für diesen Ordner', 1100: 'Ordner konnte nicht angelegt werden' };
+export class DsmError extends Error { constructor(code) { super(DSM_ERR[code] || 'DSM-Fehler ' + code); this.code = code; } }
+const dsmBase = () => sync.cfg.host.replace(/\/+$/, '') + '/webapi/entry.cgi';
+const enc = v => typeof v === 'string' ? v : JSON.stringify(v);
+async function dsmCall(params, { post = false, body = null } = {}) {
+  const q = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, enc(v)]));
+  if (sync.cfg.sid) q.set('_sid', sync.cfg.sid);
+  const r = post ? await fetch(dsmBase() + (body ? '?' + q : ''), { method: 'POST', body: body || q, cache: 'no-store' }) : await fetch(dsmBase() + '?' + q, { cache: 'no-store' });
+  return r;
+}
+async function dsmJson(params, opt) {
+  const r = await dsmCall(params, opt); const j = await r.json().catch(() => null);
+  if (!j) throw new Error('Unerwartete Antwort vom NAS (HTTP ' + r.status + ')');
+  if (!j.success) { const c = j.error?.code; if (c === 119 || c === 106 || c === 107) { sync.cfg.sid = null; sync.needLogin = true; } throw new DsmError(c); }
+  return j.data || {};
+}
+// Anmeldung mit DSM-Konto. Bei aktivierter 2FA zuerst ohne Code (Fehler 403), dann mit Code.
+// "Gerät merken" (device token) erspart den Code bei späteren Anmeldungen.
+// NAS-Adresse vereinheitlichen: immer https, Standardport 443 (kein Port nötig), ohne Pfad am Ende
+export function normalizeHost(v) {
+  let s = String(v || '').trim();
+  if (!s) return s;
+  if (!/^[a-z]+:\/\//i.test(s)) s = 'https://' + s;
+  s = s.replace(/^http:\/\//i, 'https://');
+  try { const u = new URL(s); if (u.port === '443') u.port = ''; return (u.origin + u.pathname).replace(/\/+$/, ''); } catch (e) { return s.replace(/\/+$/, ''); }
+}
+export async function dsmLogin({ host, folder, user, pass, otp, remember, auto }) {
+  const prev = sync.cfg || {};
+  host = location.protocol === 'https:' ? normalizeHost(host) : host.trim().replace(/\/+$/, ''); // lokal (http) zum Testen unverändert
+  sync.cfg = { mode: 'dsm', host, folder: '/' + folder.trim().replace(/^\/+|\/+$/g, ''), user: user.trim(), auto: !!auto, remember: !!remember, did: prev.host === host ? prev.did : null, sid: null };
+  const p = { api: 'SYNO.API.Auth', version: '6', method: 'login', account: user.trim(), passwd: pass, session: 'FileStation', format: 'sid', enable_device_token: 'yes', device_name: 'VeloVerse' };
+  if (otp) p.otp_code = otp.trim();
+  if (sync.cfg.did) p.device_id = sync.cfg.did;
+  try {
+    const d = await dsmJson(p, { post: true });
+    sync.cfg.sid = d.sid; if (d.did || d.device_id) sync.cfg.did = d.did || d.device_id;
+    if (remember) sync.cfg.pass = pass; // nur auf Wunsch, damit abgelaufene Sitzungen ohne Nachfrage erneuert werden
+    sync.needLogin = false; sync.dirsOk = false;
+    await kv.set('sync', sync.cfg);
+    return true;
+  } catch (e) { if (e.code !== 403 && e.code !== 404) { /* Konfiguration trotzdem merken */ await kv.set('sync', { ...sync.cfg, sid: null }); } throw e; }
+}
+export async function dsmLogout() {
+  try { if (sync.cfg?.sid) await dsmJson({ api: 'SYNO.API.Auth', version: '6', method: 'logout', session: 'FileStation' }); } catch (e) { }
+  if (sync.cfg) { sync.cfg.sid = null; delete sync.cfg.pass; await kv.set('sync', sync.cfg); }
+}
+async function ensureSid() {
+  if (sync.cfg.sid) return;
+  if (sync.cfg.pass) { await dsmLogin({ ...sync.cfg, pass: sync.cfg.pass, remember: true }); return; }
+  sync.needLogin = true; throw new Error('Bitte unter Einstellungen › Verbindungen beim NAS anmelden');
+}
+const join = (...p) => p.join('/').replace(/\/+/g, '/');
+const DSM = {
+  async mkdir(rel) {
+    const full = join(sync.cfg.folder, rel).replace(/\/$/, ''), i = full.lastIndexOf('/');
+    try { await dsmJson({ api: 'SYNO.FileStation.CreateFolder', version: '2', method: 'create', folder_path: [full.slice(0, i) || '/'], name: [full.slice(i + 1)], force_parent: 'true' }); }
+    catch (e) { if (e.code !== 1100) throw e; }
+  },
+  async put(rel, body, type) {
+    const full = join(sync.cfg.folder, rel), i = full.lastIndexOf('/');
+    const fd = new FormData(); fd.append('path', full.slice(0, i)); fd.append('create_parents', 'true'); fd.append('overwrite', 'true');
+    fd.append('file', body instanceof Blob ? body : new Blob([body], { type: type || 'application/octet-stream' }), full.slice(i + 1));
+    await dsmJson({ api: 'SYNO.FileStation.Upload', version: '2', method: 'upload' }, { post: true, body: fd });
+  },
+  async get(rel) {
+    const r = await dsmCall({ api: 'SYNO.FileStation.Download', version: '2', method: 'download', path: [join(sync.cfg.folder, rel)], mode: 'open' });
+    const t = r.headers.get('content-type') || '';
+    if (/json/.test(t) && !/\.json$/.test(rel)) { const j = await r.json(); if (!j.success) throw new DsmError(j.error?.code); }
+    if (!r.ok) return null;
+    const b = await r.blob();
+    // Fehler kommen als kleines JSON zurück
+    if (b.size < 200) { try { const j = JSON.parse(await b.text()); if (j && j.success === false) { if (j.error?.code === 408) return null; if ([119, 106].includes(j.error?.code)) { sync.cfg.sid = null; sync.needLogin = true; } throw new DsmError(j.error?.code); } } catch (e) { if (e instanceof DsmError) throw e; } }
+    return b;
+  },
+  async list(rel) {
+    try { const d = await dsmJson({ api: 'SYNO.FileStation.List', version: '2', method: 'list', folder_path: join(sync.cfg.folder, rel).replace(/\/$/, ''), limit: '5000' }); return (d.files || []).map(f => f.name); }
+    catch (e) { if (e.code === 408) return []; throw e; }
+  },
+  async del(rel) { try { await dsmJson({ api: 'SYNO.FileStation.Delete', version: '2', method: 'start', path: [join(sync.cfg.folder, rel)] }); } catch (e) { } },
+};
+
+/* ---------- WebDAV ---------- */
+const b64 = s => btoa(String.fromCharCode(...new TextEncoder().encode(s)));
+function davBase() { let u = sync.cfg.url.trim(); if (!u.endsWith('/')) u += '/'; return u; }
+const dav = (method, path, body, headers = {}) => fetch(davBase() + path, { method, body, headers: { Authorization: 'Basic ' + b64(sync.cfg.user + ':' + sync.cfg.pass), ...headers }, cache: 'no-store' });
+async function davOk(r, what) { if (!r.ok && r.status !== 207) throw new Error(`${what}: HTTP ${r.status}${r.status === 401 ? ' (Benutzer oder Passwort falsch)' : r.status === 404 ? ' (Ordner nicht gefunden)' : ''}`); return r; }
+const DAV = {
+  async mkdir(rel) { const r = await dav('MKCOL', rel); if (!(r.ok || r.status === 405 || r.status === 301)) throw new Error(`Ordner ${rel} anlegen: HTTP ${r.status}`); },
+  async put(rel, body, type) { await davOk(await dav('PUT', rel, body, { 'Content-Type': type || 'application/octet-stream' }), rel); },
+  async get(rel) { const r = await dav('GET', rel); if (r.status === 404) return null; await davOk(r, rel); return r.blob(); },
+  async list(rel) {
+    const r = await dav('PROPFIND', rel, '<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:getcontentlength/></d:prop></d:propfind>', { Depth: '1', 'Content-Type': 'application/xml' });
+    if (r.status === 404) return [];
+    await davOk(r, 'Liste ' + rel);
+    const doc = new DOMParser().parseFromString(await r.text(), 'application/xml');
+    return [...doc.getElementsByTagNameNS('DAV:', 'href')].map(h => decodeURIComponent(h.textContent).replace(/\/$/, '').split('/').pop()).filter(Boolean);
+  },
+  async del(rel) { await dav('DELETE', rel); },
+};
+const saveTok = c => kv.set('sync', c);
+const B = () => ON ? SBK : isOAuth(sync.cfg.mode) ? backend(sync.cfg, saveTok) : sync.cfg.mode === 'dsm' ? DSM : DAV;
+async function prep() {
+  if (ON) return;
+  if (sync.cfg.mode === 'dsm') await ensureSid();
+  else if (isOAuth(sync.cfg.mode)) { try { await fresh(sync.cfg, saveTok); } catch (e) { if (e.login) { sync.needLogin = true; bus.emit('sync'); } throw e; } }
+}
+
+// Verbindung prüfen: Ordner anlegen, Testdatei schreiben, lesen, löschen
+export async function testConnection() {
+  await prep();
+  try { await B().mkdir(''); } catch (e) { if (sync.cfg?.mode === 'dsm') throw e; }
+  await B().put('.veloverse-test', 'ok', 'text/plain');
+  const b = await B().get('.veloverse-test');
+  if (!b || (await b.text()).trim() !== 'ok') throw new Error('Testdatei ließ sich nicht zurücklesen');
+  await B().del('.veloverse-test');
+  return true;
+}
+
+async function stateObj(rev) {
+  const now = new Date().toISOString();
+  const out = { app: 'trittwerk', format: 'veloverse-data', schema: SCHEMA, savedAt: now, rev, by: { ...sync.device }, devices: { ...sync.devices, [sync.device.id]: { name: sync.device.name, last: now } }, kvT: {}, kv: {}, routes: (await db.all('routes')).map(r => ({ ...r, dem: undefined })), workouts: await db.all('workouts') };
+  for (const k of await db.keys('kv')) if (!LOCAL_ONLY.has(k)) { out.kv[k] = await db.get('kv', k); out.kvT[k] = kvT[k] || 0; }
+  return out;
+}
+async function readState() { const b = await B().get('state.json'); if (!b) return null; const st = JSON.parse(await b.text()); if (st.app !== 'trittwerk') throw new Error('state.json gehört nicht zu VeloVerse'); return st; }
+
+// Stand vom NAS einarbeiten. how: 'remote' = NAS gewinnt überall (erstes Verbinden, „Vom NAS laden“), 'merge' = je Einstellung gewinnt die neuere Seite
+async function applyRemote(st, how) {
+  const T = {}; for (const k of TOMBS) T[k] = new Set([...(st.kv[k] || []), ...await kv.get(k, [])]);
+  const gone = T.deletedRides, goneW = T.deletedWorkouts, goneR = T.deletedRoutes, goneP = T.deletedPlans;
+  const rT = st.kvT || {}; let changed = 0;
+  applying = true;
+  try {
+    for (const k in st.kv) {
+      if (LOCAL_ONLY.has(k) || TOMBS.includes(k)) continue;
+      const remoteT = rT[k] || 0, localT = kvT[k] || 0, remoteWins = how === 'remote' || remoteT > localT || (!localT && !remoteT);
+      let val = st.kv[k];
+      if (k === 'customPlans') {
+        // Eigene Pläne je Plan zusammenführen: neue von beiden Seiten behalten, gelöschte entfernen
+        const loc = await kv.get('customPlans', []), m = new Map(loc.map(c => [c.id, c]));
+        for (const c of val || []) if (!m.has(c.id) || remoteWins) m.set(c.id, c);
+        val = [...m.values()].filter(c => !goneP.has(c.id));
+      } else if (!remoteWins) continue;
+      if (JSON.stringify(await db.get('kv', k)) !== JSON.stringify(val)) { await db.put('kv', val, k); changed++; }
+      if (remoteWins) kvT[k] = remoteT;
+    }
+    for (const k of TOMBS) await db.put('kv', [...T[k]], k);
+    for (const x of st.routes || []) { if (goneR.has(x.id)) continue; const loc = await db.get('routes', x.id); if (!loc || how === 'remote' || (x.updated || 0) >= (loc.updated || 0)) await db.put('routes', loc?.dem ? { ...x, dem: loc.dem } : x); }
+    for (const x of st.workouts || []) { if (goneW.has(x.id)) continue; const loc = await db.get('workouts', x.id); if (!loc || how === 'remote' || (x.updated || 0) >= (loc.updated || 0)) await db.put('workouts', x); }
+    // Auf anderen Geräten gelöschte Strecken und Workouts hier entfernen
+    for (const id of goneR) if (await db.get('routes', id)) { await db.del('routes', id); changed++; }
+    for (const id of goneW) if (await db.get('workouts', id)) { await db.del('workouts', id); changed++; }
+  } finally { applying = false; await kv.set('kvTimes', kvT); }
+  // Fahrten und Fotos: nur ergänzen, gelöschte entfernen
+  const haveR = new Set((await db.keys('rides')).map(String)), haveS = new Set((await db.keys('shots')).map(String));
+  for (const id of gone) if (haveR.has(id)) { await db.del('rides', id); await db.delByIndex('shots', 'ride', id); changed++; }
+  let n = 0;
+  for (const f of await B().list('rides/')) { const id = f.replace(/\.json$/, ''); if (f.endsWith('.json') && !haveR.has(id) && !gone.has(id)) { const b = await B().get('rides/' + f); if (b) { await db.put('rides', JSON.parse(await b.text())); n++; } } }
+  for (const f of await B().list('shots/')) {
+    if (!f.endsWith('.json')) continue; const id = f.replace(/\.json$/, ''); if (haveS.has(id) || [...gone].some(g => id.startsWith(g + '-'))) continue;
+    const m = await B().get('shots/' + f), img = await B().get('shots/' + id + '.jpg');
+    if (m && img) await db.put('shots', { ...JSON.parse(await m.text()), blob: img });
+  }
+  return { rides: n, changed: changed + n };
+}
+
+// Fahrten und Fotos hochladen, die auf dem NAS fehlen; gelöschte dort entfernen
+async function pushFiles() {
+  const haveR = new Set(await B().list('rides/')), haveS = new Set(await B().list('shots/')), gone = new Set(await kv.get('deletedRides', []));
+  let n = 0, f = 0;
+  const P = ON ? await prefs() : null;
+  if (!P || P.rides !== 'none') for (const r of await db.all('rides')) if (!haveR.has(r.id + '.json') && !gone.has(r.id) && !r.demo) { await B().put('rides/' + r.id + '.json', JSON.stringify(await filterRide(r)), 'application/json'); n++; }
+  // Foto zuerst, Beschreibung danach: fehlt die Beschreibung, wird beim nächsten Mal beides neu geschrieben
+  if (!P || P.shots) for (const s of await db.all('shots')) if (!haveS.has(s.id + '.json') && !gone.has(s.rideId)) { await B().put('shots/' + s.id + '.jpg', s.blob, 'image/jpeg'); await B().put('shots/' + s.id + '.json', JSON.stringify({ ...s, blob: undefined }), 'application/json'); f++; }
+  for (const id of gone) {
+    if (haveR.has(id + '.json')) await B().del('rides/' + id + '.json');
+    for (const x of haveS) if (x.startsWith(id + '-')) await B().del('shots/' + x);
+  }
+  return { rides: n, shots: f };
+}
+
+// Ein Abgleich: erst den Stand auf dem NAS lesen und einarbeiten, dann den gemeinsamen Stand mit neuer Versionsnummer schreiben.
+// Ein neu verbundenes Gerät übernimmt zuerst alles vom NAS und überschreibt dort nichts.
+export async function syncAll({ preferRemote = false } = {}) {
+  await prep();
+  if (!sync.dirsOk) { await B().mkdir(''); await B().mkdir('rides'); await B().mkdir('shots'); sync.dirsOk = true; }
+  let st = await readState(), pulled = null;
+  if (st) {
+    const rRev = st.rev || 0, first = sync.rev == null && !sync.last;
+    const legacyLocalWins = sync.rev == null && sync.last && st.savedAt <= sync.last; // älterer Stand ohne Versionsnummer, NAS seitdem unverändert
+    if (preferRemote || first) { pulled = await applyRemote(st, 'remote'); sync.info = first ? `Erstes Verbinden: Daten von „${st.by?.name || 'einem anderen Gerät'}“ übernommen, auf dem NAS wurde nichts überschrieben.` : ''; }
+    else if (rRev !== sync.rev && !legacyLocalWins) pulled = await applyRemote(st, 'merge');
+    sync.devices = st.devices || {};
+    // Kurz vor dem Schreiben erneut prüfen, ob inzwischen ein anderes Gerät geschrieben hat
+    const again = await readState();
+    if (again && (again.rev || 0) !== rRev) { const p2 = await applyRemote(again, 'merge'); pulled = { rides: (pulled?.rides || 0) + p2.rides, changed: (pulled?.changed || 0) + p2.changed }; st = again; sync.devices = again.devices || {}; }
+  }
+  const files = await pushFiles();
+  const rev = (st?.rev || 0) + 1, mine = await stateObj(rev);
+  await B().put('state.json', JSON.stringify(mine), 'application/json');
+  sync.rev = rev; sync.devices = mine.devices;
+  return { pulled: pulled && pulled.changed ? pulled : null, rides: pulled?.rides || 0, up: files, savedAt: mine.savedAt };
+}
+
+async function mark() { sync.last = new Date().toISOString(); sync.error = null; await kv.set(META(), { at: sync.last, rev: sync.rev, devices: sync.devices }); bus.emit('sync'); }
+async function guarded(fn) {
+  if (!configured() || sync.busy) return null;
+  sync.busy = true; bus.emit('sync');
+  try { const res = await fn(); await mark(); return res; }
+  catch (e) { if (e.login) sync.needLogin = true; sync.error = e.message === 'Failed to fetch' ? (isOAuth(sync.cfg?.mode) ? providerName() + ' nicht erreichbar (Internetverbindung?)' : 'NAS nicht erreichbar oder Zugriff von dieser Adresse nicht freigegeben (siehe Einrichtung)') : e.message; bus.emit('sync'); throw e; }
+  finally { sync.busy = false; bus.emit('sync'); }
+}
+export const pushNow = () => guarded(() => syncAll());
+export const pullNow = () => guarded(() => syncAll({ preferRemote: true }));
+
+// Beim Start und beim Zurückkehren zur App: abgleichen; Rückgabe ist gesetzt, wenn sich lokal etwas geändert hat
+export async function autoSync() {
+  if (!configured() || !(ON || sync.cfg.auto)) return;
+  if (!ON && sync.cfg.mode === 'dsm' && !sync.cfg.sid && !sync.cfg.pass) { sync.needLogin = true; bus.emit('sync'); return; }
+  const r = await guarded(() => syncAll());
+  return r?.pulled || null;
+}
+// Nach Änderungen verzögert hochladen (nicht während eines Abgleichs)
+let pend = null;
+bus.on('dbchange', ({ s, k }) => { if (sync.busy || (s === 'kv' && LOCAL_ONLY.has(k))) return; schedulePush(s === 'rides' ? 1500 : 8000); });
+export function schedulePush(ms = 4000) {
+  if (!configured() || !(ON || sync.cfg.auto) || sync.needLogin) return;
+  clearTimeout(pend); pend = setTimeout(() => pushNow().catch(() => { }), ms);
+}
+
+/* ---------- Live-Fahrt für die Companion-Ansicht (kleine Datei live.json im NAS-Ordner) ---------- */
+export const syncReady = () => configured() && !sync.needLogin && (ON || sync.cfg.mode !== 'dsm' || sync.cfg.sid || sync.cfg.pass);
+let liveBusy = false;
+export async function putLive(obj) {
+  if (!syncReady() || liveBusy) return;
+  liveBusy = true;
+  try { await prep(); await B().put('live.json', JSON.stringify({ ...obj, ts: Date.now() }), 'application/json'); } catch (e) { } finally { liveBusy = false; }
+}
+export async function getLive() {
+  if (!syncReady()) return null;
+  await prep();
+  const b = await B().get('live.json'); if (!b) return null;
+  try { return JSON.parse(await b.text()); } catch (e) { return null; }
+}
+
+// Fotos einer Fahrt direkt vom NAS holen, falls sie auf diesem Gerät fehlen (z. B. auf dem Handy)
+export async function fetchShots(rideId, count) {
+  if (!syncReady() || !count) return 0;
+  await prep();
+  let n = 0;
+  for (let k = 0; k < count; k++) {
+    const id = rideId + '-' + k; if (await db.get('shots', id)) continue;
+    const m = await B().get('shots/' + id + '.json'); if (!m) continue;
+    const img = await B().get('shots/' + id + '.jpg'); if (!img) continue;
+    await db.put('shots', { ...JSON.parse(await m.text()), blob: img }); n++;
+  }
+  return n;
+}
