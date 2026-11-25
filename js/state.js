@@ -3,7 +3,7 @@ import { kv } from './db.js';
 import { bus } from './util.js';
 
 export const profile = {
-  name: 'Fahrer', ftp: 200, kg: 75, bike: 8.5, cda: 0.32, circ: 2105, maxW: 600, hrMax: 190, hrRest: 55,
+  name: 'Fahrer', ftp: 200, kg: 75, age: 40, sex: 'm', bike: 8.5, cda: 0.32, circ: 2105, maxW: 600, hrMax: 190, hrRest: 55,
   simDiff: 60, gearDiff: 100, jersey: '#ff6a3d', bikeColor: '#e9eef2', helmet: '#f2f4f6', skin: '#e3b18c',
   quality: 'auto', autoPause: true, autoShots: true, shotEvery: 10, units: 'metric', ftpHistory: [],
   soundOn: true, volMaster: .7, volAmb: .6, volFx: .8, tips: true, drinkTips: true, tripleSkip: true, ergSoft: true, hudStyle: 'dark',

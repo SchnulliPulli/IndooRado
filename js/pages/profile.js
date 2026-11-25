@@ -131,6 +131,8 @@ export async function render(el) {
       ${F('name', 'Name', 'text', 'maxlength="30"')}
       <div class="grid2 tight">${F('ftp', 'FTP (Watt)', 'number', 'min="50" max="600" inputmode="numeric"')}${F('kg', 'Gewicht (kg)', 'number', 'min="30" max="200" step="0.5" inputmode="decimal"')}</div>
       <div class="grid2 tight">${F('hrMax', 'Max. Puls', 'number', 'min="120" max="230" inputmode="numeric"')}${F('bike', 'Radgewicht (kg)', 'number', 'min="5" max="25" step="0.5" inputmode="decimal"')}</div>
+      <div class="grid2 tight">${F('age', 'Alter', 'number', 'min="10" max="99" inputmode="numeric"')}<label class="f">Geschlecht (für Kalorien aus dem Puls)<select class="inp" id="sex"><option value="m" ${profile.sex !== 'f' ? 'selected' : ''}>männlich</option><option value="f" ${profile.sex === 'f' ? 'selected' : ''}>weiblich</option></select></label></div>
+      <div class="grid2 tight">${F('hrRest', 'Ruhepuls', 'number', 'min="30" max="100" inputmode="numeric"')}<span></span></div>
       <label class="f">Sitzposition<select class="inp" id="cda">${[['0.40', 'Aufrecht (CdA 0,40)'], ['0.32', 'Oberlenker (CdA 0,32)'], ['0.28', 'Unterlenker (CdA 0,28)'], ['0.24', 'Zeitfahren (CdA 0,24)']].map(([v, l]) => `<option value="${v}" ${+v === +profile.cda ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <p class="small muted">Leistungszonen: ${[['Z2', .56, .75], ['Z3', .76, .9], ['Z4', .91, 1.05], ['Z5', 1.06, 1.2]].map(([z, a, b]) => `${z} ${Math.round(a * profile.ftp)}–${Math.round(b * profile.ftp)} W`).join(' · ')}</p>
     </div>
@@ -179,7 +181,8 @@ export async function render(el) {
   for (const k of ['soundOn', 'tips', 'drinkTips', 'tripleSkip', 'ergSoft']) $('#' + k, el).onchange = e => { profile[k] = e.target.checked; saveProfile(); sound.apply(); };
   for (const k of ['volMaster', 'volAmb', 'volFx']) $('#' + k, el).oninput = e => { profile[k] = +e.target.value; $('#' + k + 'V', el).textContent = Math.round(profile[k] * 100) + ' %'; saveProfile(); sound.apply(); };
   $('#sndTest', el).onclick = () => { sound.unlock(); sound.fanfare(); };
-  const num = ['ftp', 'kg', 'hrMax', 'bike', 'circ', 'maxW', 'shotEvery'];
+  const num = ['ftp', 'kg', 'hrMax', 'bike', 'circ', 'maxW', 'shotEvery', 'age', 'hrRest'];
+  $('#sex', el).onchange = e => { profile.sex = e.target.value; saveProfile(); toast('Gespeichert', 1200); };
   for (const k of ['name', ...num]) $('#' + k, el).onchange = e => { const v = num.includes(k) ? parseFloat(e.target.value) : e.target.value.trim(); if (num.includes(k) && isNaN(v)) return; if (k === 'ftp' && v !== profile.ftp) profile.ftpHistory = [...(profile.ftpHistory || []), { date: new Date().toISOString(), ftp: v, source: 'manuell' }]; profile[k] = v; saveProfile(); toast('Gespeichert', 1200); };
   $('#cda', el).onchange = e => { profile.cda = +e.target.value; saveProfile(); };
   $('#quality', el).onchange = e => { profile.quality = e.target.value; saveProfile(); };

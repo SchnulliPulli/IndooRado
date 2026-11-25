@@ -10,6 +10,7 @@ import { profileChart } from '../charts.js';
 import { ICON } from '../components.js';
 import { saveRide } from '../ridesave.js';
 import { db } from '../db.js';
+import { putLive } from '../sync.js';
 import { makeField, stepField, gapOf } from '../npc.js';
 import { sound, music } from '../sound.js';
 import { tipFor, cadRange } from '../coach.js';
@@ -396,8 +397,18 @@ function xpPop(txt) { if (profile.xpPops === false) return; const f = $('#xpFloa
 function note(txt) { S.adapt.note = txt; S.adapt.noteT = performance.now(); if (/gesenkt|hoch|nicht/.test(txt)) sound.warn(); }
 
 /* ---------- Simulation (10 Hz, auch im Hintergrund) ---------- */
+// Live-Fahrt für die Companion-Ansicht (läuft im Simulationstakt, also auch bei verdecktem Fenster)
+function liveShare() {
+  if (profile.liveShare === false || S.state === 'ready' || S.parked || performance.now() - (S.liveT || 0) < 5000) return;
+  S.liveT = performance.now();
+  const R = S.route, wi = S.wi, p3 = S.p3.length ? S.p3.reduce((a, b) => a + b, 0) / S.p3.length : 0, np = S.np.n ? Math.pow(S.np.s4 / S.np.n, .25) : p3;
+  putLive({ state: S.state, route: R.name, routeId: R.id, total: R.total, loop: R.loop, pos: S.dist, odo: Math.round(S.odo), t: Math.round(S.t), p: Math.round(p3), hr: live.heart, cad: live.cadence != null ? Math.round(live.cadence) : null, v: +(S.v * 3.6).toFixed(1), asc: Math.round(S.asc), kj: Math.round(S.kj), np: Math.round(np), grade: +R.gradeAt(S.dist).toFixed(1),
+    wo: S.wo ? { name: S.wo.name, i: wi && !wi.done ? wi.i + 1 : null, n: S.wo.segs.length, left: wi && !wi.done ? Math.round(wi.left) : 0, target: S.target ? Math.round(S.target) : null, done: Math.round(S.wT), total: woTotal(S.wo) } : null,
+    ghost: S.ghost ? Math.round(S.ghostGap) : null, place: S.npcOn ? S.field.filter(n => gapOf(R, n.d, S.dist) > 0).length + 1 : null });
+}
 function tick() {
   if (!S?.alive) return;
+  liveShare();
   // Im Hintergrund drosselt der Browser Timer stark, deshalb die verstrichene Zeit in kleinen Schritten nachrechnen
   const now = performance.now(); let rest = Math.min(300, (now - (S.lastTick || now)) / 1000) * SPEED; S.lastTick = now;
   let first = true;
@@ -768,7 +779,7 @@ document.addEventListener('visibilitychange', () => { if (S?.alive && document.v
 
 export function leave() {
   if (!S) return;
-  S.alive = false; sound.silence(); music.stop(); clearInterval(S.timer); cancelAnimationFrame(S.raf); S.ro?.disconnect();
+  S.alive = false; sound.silence(); music.stop(); putLive({ state: 'ended', t: Math.round(S.t), odo: Math.round(S.odo), route: S.route.name }); clearInterval(S.timer); cancelAnimationFrame(S.raf); S.ro?.disconnect();
   document.removeEventListener('keydown', S.key); S.offs.forEach(f => f());
   try { S.world.dispose(); } catch (e) { }
   // Speicher freigeben: Streckendaten, Caches der Karte, Testverweis

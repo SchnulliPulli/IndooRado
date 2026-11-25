@@ -121,3 +121,41 @@ export function bestCurve(rides, sinceDays) {
   for (const r of rides) if (+new Date(r.date) >= lim) for (const k in r.sum.curve) if (!best[k] || r.sum.curve[k] > best[k].w) best[k] = { w: r.sum.curve[k], id: r.id, date: r.date };
   return best;
 }
+
+/* ---------- Auswertung wie bei Strava: Anstrengung, Kalorien, Abschnitte, Platzierungen ---------- */
+// Anstrengung (TRIMP nach Banister) aus dem Puls; ohne Puls aus dem TSS geschätzt
+export function effort(samples, p) {
+  const rest = p.hrRest || 55, max = p.hrMax || 190, k = p.sex === 'f' ? 1.67 : 1.92, a = p.sex === 'f' ? .86 : .64;
+  let t = 0, n = 0;
+  for (const s of samples) if (s.hr > rest) { const r = Math.min(1, (s.hr - rest) / (max - rest)); t += r * a * Math.exp(k * r) / 60; n++; }
+  const score = n > samples.length * .5 ? Math.round(t) : null;
+  return { score, source: score != null ? 'Puls' : 'Leistung' };
+}
+export const effortLabel = v => v == null ? '–' : v < 25 ? 'Locker' : v < 60 ? 'Moderat' : v < 120 ? 'Hart' : v < 200 ? 'Sehr hart' : 'Extrem';
+// Kalorien: mit Leistungsmesser aus der Arbeit (ca. 1 kcal je kJ), sonst aus dem Puls (Keytel-Formel)
+export function calories(sum, samples, p) {
+  if (sum.kj > 0 && sum.avgP > 20) return { kcal: Math.round(sum.kj / .24 / 4.184), source: 'Leistung' };
+  const age = p.age || 40, kg = p.kg || 75, hr = samples.filter(s => s.hr);
+  if (hr.length < 60) return { kcal: null, source: '–' };
+  const per = h => p.sex === 'f' ? (-20.4022 + .4472 * h - .1263 * kg + .074 * age) / 4.184 : (-55.0969 + .6309 * h + .1988 * kg + .2017 * age) / 4.184;
+  return { kcal: Math.max(0, Math.round(hr.reduce((a, s) => a + Math.max(0, per(s.hr)), 0) / 60)), source: 'Puls' };
+}
+// Abschnitte (Splits) je km bzw. je 5 km bei langen Fahrten
+export function splits(samples) {
+  if (!samples.length) return { step: 1000, rows: [] };
+  const total = samples.at(-1).d, step = total > 60000 ? 5000 : total > 25000 ? 2000 : 1000, rows = [];
+  let i0 = 0;
+  for (let k = 1; k * step <= total + step * .3; k++) {
+    let i1 = i0; while (i1 < samples.length - 1 && samples[i1].d < k * step) i1++;
+    const part = samples.slice(i0, i1 + 1); if (part.length < 2) break;
+    const dist = part.at(-1).d - part[0].d, hr = part.filter(s => s.hr);
+    rows.push({ k, dist, time: part.length, v: dist / part.length * 3.6, p: Math.round(part.reduce((a, s) => a + s.p, 0) / part.length), hr: hr.length ? Math.round(hr.reduce((a, s) => a + s.hr, 0) / hr.length) : null, de: Math.round(part.at(-1).e - part[0].e) });
+    i0 = i1; if (i1 >= samples.length - 1) break;
+  }
+  return { step, rows };
+}
+// Platz eines Werts unter allen Fahrten (1 = bester)
+export function rankOf(value, rides, dur) {
+  if (!value) return null;
+  return 1 + rides.filter(r => (r.sum.curve?.[dur] || 0) > value).length;
+}

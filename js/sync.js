@@ -194,3 +194,18 @@ export function schedulePush(ms = 4000) {
   if (!configured() || !sync.cfg.auto || sync.needLogin) return;
   clearTimeout(pend); pend = setTimeout(() => pushNow().catch(() => { }), ms);
 }
+
+/* ---------- Live-Fahrt für die Companion-Ansicht (kleine Datei live.json im NAS-Ordner) ---------- */
+export const syncReady = () => configured() && !sync.needLogin && (sync.cfg.mode !== 'dsm' || sync.cfg.sid || sync.cfg.pass);
+let liveBusy = false;
+export async function putLive(obj) {
+  if (!syncReady() || liveBusy) return;
+  liveBusy = true;
+  try { await prep(); await B().put('live.json', JSON.stringify({ ...obj, ts: Date.now() }), 'application/json'); } catch (e) { } finally { liveBusy = false; }
+}
+export async function getLive() {
+  if (!syncReady()) return null;
+  await prep();
+  const b = await B().get('live.json'); if (!b) return null;
+  try { return JSON.parse(await b.text()); } catch (e) { return null; }
+}

@@ -11,9 +11,9 @@ import { loadStrava, handleRedirect, strava, connected as stravaConnected } from
 const PAGES = {
   '': () => import('./pages/start.js'), ride: () => import('./pages/ride.js'), summary: () => import('./pages/summary.js'),
   workouts: () => import('./pages/workouts.js'), plans: () => import('./pages/plans.js'), routes: () => import('./pages/routes.js'), history: () => import('./pages/history.js'),
-  progress: () => import('./pages/progress.js'), profile: () => import('./pages/profile.js'), devices: () => import('./pages/devices.js'), help: () => import('./pages/help.js'), editor: () => import('./pages/editor.js'), planner: () => import('./pages/planner.js'), ridesettings: () => import('./pages/ridesettings.js'),
+  progress: () => import('./pages/progress.js'), profile: () => import('./pages/profile.js'), devices: () => import('./pages/devices.js'), help: () => import('./pages/help.js'), editor: () => import('./pages/editor.js'), planner: () => import('./pages/planner.js'), ridesettings: () => import('./pages/ridesettings.js'), companion: () => import('./pages/companion.js'),
 };
-const NAV = [['', 'Start', 'home'], ['plans', 'Pläne', 'plan'], ['workouts', 'Workouts', 'workout'],['routes', 'Strecken', 'route'], ['history', 'Verlauf', 'history'], ['progress', 'Fortschritt', 'progress'], ['devices', 'Geräte', 'devices'], ['ridesettings', 'Fahransicht', 'view'], ['profile', 'Profil', 'profile'], ['help', 'Anleitung', 'help']];
+const NAV = [['', 'Start', 'home'], ['companion', 'Companion', 'phone'], ['plans', 'Pläne', 'plan'], ['workouts', 'Workouts', 'workout'],['routes', 'Strecken', 'route'], ['history', 'Verlauf', 'history'], ['progress', 'Fortschritt', 'progress'], ['devices', 'Geräte', 'devices'], ['ridesettings', 'Fahransicht', 'view'], ['profile', 'Profil', 'profile'], ['help', 'Anleitung', 'help']];
 let current = null, currentKey = null;
 
 function nav() {
@@ -95,6 +95,10 @@ async function init() {
     await loadState(); await loadPlan(); await loadClickMap(); toast('Daten vom NAS übernommen');
     if (currentKey !== 'ride') route();
   }).catch(e => toast('NAS-Abgleich: ' + (sync.error || e.message), 5000));
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState !== 'visible' || currentKey === 'ride') return;
+    try { const pulled = await autoSync(); if (pulled) { await loadState(); await loadPlan(); toast('Neuer Stand vom NAS übernommen'); route(); } } catch (e) { }
+  });
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => { });
 }
 init();
