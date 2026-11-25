@@ -12,6 +12,7 @@ export const sel = { routeId: 'b-hills', workoutId: null, mode: 'gear', ergW: 15
 export const progress = { xp: 0, badges: {}, climbBest: {}, routeBest: {}, sprintBest: {}, missions: {}, pb: {} };
 
 export async function loadState() {
+  try { await (await import('./store.js')).migrate(); } catch (e) { console.error(e); }
   Object.assign(profile, await kv.get('profile', {}));
   Object.assign(sel, await kv.get('sel', {}));
   Object.assign(progress, await kv.get('progress', {}));

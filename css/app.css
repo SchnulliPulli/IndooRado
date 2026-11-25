@@ -147,6 +147,16 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 .riderow-stats{display:flex;gap:14px;font-size:17px;color:var(--soft)}.riderow-stats span:first-child{color:var(--ink)}
 /* Workouts */
 .chips-row{display:flex;gap:6px;flex-wrap:wrap}
+.chipbtn{border:1px solid var(--line);background:var(--panel2);border-radius:999px;padding:6px 12px;font-size:14px;font-weight:600;color:var(--soft)}
+.chipbtn.on{border-color:var(--acc);color:var(--ink);background:color-mix(in srgb,var(--acc) 18%,var(--panel2))}
+.chipbtn:disabled{opacity:.5;cursor:not-allowed}
+.avlayout{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;align-items:start}
+.avstage{position:sticky;top:calc(var(--top) + 12px);padding:10px;display:flex;flex-direction:column;gap:8px;background:radial-gradient(circle at 50% 35%,var(--panel3),var(--panel) 70%)}
+.avstage canvas{width:100%;aspect-ratio:1/1;max-height:70vh;display:block;touch-action:none;cursor:grab}
+.avstage canvas:active{cursor:grabbing}
+.avhint{text-align:center}.avviews{justify-content:center}
+.avpanel{display:flex;flex-direction:column;gap:16px}
+@media(max-width:900px){.avlayout{grid-template-columns:1fr}.avstage{position:static}.avstage canvas{max-height:52vh}}
 .chipb{border:1px solid var(--line);background:none;border-radius:20px;padding:6px 14px;color:var(--soft);font-weight:500}
 .chipb.on{background:var(--panel3);color:var(--ink)}
 .wgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:12px}
@@ -532,3 +542,8 @@ span.badge{display:inline-flex;padding:5px 10px;font-weight:600}span.badge svg{w
 @keyframes endpulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,88,.7)}50%{box-shadow:0 0 0 10px rgba(239,68,88,0)}}
 @media(prefers-reduced-motion:reduce){.tbtn.stop.pulse{animation:none}}
 .dlg .row.end{flex-wrap:wrap}
+
+/* Easter Eggs */
+.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:200}
+.logo.spin svg{animation:logospin 1.2s cubic-bezier(.3,1.6,.5,1)}
+@keyframes logospin{to{transform:rotate(720deg)}}

@@ -1,6 +1,6 @@
 // Einstieg: Zustand laden, Router, Navigation
 import { $, bus, toast, dialog, toggleFullscreen } from './util.js';
-import { loadState } from './state.js';
+import { loadState, profile } from './state.js';
 import { loadClickMap, setDemo, status, support, reconnectKnown } from './ble.js';
 import { kv, persist } from './db.js';
 import { ICON } from './components.js';
@@ -13,6 +13,7 @@ const PAGES = {
   workouts: () => import('./pages/workouts.js'), plans: () => import('./pages/plans.js'), routes: () => import('./pages/routes.js'), history: () => import('./pages/history.js'),
   progress: () => import('./pages/progress.js'), profile: () => import('./pages/profile.js'), devices: () => import('./pages/devices.js'), help: () => import('./pages/help.js'), editor: () => import('./pages/editor.js'), planner: () => import('./pages/planner.js'), ridesettings: () => import('./pages/ridesettings.js'), companion: () => import('./pages/companion.js'),
   // Einstellungen: gleiche Module, anderer Ausschnitt
+  avatar: () => import('./pages/avatar.js'),
   sound: () => import('./pages/ridesettings.js').then(m => ({ ...m, render: el => m.render(el, ['sound']) })),
   appsettings: () => import('./pages/profile.js').then(m => ({ ...m, render: el => m.render(el, ['app']) })),
   connect: () => import('./pages/profile.js').then(m => ({ ...m, render: el => m.render(el, ['connect']) })),
@@ -24,7 +25,7 @@ const NAV = [
   { k: 'routes', l: 'Strecken', i: 'route' },
   { k: 'history', l: 'Aktivitäten', i: 'history', tabs: [['history', 'Verlauf'], ['progress', 'Fortschritt']], also: ['summary'] },
   { k: 'devices', l: 'Geräte', i: 'devices' },
-  { k: 'profile', l: 'Einstellungen', i: 'profile', tabs: [['profile', 'Profil'], ['ridesettings', 'Fahransicht'], ['sound', 'Ton'], ['appsettings', 'App'], ['connect', 'Verbindungen'], ['help', 'Anleitung']] },
+  { k: 'profile', l: 'Einstellungen', i: 'profile', tabs: [['profile', 'Profil'], ['avatar', 'Avatar'], ['ridesettings', 'Fahransicht'], ['sound', 'Ton'], ['appsettings', 'App'], ['connect', 'Verbindungen'], ['help', 'Anleitung']] },
 ];
 const groupOf = k => NAV.find(g => g.k === k || g.tabs?.some(t => t[0] === k) || g.also?.includes(k)) || null;
 let current = null, currentKey = null;
@@ -92,6 +93,12 @@ async function resumeBar(k) {
   bar.querySelector('[data-end]').onclick = () => { sessionStorage.setItem('endAfterResume', '1'); location.hash = '#/ride'; };
 }
 
+// Handy: Touch als Hauptbedienung und kleiner Bildschirm (kürzere Seite unter 520 px) oder schmales Hochformat
+export function isPhone() {
+  const coarse = matchMedia('(pointer: coarse)').matches, short = Math.min(screen.width, screen.height), ar = innerWidth / innerHeight;
+  return coarse && (short < 520 || (ar < .7 && innerWidth < 600)) || /iPhone|Android.+Mobile/.test(navigator.userAgent);
+}
+function wantsPhoneView() { const m = profile.phoneView || 'auto'; return m === 'always' || (m === 'auto' && isPhone()); }
 async function init() {
   await loadState(); await loadClickMap(); await loadPlan();
   const { applyAppTheme } = await import('./pages/profile.js'); applyAppTheme();
@@ -106,9 +113,12 @@ async function init() {
   await loadStrava(); window.__cloudUpd?.();
   try { const who = await handleRedirect(); if (who) toast('Mit Strava verbunden' + (typeof who === 'string' && who ? ': ' + who : '')); }
   catch (e) { toast(e.message, 6000); }
+  // Handy erkannt: beim App-Start gleich die Handy-Ansicht öffnen (Einstellung unter App)
+  if (/^#?\/?$/.test(location.hash) && wantsPhoneView()) history.replaceState(null, '', location.pathname + location.search + '#/companion');
   window.addEventListener('hashchange', route);
   await route();
   import('./onboard.js').then(m => m.onboarding()).catch(e => console.error(e));
+  import('./eggs.js').then(m => m.initEggs()).catch(e => console.error(e));
   reconnectKnown().catch(() => { });
   // NAS-Abgleich: neuerer Stand vom NAS wird übernommen, danach Seite neu aufbauen
   loadSync().then(() => window.__cloudUpd?.()).then(autoSync).then(async pulled => {

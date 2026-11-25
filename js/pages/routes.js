@@ -12,7 +12,7 @@ async function terrain(r) {
   try { await loadDem(r, f => box.textContent = `Echtes Gelände wird geladen … ${Math.round(f * 100)} %`); }
   finally { box.remove(); }
 }
-const THEME_N = { meadow: 'Hügel und Wiesen', lake: 'Bergsee', alpine: 'Hochgebirge', coast: 'Küste', forest: 'Wald', plains: 'Flachland', auto: 'Automatisch' };
+const THEME_N = { meadow: 'Hügel und Wiesen', lake: 'Bergsee', alpine: 'Hochgebirge', coast: 'Küste', forest: 'Wald', plains: 'Flachland', tropical: 'Tropen', himalaya: 'Himalaya', desert: 'Wüste', fjord: 'Fjord', tuscany: 'Toskana', auto: 'Automatisch' };
 export async function render(el, [rid]) {
   const routes = await listRoutes();
   const cur = routes.find(r => r.id === (rid || sel.routeId)) || routes[0];

@@ -213,11 +213,7 @@ export async function render(el, params = []) {
       <p class="small muted">Fahrgefühl, automatische Pause, Fotos und Hinweise stellst du unter <a href="#/ridesettings">Fahransicht</a> ein.</p>
     </div>
   </section>
-  <section class="card form"><h2>Avatar</h2>
-      <p class="small muted">Weitere Farben schaltest du mit höheren Leveln frei (aktuell Level ${lv}).</p>
-      ${['jersey', 'helmet', 'bikeColor'].map(k => `<div class="f">${{ jersey: 'Trikot', helmet: 'Helm', bikeColor: 'Rahmen' }[k]}<div class="swatches" data-k="${k}">${UNLOCKS.map(u => u.lv <= lv ? `<button style="background:${u.c}" data-c="${u.c}" aria-pressed="${profile[k] === u.c}" aria-label="${u.name || u.c}" title="${u.name || ''}"></button>` : `<button class="locked" style="background:${u.c}" disabled title="Ab Level ${u.lv}" aria-label="Gesperrt bis Level ${u.lv}"><small>${u.lv}</small></button>`).join('')}${lv >= 10 ? `<input type="color" value="${profile[k]}" data-k="${k}" title="Freie Farbe">` : '<span class="small muted">Freie Farbwahl ab Level 10</span>'}</div></div>`).join('')}
-      <div class="f">Hautton<div class="swatches" data-k="skin">${['#f1c7a5', '#e3b18c', '#c99272', '#9a6a4b', '#6b4532'].map(c => `<button style="background:${c}" data-c="${c}" aria-pressed="${profile.skin === c}"></button>`).join('')}</div></div>
-    </div>
+  <section class="card avteaser"><div class="row between"><div><h2>Avatar</h2><p class="small muted">Trikotmuster, Helm, Brille, Bart, Socken, Schuhe und Extras im 3D-Designer.</p></div><a class="btn pri" href="#/avatar">Avatar gestalten</a></div>
   </section>`,
   app: `
   <section class="pagehead"><h1>App</h1></section>
@@ -226,6 +222,8 @@ export async function render(el, params = []) {
       <label class="f">Thema<select class="inp" id="appTheme">${[['dark', 'Dunkel'], ['light', 'Hell'], ['system', 'Wie das Gerät']].map(([v, l]) => `<option value="${v}" ${theme === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <div class="f">Akzentfarbe<div class="swatches" id="appAcc">${['#ff6a3d', '#3fa7f5', '#4fd18b', '#f5c542', '#b06cf0', '#ef4458', '#00c2c7'].map(c => `<button style="background:${c}" data-c="${c}" aria-pressed="${acc === c}" aria-label="Farbe ${c}"></button>`).join('')}</div></div>
       <p class="small muted">Gilt für Menüs und Seiten. Die Anzeige während der Fahrt hat einen eigenen Stil unter <a href="#/ridesettings">Fahransicht</a>.</p>
+      <label class="f">Handy-Ansicht beim Start<select class="inp" id="phoneView">${[['auto', 'Automatisch auf Handys'], ['always', 'Immer'], ['never', 'Nie']].map(([v, l]) => `<option value="${v}" ${(profile.phoneView || 'auto') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <p class="small muted">Auf Handys öffnet die App dann direkt die kompakte Ansicht mit nächster Fahrt, Woche und Live-Fahrt. Die Startseite erreichst du jederzeit über „Übersicht“.</p>
       <h2 style="margin-top:18px">Grafik</h2>
       <label class="f">Qualität der 3D-Welt<select class="inp" id="quality">${[['auto', 'Automatisch (' + ({ high: 'hoch', medium: 'mittel' }[autoQuality()]) + ')'], ['high', 'Hoch: Schatten, weite Sicht'], ['medium', 'Mittel: für Tablets'], ['low', 'Niedrig: für ältere Geräte']].map(([v, l]) => `<option value="${v}" ${profile.quality === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <p class="small muted">Ruckelt die Fahrt, senkt die App die Auflösung automatisch. Auf schwachen Geräten hilft zusätzlich „Mittel“ oder „Niedrig“.</p>
@@ -234,6 +232,7 @@ export async function render(el, params = []) {
       <p class="small muted">Gespeichert werden Profil, Einstellungen, gekoppelte Geräte und Tastenbelegung, Fahrten mit Fotos, Level, Abzeichen, Missionen, Bestzeiten, Trainingsplan-Fortschritt sowie eigene Strecken, Pläne und Workouts. Die Sicherung enthält alles davon in einer Datei, aber keine Passwörter oder Schlüssel.</p>
       <p class="small muted">Alles wird in diesem Browser unter <b>${esc(location.origin)}</b> gespeichert. Unter einer anderen Adresse siehst du andere Daten. Sichere regelmäßig oder richte unter <a href="#/connect">Verbindungen</a> einen Cloud-Speicher ein (NAS, OneDrive, Google Drive, Dropbox).</p>
       <p class="small muted">Belegt: ${u ? (u.usage / 1048576).toFixed(1).replace('.', ',') + ' MB' : 'unbekannt'} · Dauerhafter Speicher: ${pers ? 'ja' : 'nicht bestätigt'}</p>
+      <label class="switch"><input type="checkbox" id="bkSec"><span></span> <div class="swt">Anmeldungen mitsichern<small class="muted">Strava, Cloud-Speicher und NAS, mit einem Passwort verschlüsselt. So bist du nach dem Einspielen sofort wieder angemeldet.</small></div></label>
       <div class="row"><button class="btn" id="bk">Sicherung herunterladen</button><label class="btn">Sicherung einspielen<input type="file" id="rs" accept=".json" hidden></label></div>
       <div class="row"><button class="btn ghost danger" id="wp">Alle lokalen Daten löschen</button></div>
     </div>
@@ -258,14 +257,28 @@ export async function render(el, params = []) {
   on('#appReload', 'onclick', async () => { try { for (const k of await caches.keys()) await caches.delete(k); for (const r of await navigator.serviceWorker?.getRegistrations?.() || []) await r.update(); } catch (e) { } location.reload(); });
   on('#cda', 'onchange', e => { profile.cda = +e.target.value; saveProfile(); });
   on('#quality', 'onchange', e => { profile.quality = e.target.value; saveProfile(); toast('Gilt ab der nächsten Fahrt', 1500); });
+  on('#phoneView', 'onchange', e => { profile.phoneView = e.target.value; saveProfile(); toast('Gespeichert', 900); });
   on('#appTheme', 'onchange', e => { profile.appTheme = e.target.value; saveProfile(); applyAppTheme(); });
   on('#appAcc', 'onclick', e => { const b = e.target.closest('[data-c]'); if (!b) return; profile.appAccent = b.dataset.c; saveProfile(); applyAppTheme(); for (const x of el.querySelectorAll('#appAcc [data-c]')) x.setAttribute('aria-pressed', String(x === b)); });
   el.querySelectorAll('.swatches[data-k]').forEach(sw => {
     sw.onclick = e => { const b = e.target.closest('[data-c]'); if (!b) return; profile[sw.dataset.k] = b.dataset.c; saveProfile(); for (const x of sw.querySelectorAll('[data-c]')) x.setAttribute('aria-pressed', String(x === b)); };
     sw.oninput = e => { if (e.target.type === 'color') { profile[sw.dataset.k] = e.target.value; saveProfile(); } };
   });
-  on('#bk', 'onclick', async () => { download('veloverse-sicherung-' + new Date().toISOString().slice(0, 10) + '.json', await backup(), 'application/json'); });
-  on('#rs', 'onchange', async e => { try { await restore(await e.target.files[0].text()); toast('Sicherung eingespielt, App wird neu geladen'); setTimeout(() => location.reload(), 1200); } catch (err) { toast('Fehler: ' + err.message, 5000); } });
+  const askPass = (title, confirm) => new Promise(async res => {
+    let v1 = '', v2 = '';
+    const p = dialog({ title, html: `<input class="inp" id="pw1" type="password" placeholder="Passwort" autocomplete="new-password">${confirm ? '<input class="inp" id="pw2" type="password" placeholder="Passwort wiederholen" style="margin-top:8px">' : ''}<p class="small muted">Ohne dieses Passwort lassen sich die Anmeldungen nicht wiederherstellen.</p>`, buttons: [{ label: 'Abbrechen', value: null }, { label: 'OK', value: 'ok', cls: 'pri' }] });
+    const i1 = document.getElementById('pw1'), i2 = document.getElementById('pw2'); i1.focus(); i1.oninput = () => v1 = i1.value; if (i2) i2.oninput = () => v2 = i2.value;
+    if (await p !== 'ok' || !v1) return res(null);
+    if (confirm && v1 !== v2) { toast('Passwörter stimmen nicht überein', 3000); return res(null); }
+    if (confirm && v1.length < 6) { toast('Bitte mindestens 6 Zeichen', 3000); return res(null); }
+    res(v1);
+  });
+  on('#bk', 'onclick', async () => {
+    let secretsPass = null;
+    if ($('#bkSec', el)?.checked) { secretsPass = await askPass('Passwort für die Anmeldungen', true); if (!secretsPass) return; }
+    download('veloverse-sicherung-' + new Date().toISOString().slice(0, 10) + '.json', await backup({ secretsPass }), 'application/json');
+  });
+  on('#rs', 'onchange', async e => { try { await restore(await e.target.files[0].text(), { askPass: () => askPass('Sicherung enthält Anmeldungen: Passwort eingeben') }); toast('Sicherung eingespielt, App wird neu geladen'); setTimeout(() => location.reload(), 1200); } catch (err) { toast('Fehler: ' + err.message, 5000); } });
   on('#wp', 'onclick', async () => {
     const nas = sync.cfg?.url;
     if (!(await dialog({ title: 'Alle lokalen Daten löschen?', html: `<p>In diesem Browser werden unwiderruflich gelöscht: Fahrten, Fotos, Fortschritt, Pläne, eigene Strecken und Workouts, Einstellungen, Geräte, NAS- und Strava-Zugang sowie der App-Cache.</p><p class="muted small">${nas ? 'Die Daten auf dem NAS bleiben erhalten und lassen sich danach mit „Vom NAS laden“ zurückholen.' : 'Ohne Sicherungsdatei oder NAS sind die Daten danach weg.'}</p>`, buttons: [{ label: 'Abbrechen', value: false }, { label: 'Endgültig löschen', value: true, cls: 'danger' }] }))) return;

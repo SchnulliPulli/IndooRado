@@ -12,6 +12,7 @@ import { saveRide } from '../ridesave.js';
 import { db } from '../db.js';
 import { putLive } from '../sync.js';
 import { makeField, stepField, gapOf } from '../npc.js';
+import { rideEggs } from '../eggs.js';
 import { sound, music } from '../sound.js';
 import { tipFor, cadRange } from '../coach.js';
 import { saveProfile } from '../state.js';
@@ -456,6 +457,7 @@ function step(dt, first) {
   if (S.state === 'riding' && profile.autoPause && pw < 5 && (cad || 0) < 5 && S.v < .3) { S.idle += dt; if (S.idle > 3) { S.state = 'auto'; flash('Automatische Pause'); endHint(true); } } else S.idle = 0;
   if (S.state === 'auto' && (pw > 10 || (cad || 0) > 20)) { S.state = 'riding'; flash('Weiter'); endHint(false); }
   const running = S.state === 'riding';
+  if (running && demo.on && !S.demoUsed) { S.demoUsed = true; flash('Demo-Modus: diese Fahrt wird nicht gespeichert', 3500); }
   // Ziel bestimmen
   let target = null, wi = null;
   if (S.wo && S.state !== 'ready') {
@@ -506,6 +508,7 @@ function step(dt, first) {
     if (!S.ghostLead && S.ghostGap < -5 && S.t > 30) { S.ghostLead = true; flash('👻 Du liegst vor deiner Bestfahrt!', 2000); }
     else if (S.ghostLead && S.ghostGap > 5) S.ghostLead = false;
   }
+  if (first && !S.demoUsed && (S.eggT = (S.eggT || 0) + 1) % 10 === 0) rideEggs(S, flash);
   if (profile.drinkTips !== false && S.t > S.nextDrink) { S.nextDrink += (profile.drinkEvery || 15) * 60; flash('💧 Kurz trinken', 2000); }
   if (S.wo) S.wT += dt;
   if (S.dist >= R.total) {
@@ -763,7 +766,15 @@ function shot(caption) {
 /* ---------- Ende ---------- */
 async function endRide(auto = false) {
   if (!S) return;
+  auto = auto === true; // als Klick-Handler kommt hier ein Event an
   const prevState = S.state; if (S.state === 'riding') S.state = 'paused';
+  // Fahrten mit Demo-Geräten werden nicht gespeichert (kein XP, keine Rekorde, kein Strava)
+  if (S.demoUsed) {
+    const v = await dialog({ title: auto ? 'Ziel erreicht' : 'Demo-Fahrt beenden?', html: `<p>${S.samples.length ? fmtKm(S.samples.at(-1).d) + ' km in ' + fmtT(S.t) + '. ' : ''}</p><p class="muted small">Diese Fahrt lief mit Demo-Geräten und wird nicht gespeichert. Sie zählt nicht für Level, Missionen, Rekorde oder Strava.</p>`, buttons: [{ label: 'Weiterfahren', value: 'back', cls: 'ghost' }, { label: 'Zum Menü (Fahrt bleibt)', value: 'menu', cls: 'ghost' }, { label: 'Beenden', value: 'quit', cls: 'pri' }] });
+    if (v === 'menu') { if (S) S.state = 'paused'; location.hash = '#/'; return; }
+    if (v === 'quit') { leave(); location.hash = '#/'; return; }
+    if (S && !S.finished) S.state = prevState === 'auto' ? 'riding' : prevState; return;
+  }
   if (!S.samples.length) {
     const v = await dialog({ title: 'Fahrt beenden?', html: '<p class="muted">Es wurde noch nichts aufgezeichnet.</p>', buttons: [{ label: 'Weiterfahren', value: 'back' }, { label: 'Zum Menü', value: 'menu', cls: 'ghost' }, { label: 'Beenden', value: 'quit', cls: 'pri' }] });
     if (v === 'menu') { S.state = 'paused'; location.hash = '#/'; return; }

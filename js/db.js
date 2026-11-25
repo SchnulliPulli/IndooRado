@@ -62,25 +62,9 @@ export async function usage() {
   try { return await navigator.storage.estimate(); } catch (e) { return null; }
 }
 
-// Komplette Sicherung als JSON (Screenshots als Data-URL)
-export async function backup() {
-  const out = { app: 'trittwerk', version: 1, date: new Date().toISOString(), kv: {}, rides: [], shots: [], routes: [], workouts: [] };
-  // Zugangsdaten (NAS-Passwort, Strava-Schlüssel) gehören nicht in die Sicherungsdatei
-  for (const k of await db.keys('kv')) if (!['sync', 'strava', 'syncMeta', 'musicFiles', 'cloudApps', 'device', 'kvTimes'].includes(k)) out.kv[k] = await db.get('kv', k);
-  out.rides = await db.all('rides');
-  out.routes = (await db.all('routes')).map(r => ({ ...r, dem: undefined })); // Gelände wird bei Bedarf neu geladen
-  out.workouts = await db.all('workouts');
-  for (const s of await db.all('shots')) out.shots.push({ ...s, blob: await blobToDataUrl(s.blob) });
-  return JSON.stringify(out);
-}
-export async function restore(text) {
-  const d = JSON.parse(text);
-  if (d.app !== 'trittwerk') throw new Error('Keine VeloVerse-Sicherung');
-  for (const k in d.kv) await db.put('kv', d.kv[k], k);
-  for (const s of ['rides', 'routes', 'workouts']) for (const v of d[s] || []) await db.put(s, v);
-  for (const s of d.shots || []) await db.put('shots', { ...s, blob: await (await fetch(s.blob)).blob() });
-  return d;
-}
+// Sicherung und Wiederherstellung: Format und Versionierung liegen in store.js
+export async function backup(opt) { return (await import('./store.js')).exportData(opt); }
+export async function restore(text, opt) { return (await import('./store.js')).importData(text, opt); }
 // Alles Lokale entfernen: Datenbank, App-Cache, Service Worker, Browser-Speicher (Daten auf dem NAS bleiben)
 export async function wipeAll() {
   try { (await dbp)?.close(); } catch (e) { }
@@ -91,4 +75,3 @@ export async function wipeAll() {
   try { localStorage.clear(); sessionStorage.clear(); } catch (e) { }
 }
 export async function wipe() { for (const s of ['kv', 'rides', 'shots', 'routes', 'workouts']) await db.clear(s); }
-function blobToDataUrl(b) { return new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(b); }); }

@@ -54,9 +54,14 @@ function build() {
   const roll = loop(brown, 'lowpass', 260, .7, rollG), grit = loop(pink, 'bandpass', 1400, .8, rollG); roll.g.gain.value = 1; grit.g.gain.value = .25;
   nodes = {
     wind: loop(pink, 'lowpass', 400, .4), roll: { g: rollG, f: roll.f, grit }, hum: loop(brown, 'bandpass', 110, 3),
-    sea: loop(brown, 'lowpass', 520, .4), surf: loop(pink, 'bandpass', 900, .5), breeze: loop(white, 'bandpass', 1800, .4), chain: loop(pink, 'bandpass', 3200, 1.6),
+    sea: loop(brown, 'lowpass', 520, .4), surf: loop(pink, 'bandpass', 900, .5), breeze: loop(white, 'bandpass', 1800, .4), chain: loop(pink, 'bandpass', 1900, 1.1),
     tick: 0, bird: 0, wave: 0, gust: 0, gustV: 0,
   };
+  // Antrieb ohne Klicks: Kettensurren als Rauschen, das per LFO weich im Tritt-Takt atmet, dazu das leise Zahnrad-Brummen
+  const lfo = ctx.createOscillator(), lfoG = ctx.createGain(); lfo.type = 'sine'; lfo.frequency.value = 3; lfoG.gain.value = 0; lfo.connect(lfoG).connect(nodes.chain.g.gain); lfo.start();
+  const tooth = ctx.createOscillator(), toothF = ctx.createBiquadFilter(), toothG = ctx.createGain(); tooth.type = 'triangle'; tooth.frequency.value = 70; toothF.type = 'lowpass'; toothF.frequency.value = 380; toothG.gain.value = 0;
+  tooth.connect(toothF).connect(toothG).connect(amb); tooth.start();
+  Object.assign(nodes, { lfo, lfoG, tooth, toothG });
   apply();
 }
 // Muss einmal durch eine Nutzeraktion freigeschaltet werden (Browser-Regel)
@@ -97,22 +102,20 @@ export function update(st) {
   const cad = st.cad || 0, pedaling = st.riding && cad > 20;
   set(N.hum.g.gain, pedaling ? Math.min(.07, .02 + st.power / 6000) * V('hum') : 0);
   set(N.hum.f.frequency, 55 + cad * .9);
-  // Kette: gleichmäßiges, leises Surren, das im Takt der Kurbel etwas pulsiert
-  set(N.chain.f.frequency, 2600 + cad * 9 + k * 600);
-  if (!pedaling || V('chain') <= 0) set(N.chain.g.gain, 0, .12);
-  else {
-    const base = (.012 + Math.min(.018, st.power / 25000)) * V('chain'), per = 60 / cad / 2, g = N.chain.g.gain;
-    g.cancelScheduledValues(t); g.setTargetAtTime(base, t, .08);
-    for (let s = t + .02; s < t + .22; s += per) { g.setTargetAtTime(base * 1.6, s, per * .12); g.setTargetAtTime(base * .7, s + per * .35, per * .2); }
-  }
-  // Freilauf: gleichmäßiges Ratschen, Taktrate folgt der Radgeschwindigkeit
+  // Kette: gleichmäßiges Surren; Lautstärke und Takt ändern sich nur über weiche Rampen (kein Neu-Planen, also kein Knacken)
+  const base = pedaling ? (.01 + Math.min(.014, st.power / 30000)) * V('chain') : 0;
+  set(N.chain.g.gain, base, .15); set(N.lfoG.gain, base * .45, .15);
+  set(N.lfo.frequency, Math.max(.5, cad / 60 * 2), .3);
+  set(N.chain.f.frequency, 1500 + cad * 6 + k * 500, .3);
+  set(N.toothG.gain, pedaling ? .012 * V('chain') : 0, .2); set(N.tooth.frequency, Math.max(20, cad / 60 * 50), .2);
+  // Freilauf: feines, metallisches Ticken der Sperrklinken, Takt folgt dem Raddrehen
   if (v > 1.5 && cad < 10 && V('free') > 0) {
-    const rate = Math.min(55, v / 2.1 * 24), vol = .028 * Math.min(1, v / 6) * V('free');
+    const rate = Math.min(32, v / 2.1 * 18), vol = .02 * Math.min(1, v / 6) * V('free');
     if (N.tick < t) N.tick = t + .02;
-    while (N.tick < t + .25) { click(N.tick, vol * (.75 + Math.random() * .5), 4200 + Math.random() * 1500); N.tick += 1 / rate * (.92 + Math.random() * .16); }
+    while (N.tick < t + .25) { pawl(N.tick, vol * (.8 + Math.random() * .4)); N.tick += 1 / rate * (.95 + Math.random() * .1); }
   } else N.tick = 0;
   // Meer: ruhiges Rauschen plus einzelne Wellen, die anlaufen und auslaufen
-  const coast = st.theme === 'coast' && !st.tunnel && V('sea') > 0;
+  const coast = ['coast', 'tropical', 'fjord'].includes(st.theme) && !st.tunnel && V('sea') > 0;
   set(N.sea.g.gain, coast ? .12 * V('sea') : 0, .8);
   if (!coast) set(N.surf.g.gain, 0, .5);
   else if (t > N.wave) {
@@ -126,7 +129,7 @@ export function update(st) {
   set(N.breeze.f.frequency, wet ? 2600 : 1500, .8);
   if (wet && !st.tunnel && V('rain') > 0 && Math.random() < .5) for (let i = 0; i < 3; i++) click(t + Math.random() * .2, (.008 + Math.random() * .012) * V('rain'), 2500 + Math.random() * 3000);
   // Vögel auf dem Land, nicht im Tunnel, nachts oder bei Regen
-  if (!st.tunnel && !wet && !st.night && V('birds') > 0 && ['meadow', 'forest', 'lake', 'alpine', 'plains'].includes(st.theme) && t > N.bird) { bird(t); N.bird = t + 2.5 + Math.random() * 7; }
+  if (!st.tunnel && !wet && !st.night && V('birds') > 0 && ['meadow', 'forest', 'lake', 'alpine', 'plains', 'tropical', 'tuscany', 'fjord'].includes(st.theme) && t > N.bird) { bird(t); N.bird = t + 2.5 + Math.random() * 7; }
   // Musik folgt der Intensität
   M.intensity = st.riding && st.ftp ? Math.min(1.3, st.power / st.ftp) : .3;
   const duck = !st.riding; if (duck !== M.duck) { M.duck = duck; apply(); }
@@ -144,6 +147,13 @@ function tone(freq, start, dur, { type = 'sine', vol = .3, slide = 0, attack = .
 }
 // Glocke: Grundton mit leisen Obertönen, klingt weicher als ein reiner Piepton
 function bell(freq, start, dur, vol, out = fx) { [[1, 1], [2.01, .35], [3.02, .12]].forEach(([m, a]) => tone(freq * m, start, dur / m ** .5, { vol: vol * a, attack: .004, out })); }
+// Sperrklinke: kurzer, gedämpfter Metallton statt Rauschklick
+function pawl(start, vol) {
+  const o = ctx.createOscillator(), g = ctx.createGain(), f = ctx.createBiquadFilter();
+  o.type = 'sine'; o.frequency.setValueAtTime(3400 + Math.random() * 500, start); f.type = 'highpass'; f.frequency.value = 1500;
+  g.gain.setValueAtTime(0, start); g.gain.linearRampToValueAtTime(vol, start + .0015); g.gain.exponentialRampToValueAtTime(.0001, start + .018);
+  o.connect(f).connect(g).connect(amb); o.start(start); o.stop(start + .03);
+}
 function click(start, vol = .08, freq = 3000) {
   if (vol <= 0) return;
   const s = ctx.createBufferSource(); s.buffer = NB.click;
@@ -254,11 +264,11 @@ export const sound = {
     unlock(); if (!ctx) return; const t = now();
     if (this[k === 'levelup' ? 'levelUp' : k]) return this[k === 'levelup' ? 'levelUp' : k](k === 'shift' ? true : undefined);
     if (k === 'birds') return bird(t);
-    if (k === 'free') { for (let i = 0; i < 40; i++) click(t + i * .035, .03 * V('free'), 4500); return; }
+    if (k === 'free') { for (let i = 0; i < 40; i++) pawl(t + i * .04, .02 * V('free')); return; }
     const n = nodes[{ wind: 'wind', roll: 'roll', hum: 'hum', sea: 'sea', rain: 'breeze', chain: 'chain' }[k]]; if (!n) return;
     const lvl = { wind: .14, roll: .26, hum: .07, sea: .2, rain: .06, chain: .02 }[k] * V(k);
     n.g.gain.cancelScheduledValues(t); n.g.gain.setTargetAtTime(lvl, t, .1); n.g.gain.setTargetAtTime(0, t + 1.6, .3);
   },
-  silence() { if (!ctx || !nodes) return; for (const k of ['wind', 'roll', 'hum', 'sea', 'surf', 'breeze', 'chain']) { nodes[k].g.gain.cancelScheduledValues(now()); nodes[k].g.gain.setTargetAtTime(0, now(), .2); } nodes.tick = 0; nodes.wave = 0; },
+  silence() { if (!ctx || !nodes) return; for (const k of ['wind', 'roll', 'hum', 'sea', 'surf', 'breeze', 'chain']) { nodes[k].g.gain.cancelScheduledValues(now()); nodes[k].g.gain.setTargetAtTime(0, now(), .2); } nodes.lfoG.gain.setTargetAtTime(0, now(), .2); nodes.toothG.gain.setTargetAtTime(0, now(), .2); nodes.tick = 0; nodes.wave = 0; },
   toggle() { profile.soundOn = profile.soundOn === false; apply(); return !muted(); },
 };

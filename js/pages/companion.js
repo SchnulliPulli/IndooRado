@@ -23,7 +23,7 @@ export async function render(el) {
   <section class="comp">
     <div class="comphead"><div><div class="small muted">Companion</div><h1>Hallo ${esc(profile.name)}</h1><div class="small muted">Level ${L.lv} · ${titleOf(L.lv)} · FTP ${profile.ftp} W</div></div>
       <button class="btn sm" id="cRefresh" ${nas ? '' : 'disabled'}>↻ Abgleichen</button></div>
-    <div class="small ${nas ? 'muted' : 'warn'}" id="cSync">${nas ? syncText() : 'Ohne Cloud-Abgleich siehst du hier nur die Daten dieses Geräts. Unter Profil einen Cloud-Speicher verbinden (NAS, OneDrive, Google Drive, Dropbox), dann zeigt das Handy deine Fahrten, Pläne und die laufende Fahrt vom PC.'}</div>
+    <div class="small ${nas ? 'muted' : 'warn'}" id="cSync">${nas ? syncText() : 'Ohne Cloud-Abgleich siehst du hier nur die Daten dieses Geräts. Unter Einstellungen › Verbindungen einen Cloud-Speicher verbinden (NAS, OneDrive, Google Drive, Dropbox), dann zeigt das Handy deine Fahrten, Pläne und die laufende Fahrt vom PC.'}</div>
 
     <div class="card live" id="cLive" hidden></div>
 

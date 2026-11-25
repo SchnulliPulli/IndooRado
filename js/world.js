@@ -97,14 +97,44 @@ function rockGeo() {
   for (let i = 0; i < p.count; i++) p.setXYZ(i, p.getX(i) * (.8 + r() * .5), p.getY(i) * (.5 + r() * .3), p.getZ(i) * (.8 + r() * .5));
   g.computeVertexNormals(); return colored(g, '#8b8d8f');
 }
+function palmGeo() {
+  // leicht gebogener Stamm aus Segmenten, Wedel als flache Kegel
+  const parts = []; let x = 0, y = 0;
+  for (let i = 0; i < 6; i++) { const seg = new THREE.CylinderGeometry(.2 - i * .015, .24 - i * .015, 1.5, 6); seg.translate(x, y + .75, 0); parts.push(colored(seg, i % 2 ? '#8a6a4a' : '#7b5d40')); x += .12 + i * .04; y += 1.45; }
+  for (let k = 0; k < 7; k++) { const f = new THREE.ConeGeometry(.55, 4.2, 4); f.scale(1, 1, .18); f.rotateZ(Math.PI / 2 + .45); f.translate(1.9, 0, 0); f.rotateY(k / 7 * Math.PI * 2); f.translate(x, y + .1, 0); parts.push(colored(f, k % 2 ? '#3f8f3a' : '#4fa043')); }
+  parts.push(colored(new THREE.IcosahedronGeometry(.4, 0).translate(x, y - .2, 0), '#6b4a2a'));
+  return merge(parts);
+}
+function cactusGeo() {
+  const g = '#4d8a4a';
+  return merge([colored(new THREE.CylinderGeometry(.32, .36, 4.2, 8).translate(0, 2.1, 0), g), colored(new THREE.SphereGeometry(.32, 8, 6).translate(0, 4.2, 0), g),
+    colored(new THREE.CylinderGeometry(.2, .2, 1, 8).rotateZ(Math.PI / 2).translate(.6, 1.9, 0), g), colored(new THREE.CylinderGeometry(.2, .2, 1.4, 8).translate(1.05, 2.6, 0), g), colored(new THREE.SphereGeometry(.2, 8, 6).translate(1.05, 3.3, 0), g),
+    colored(new THREE.CylinderGeometry(.18, .18, .8, 8).rotateZ(Math.PI / 2).translate(-.5, 2.5, 0), g), colored(new THREE.CylinderGeometry(.18, .18, 1, 8).translate(-.85, 3, 0), g), colored(new THREE.SphereGeometry(.18, 8, 6).translate(-.85, 3.5, 0), g)]);
+}
 function tuftGeo() { return merge([colored(new THREE.ConeGeometry(.35, .9, 4).translate(0, .45, 0), '#5f9a46'), colored(new THREE.ConeGeometry(.25, .7, 4).translate(.3, .35, .2), '#6aa34c')]); }
 
 /* ---------- Avatar ---------- */
-class Rider {
+export const AV_DEFAULT = { pattern: 'plain', jersey2: '#ffffff', shorts: '#1b1e22', socks: '#f4f4f4', shoes: '#1b1e22', hair: '#3a2a1e', lens: '#20262c', helmetStyle: 'road', glasses: 'none', beard: false, ponytail: false, bottle: true, bottleColor: '#3fa7f5', extra: 'none' };
+// Trikotmuster als Textur (u läuft um den Körper, v von unten nach oben)
+export function jerseyTex(pattern, c1, c2) {
+  return canvasTex(256, 256, (x, w, h) => {
+    x.fillStyle = c1; x.fillRect(0, 0, w, h); x.fillStyle = c2;
+    if (pattern === 'band') x.fillRect(0, h * .42, w, h * .16);
+    else if (pattern === 'stripes') for (let i = 0; i < 8; i++) x.fillRect(i * w / 8, 0, w / 16, h);
+    else if (pattern === 'hoops') for (let i = 0; i < 6; i++) x.fillRect(0, i * h / 6, w, h / 12);
+    else if (pattern === 'dots') for (let i = 0; i < 9; i++) for (let j = 0; j < 9; j++) { x.beginPath(); x.arc((i + .5 + (j % 2) * .5) * w / 9, (j + .5) * h / 9, w / 40, 0, 7); x.fill(); }
+    else if (pattern === 'split') x.fillRect(0, 0, w / 2, h);
+    else if (pattern === 'chevron') { x.lineWidth = h / 10; x.strokeStyle = c2; x.beginPath(); x.moveTo(0, h * .3); x.lineTo(w / 4, h * .55); x.lineTo(w / 2, h * .3); x.lineTo(w * .75, h * .55); x.lineTo(w, h * .3); x.stroke(); }
+  }, false);
+}
+export class Rider {
   constructor(c) {
+    const A = this.av = { ...AV_DEFAULT, ...(c.av || {}) };
     this.root = new THREE.Group(); this.root.rotation.order = 'YXZ';
     const M = (color, rough) => new THREE.MeshStandardMaterial({ color, roughness: rough ?? .6, metalness: 0 });
-    this.mat = { jersey: M(c.jersey, .7), bike: M(c.bikeColor, .35), skin: M(c.skin, .8), helmet: M(c.helmet, .3), dark: M('#1b1e22', .8), tire: M('#151618', .9), rim: M('#c8ccd0', .3), sock: M('#f4f4f4', .8) };
+    this.mat = { jersey: M(c.jersey, .7), bike: M(c.bikeColor, .35), skin: M(c.skin, .8), helmet: M(c.helmet, .3), dark: M('#1b1e22', .8), tire: M('#151618', .9), rim: M('#c8ccd0', .3), sock: M(A.socks, .8),
+      shorts: M(A.shorts, .75), shoes: M(A.shoes, .5), hair: M(A.hair, .9), lens: new THREE.MeshStandardMaterial({ color: A.lens, roughness: .1, metalness: .6 }), gold: new THREE.MeshStandardMaterial({ color: '#e8c04a', roughness: .25, metalness: .8 }) };
+    if (A.pattern && A.pattern !== 'plain') { this.mat.jersey.map = jerseyTex(A.pattern, c.jersey, A.jersey2); this.mat.jersey.color.set('#ffffff'); }
     const g = this.g = new THREE.Group(); this.root.add(g);
     const add = (geo, mat) => { const m = new THREE.Mesh(geo, mat); m.castShadow = true; g.add(m); return m; };
     const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -134,10 +164,31 @@ class Rider {
     this.head = add(new THREE.SphereGeometry(.1, 14, 12), this.mat.skin);
     this.helmet = add(new THREE.SphereGeometry(.13, 14, 10, 0, Math.PI * 2, 0, Math.PI / 1.9), this.mat.helmet); this.helmet.scale.set(.95, .85, 1.25);
     this.arms = [-1, 1].map(s => ({ s, up: add(new THREE.CylinderGeometry(.045, .04, 1, 8), this.mat.jersey), lo: add(new THREE.CylinderGeometry(.038, .033, 1, 8), this.mat.skin), elb: add(new THREE.SphereGeometry(.042, 8, 6), this.mat.skin) }));
-    this.legs = [-1, 1].map(s => ({ s, th: add(new THREE.CylinderGeometry(.075, .055, 1, 10), this.mat.dark), sh: add(new THREE.CylinderGeometry(.052, .04, 1, 10), this.mat.skin), knee: add(new THREE.SphereGeometry(.058, 10, 8), this.mat.dark), sock: add(new THREE.CylinderGeometry(.042, .042, .12, 8), this.mat.sock), shoe: add(new THREE.BoxGeometry(.08, .07, .25), this.mat.dark) }));
+    this.legs = [-1, 1].map(s => ({ s, th: add(new THREE.CylinderGeometry(.075, .055, 1, 10), this.mat.shorts), sh: add(new THREE.CylinderGeometry(.052, .04, 1, 10), this.mat.skin), knee: add(new THREE.SphereGeometry(.058, 10, 8), this.mat.skin), sock: add(new THREE.CylinderGeometry(.042, .042, .12, 8), this.mat.sock), shoe: add(new THREE.BoxGeometry(.08, .07, .25), this.mat.shoes) }));
+    this.buildAcc(add, V);
     this.wheelA = 0; this.update(0, 0, 0, 0);
   }
-  setColors(c) { this.mat.jersey.color.set(c.jersey); this.mat.bike.color.set(c.bikeColor); this.mat.helmet.color.set(c.helmet); this.mat.skin.color.set(c.skin); }
+  // Zubehör: Helmform, Brille, Bart, Zopf, Trinkflasche und freischaltbare Extras. Alles hängt an einer Kopfgruppe.
+  buildAcc(add, V) {
+    const A = this.av, hg = this.headG = new THREE.Group(); this.g.add(hg);
+    const put = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; hg.add(m); return m; };
+    // Helm: Straße (Standard), Aero (lang gezogen mit Spitze), Kappe (Schirmmütze statt Helm)
+    if (A.helmetStyle === 'aero') { this.helmet.scale.set(.95, .82, 1.55); put(new THREE.ConeGeometry(.07, .22, 10).rotateX(Math.PI / 2), this.mat.helmet, 0, .02, .22); }
+    if (A.helmetStyle === 'cap') {
+      this.helmet.visible = false;
+      put(new THREE.SphereGeometry(.108, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2.1), this.mat.helmet, 0, .02, 0);
+      put(new THREE.CylinderGeometry(.09, .09, .012, 14, 1, false, -Math.PI / 2, Math.PI).scale(1, 1, .9), this.mat.helmet, 0, .03, -.09);
+    }
+    if (A.glasses === 'sport') { put(new THREE.BoxGeometry(.2, .045, .03), this.mat.lens, 0, -.005, -.098).rotation.x = .1; put(new THREE.BoxGeometry(.012, .012, .12), this.mat.dark, .1, 0, -.04); put(new THREE.BoxGeometry(.012, .012, .12), this.mat.dark, -.1, 0, -.04); }
+    if (A.glasses === 'round') for (const s of [-1, 1]) { const r = put(new THREE.TorusGeometry(.028, .006, 6, 16), this.mat.dark, s * .04, -.005, -.098); put(new THREE.CircleGeometry(.026, 16), this.mat.lens, s * .04, -.005, -.1).rotation.y = Math.PI; r.rotation.y = 0; }
+    if (A.beard) put(new THREE.SphereGeometry(.075, 12, 8, 0, Math.PI * 2, Math.PI / 2.4, Math.PI / 2).scale(1, .9, .9), this.mat.hair, 0, -.035, -.035);
+    if (A.ponytail) { const t = put(new THREE.CylinderGeometry(.025, .012, .2, 8), this.mat.hair, 0, -.05, .14); t.rotation.x = -.9; }
+    if (A.extra === 'horn') { const h = put(new THREE.ConeGeometry(.03, .2, 12), this.mat.gold, 0, .19, -.08); h.rotation.x = -.5; }
+    if (A.extra === 'crown') { const cr = put(new THREE.CylinderGeometry(.08, .07, .06, 8, 1, true), this.mat.gold, 0, .15, 0); cr.material.side = THREE.DoubleSide; for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; put(new THREE.ConeGeometry(.014, .04, 6), this.mat.gold, Math.cos(a) * .078, .2, Math.sin(a) * .078); } }
+    if (A.extra === 'antlers') for (const s of [-1, 1]) { const a = put(new THREE.CylinderGeometry(.008, .012, .16, 6), this.mat.hair, s * .07, .17, 0); a.rotation.z = -s * .5; const b = put(new THREE.CylinderGeometry(.006, .009, .08, 6), this.mat.hair, s * .1, .22, -.03); b.rotation.x = .6; }
+    if (A.bottle) { const P = this.P, b = add(new THREE.CylinderGeometry(.035, .035, 1, 10), new THREE.MeshStandardMaterial({ color: A.bottleColor || '#3fa7f5', roughness: .4 })); this.limb(b, P.BB.clone().lerp(P.HB, .3), P.BB.clone().lerp(P.HB, .62)); b.position.y += .05; }
+  }
+  setColors(c) { if (this.mat.jersey.map) { this.mat.jersey.map = jerseyTex(this.av.pattern, c.jersey, this.av.jersey2); this.mat.jersey.needsUpdate = true; } else this.mat.jersey.color.set(c.jersey); this.mat.bike.color.set(c.bikeColor); this.mat.helmet.color.set(c.helmet); this.mat.skin.color.set(c.skin); }
   limb(m, a, b) {
     const d = new THREE.Vector3().subVectors(b, a), L = d.length();
     m.position.copy(a).addScaledVector(d, .5); m.scale.set(1, L, 1);
@@ -152,7 +203,7 @@ class Rider {
     // Oberkörper
     const mid = hip.clone().lerp(sh, .5); this.torso.position.copy(mid);
     this.torso.quaternion.setFromUnitVectors(V(0, 1, 0), sh.clone().sub(hip).normalize());
-    const headP = sh.clone().add(V(0, .15, -.1)); this.head.position.copy(headP); this.helmet.position.copy(headP).add(V(0, .03, .01)); this.helmet.rotation.x = -.35;
+    const headP = sh.clone().add(V(0, .15, -.1)); this.head.position.copy(headP); this.helmet.position.copy(headP).add(V(0, .03, .01)); this.helmet.rotation.x = -.35; if (this.headG) { this.headG.position.copy(this.head.position); this.headG.rotation.x = -.25; }
     for (const a of this.arms) {
       const s0 = sh.clone().add(V(a.s * .17, .02, .02)), hand = V(a.s * .2, .9, -.46), el = s0.clone().lerp(hand, .5).add(V(a.s * .03, .06, .05));
       this.limb(a.up, s0, el); this.limb(a.lo, el, hand); a.elb.position.copy(el);
@@ -399,6 +450,37 @@ export class World {
         b.userData = { ph: r() * 6 }; this.scene.add(b); this.boats.push(b);
       }
     }
+    // Gebetsfahnen quer über die Straße (Himalaya)
+    if (R.theme.flags) {
+      const per = 12, lines = Math.floor(R.total / 450), im = new THREE.InstancedMesh(new THREE.PlaneGeometry(.42, .55).translate(0, -.28, 0), new THREE.MeshLambertMaterial({ side: THREE.DoubleSide }), lines * per);
+      const cols = ['#2f6fd6', '#f4f4f4', '#d8322f', '#2e9b4e', '#f2c230'].map(col), m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0); let k = 0;
+      const poleM = new THREE.MeshLambertMaterial({ color: 0x6b5030 });
+      for (let li = 0; li < lines; li++) {
+        const d = 200 + li * 450; if (d > R.total - 100 || R.tunnelAt(d, 30)) continue;
+        const a0 = at(d, -6.5), a1 = at(d, 6.5);
+        for (const pp of [a0, a1]) { const pole = new THREE.Mesh(new THREE.CylinderGeometry(.07, .09, 6.5, 6).translate(0, 3.25, 0), poleM); pole.position.copy(pp); this.scene.add(pole); }
+        q4.setFromAxisAngle(up, -R.headAt(d) + Math.PI / 2);
+        for (let i = 0; i < per; i++) {
+          const f = (i + .5) / per, pnt = a0.clone().lerp(a1, f); pnt.y += 6.3 - Math.sin(f * Math.PI) * 1.2;
+          m4.compose(pnt, q4, new THREE.Vector3(1, 1, 1)); im.setMatrixAt(k, m4); im.setColorAt(k, cols[i % 5]); k++;
+        }
+      }
+      im.count = k; if (im.instanceColor) im.instanceColor.needsUpdate = true; this.scene.add(im);
+    }
+    // Wahrzeichen in der Ferne: steiler Felsdom im Meer (Tropen) oder Tafelberge (Wüste)
+    if (R.theme.landmark) {
+      const r = rng(31), isDome = R.theme.landmark === 'dome';
+      const mat = new THREE.MeshLambertMaterial({ color: isDome ? 0x7d8a7a : 0xb5653c, flatShading: true });
+      for (let i = 0; i < (isDome ? 2 : 6); i++) {
+        const d = R.total * (isDome ? .35 + i * .35 : .1 + i * .15), h = R.headAt(d), side = isDome ? (R.theme.coast || -1) : (i % 2 ? 1 : -1), off = isDome ? 260 + i * 160 : 380 + r() * 500;
+        const x = R.xAt(d) - Math.cos(h) * side * off, z = R.zAt(d) - Math.sin(h) * side * off, base = isDome ? (R.water ?? 0) - 5 : R.heightAt(x, z) - 4;
+        const geo = isDome ? new THREE.SphereGeometry(1, 18, 14) : new THREE.CylinderGeometry(.85, 1, 1, 9, 2);
+        const mesh = new THREE.Mesh(geo, mat);
+        if (isDome) { mesh.scale.set(70 - i * 15, 230 - i * 70, 80 - i * 15); mesh.position.set(x, base, z); }
+        else { const hh = 50 + r() * 90, w = 90 + r() * 160; mesh.scale.set(w, hh, w * (.6 + r() * .6)); mesh.position.set(x, base + hh / 2, z); mesh.rotation.y = r() * 3; }
+        mesh.castShadow = false; this.scene.add(mesh);
+      }
+    }
     // Intervall-Zieltor (wird bei Bedarf positioniert)
     const gate = this.gate = new THREE.Group(); gate.visible = false;
     const gm = new THREE.MeshLambertMaterial({ color: 0x1b1e22 });
@@ -422,10 +504,11 @@ export class World {
     this.inst = {
       conifer: mk(coniferGeo(), this.vcMat, cap), leafy: mk(leafyGeo(), this.vcMat, cap),
       rock: mk(rockGeo(), this.vcMat, 1500), tuft: mk(tuftGeo(), this.vcMat, 24000, false),
+      palm: mk(palmGeo(), this.vcMat, Math.round(cap / 3)), cactus: mk(cactusGeo(), this.vcMat, Math.round(cap / 4)),
       wall: mk(new THREE.BoxGeometry(1, 1, 1).translate(0, .5, 0), new THREE.MeshLambertMaterial({ map: windowTex() }), 2000),
       roof: mk(new THREE.CylinderGeometry(.62, .62, 1, 3, 1).rotateZ(Math.PI / 2).rotateX(Math.PI / 2).scale(1, .5, 1).translate(0, .25, 0), new THREE.MeshLambertMaterial({ color: 0xffffff }), 2000),
     };
-    for (const k of ['wall', 'roof', 'leafy', 'conifer']) this.inst[k].instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(this.inst[k].instanceMatrix.count * 3).fill(1), 3);
+    for (const k of ['wall', 'roof', 'leafy', 'conifer', 'palm', 'cactus']) this.inst[k].instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(this.inst[k].instanceMatrix.count * 3).fill(1), 3);
   }
 
   /* Ferne Berge als Ring und Wolken */
@@ -495,7 +578,7 @@ export class World {
     g.setAttribute('color', new THREE.BufferAttribute(colr, 3));
     const mesh = new THREE.Mesh(g, this.terrainMat); mesh.receiveShadow = true; this.scene.add(mesh);
     // Objekte
-    const objs = { conifer: [], leafy: [], rock: [], tuft: [], house: [] };
+    const objs = { conifer: [], leafy: [], rock: [], tuft: [], house: [], palm: [], cactus: [] };
     const r = rng(hash2(cx + 5000, cz + 9000));
     const Q = this.Q.trees, treeline = th.snow - 220;
     const tries = Math.round(420 * th.trees * Q);
@@ -507,8 +590,8 @@ export class World {
       if (R.water != null && y < R.water + 1.5) continue;
       if (y > treeline) continue;
       // Waldflächen: Rauschen bündelt Bäume
-      if (fbm(x / 260, z / 260, 2, 13) < (th.trees > .8 ? -.35 : -.05) && dist > 30) continue;
-      const kind = r() < th.conifer ? 'conifer' : 'leafy';
+      if (!th.cactus && fbm(x / 260, z / 260, 2, 13) < (th.trees > .8 ? -.35 : -.05) && dist > 30) continue;
+      const kind = r() < (th.palm || 0) ? 'palm' : r() < (th.cactus || 0) ? 'cactus' : r() < th.conifer ? 'conifer' : 'leafy';
       objs[kind].push([x, y - .2, z, .75 + r() * .75, r() * 6.28, .85 + r() * .3]);
     }
     for (let t = 0; t < Math.round(40 * th.rocks * 4 * Q); t++) {
@@ -519,7 +602,7 @@ export class World {
     for (let t = 0; t < Math.round(420 * Q); t++) {
       const x = x0 + r() * CHUNK, z = z0 + r() * CHUNK, nn = R.nearest(x, z); if (!nn || nn.dist < 5.5 || nn.dist > 45) continue;
       const y = R.heightAt(x, z); if (R.water != null && y < R.water + 1) continue; if (y > th.snow) continue;
-      objs.tuft.push([x, y - .05, z, .6 + r() * .9, r() * 6.28, 1]);
+      if (!th.dry || r() < .25) objs.tuft.push([x, y - .05, z, .6 + r() * .9, r() * 6.28, 1]);
     }
     const hc = Math.round(th.houses * 40);
     for (let t = 0; t < hc; t++) {
@@ -565,16 +648,16 @@ export class World {
   }
   rebuildInstances() {
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), c = new THREE.Color();
-    const cnt = { conifer: 0, leafy: 0, rock: 0, tuft: 0, wall: 0, roof: 0 };
+    const cnt = { conifer: 0, leafy: 0, rock: 0, tuft: 0, wall: 0, roof: 0, palm: 0, cactus: 0 };
     const wallCols = ['#f4efe6', '#efe2c4', '#e8d3b0', '#f6f6f2'].map(col), roofCols = ['#a8442f', '#8b3a2b', '#5e5650', '#b5562c'].map(col);
     for (const ch of this.chunks.values()) {
-      for (const k of ['conifer', 'leafy', 'rock', 'tuft']) {
+      for (const k of ['conifer', 'leafy', 'rock', 'tuft', 'palm', 'cactus']) {
         const im = this.inst[k];
         for (const o of ch.objs[k]) {
           if (cnt[k] >= im.instanceMatrix.count) break;
           q.setFromAxisAngle(up, o[4]); s.set(o[3], o[3] * (k === 'rock' ? .8 : 1), o[3]); p.set(o[0], o[1], o[2]);
           m.compose(p, q, s); im.setMatrixAt(cnt[k], m);
-          if (k === 'conifer' || k === 'leafy') { c.setRGB(o[5] * .95, o[5], o[5] * .9); im.setColorAt(cnt[k], c); }
+          if (k === 'conifer' || k === 'leafy' || k === 'palm' || k === 'cactus') { c.setRGB(o[5] * .95, o[5], o[5] * .9); im.setColorAt(cnt[k], c); }
           cnt[k]++;
         }
       }

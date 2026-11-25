@@ -1,6 +1,7 @@
 // Abgleich mit dem NAS, zusätzlich zum Browser-Speicher.
 // Zwei Wege: Synology-Anmeldung (DSM-Konto inkl. 2FA, File Station API) oder WebDAV.
 // Aufbau im Ordner: state.json (Einstellungen, Fortschritt, eigene Strecken/Workouts), rides/<id>.json, shots/<id>.jpg
+import { SCHEMA } from './store.js';
 import { db, kv } from './db.js';
 import { bus } from './util.js';
 import { PROVIDERS, isOAuth, backend, finishOAuth, fresh } from './cloud.js';
@@ -168,7 +169,7 @@ export async function testConnection() {
 
 async function stateObj(rev) {
   const now = new Date().toISOString();
-  const out = { app: 'trittwerk', savedAt: now, rev, by: { ...sync.device }, devices: { ...sync.devices, [sync.device.id]: { name: sync.device.name, last: now } }, kvT: {}, kv: {}, routes: (await db.all('routes')).map(r => ({ ...r, dem: undefined })), workouts: await db.all('workouts') };
+  const out = { app: 'trittwerk', format: 'veloverse-data', schema: SCHEMA, savedAt: now, rev, by: { ...sync.device }, devices: { ...sync.devices, [sync.device.id]: { name: sync.device.name, last: now } }, kvT: {}, kv: {}, routes: (await db.all('routes')).map(r => ({ ...r, dem: undefined })), workouts: await db.all('workouts') };
   for (const k of await db.keys('kv')) if (!LOCAL_ONLY.has(k)) { out.kv[k] = await db.get('kv', k); out.kvT[k] = kvT[k] || 0; }
   return out;
 }

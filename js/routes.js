@@ -12,6 +12,11 @@ export const THEMES = {
   alpine: { sky: ['#2f74c4', '#d9ecf8'], grass: ['#5a8f43', '#6d9a4a', '#8aa46a'], hillAmp: 45, hillScale: 650, valley: 0.22, trees: 0.7, conifer: 0.95, houses: 0.02, rocks: 0.25, snow: 1750, mountains: 1.6 },
   coast: { sky: ['#4a92d8', '#e2f1fa'], grass: ['#86a85a', '#9db66a', '#c7c08a'], hillAmp: 26, hillScale: 600, valley: 0.06, trees: 0.25, conifer: 0.2, houses: 0.1, rocks: 0.15, snow: 9999, mountains: 0.4, coast: -1 },
   forest: { sky: ['#4b8fd0', '#d6eaf5'], grass: ['#4c853a', '#5d9343', '#6f9d48'], hillAmp: 20, hillScale: 380, valley: 0.05, trees: 1.0, conifer: 0.6, houses: 0.01, rocks: 0.08, snow: 9999, mountains: 0.3 },
+  tropical: { sky: ['#2d8fe0', '#e6f6ff'], grass: ['#3f9a3a', '#4fac43', '#76b84e'], hillAmp: 55, hillScale: 420, valley: 0.08, trees: 0.8, conifer: 0, palm: 0.45, houses: 0.25, rocks: 0.12, snow: 9999, mountains: 0.9, coast: -1, landmark: 'dome', waterGap: 4 },
+  himalaya: { sky: ['#1c5fc4', '#d7e8f7'], grass: ['#8c8a5e', '#9e8f66', '#b5a57a'], hillAmp: 70, hillScale: 700, valley: 0.3, trees: 0.12, conifer: 0.9, houses: 0.03, rocks: 0.7, snow: 4950, mountains: 2.6, flags: true, dry: true },
+  desert: { sky: ['#3d8bd0', '#f4ead8'], grass: ['#d6b47a', '#c99d62', '#e0c48c'], hillAmp: 30, hillScale: 500, valley: 0.05, trees: 0.12, conifer: 0, cactus: 0.85, houses: 0.02, rocks: 0.5, snow: 9999, mountains: 0.6, landmark: 'mesa', dry: true },
+  fjord: { sky: ['#3f7fc0', '#dce9f2'], grass: ['#4f7f3f', '#5d8c45', '#7a9a5a'], hillAmp: 60, hillScale: 520, valley: 0.35, trees: 0.8, conifer: 0.95, houses: 0.05, rocks: 0.3, snow: 1150, mountains: 1.5, coast: 1, waterGap: 7 },
+  tuscany: { sky: ['#3f8ad8', '#f0eee0'], grass: ['#9aa651', '#b8a95c', '#c6b06a'], hillAmp: 28, hillScale: 420, valley: 0.04, trees: 0.35, conifer: 0.7, houses: 0.14, rocks: 0.03, snow: 9999, mountains: 0.35 },
   plains: { sky: ['#4790db', '#e4f1f8'], grass: ['#7ea94c', '#a8b85a', '#c9b864'], hillAmp: 6, hillScale: 700, valley: 0.01, trees: 0.25, conifer: 0.1, houses: 0.12, rocks: 0.01, snow: 9999, mountains: 0.2 },
 };
 
@@ -49,6 +54,13 @@ const BUILTIN_DEF = [
   { id: 'b-coast', name: 'Küstenstraße', theme: 'coast', desc: '28 km entlang des Meeres, leicht wellig.', make: () => pathOpen({ len: 28000, heading: d => 1.2 + 0.35 * Math.sin(d / 1700) + 0.18 * Math.sin(d / 430 + 1), ele: d => 40 + 22 * Math.sin(d / 2100) + 12 * Math.sin(d / 760 + .5) + 5 * Math.sin(d / 230) + 18 * Math.max(0, Math.sin(d / 5200 - 1)), lat0: 43.6, lon0: 7.2 }), loop: false, climbNames: ['Capo Rosso', 'Punta Verde', 'Belvedere'] },
   { id: 'b-forest', name: 'Waldrunde', theme: 'forest', desc: 'Kurze, knackige Runde im dichten Mischwald.', make: () => polarLoop({ len: 9000, lobes: [S(2, .2, 1), S(3, .15, 0), S(6, .05, 1)], lat0: 50.1, lon0: 10.4, ele: th => 450 + 14 * Math.sin(th * 2 + 1) + 9 * Math.sin(th * 5) + 4 * Math.sin(th * 11 + 2) }), loop: true, climbNames: ['Buchenrampe', 'Fuchsbau'] },
   { id: 'b-tour', name: 'Königsetappe', theme: 'alpine', desc: '55 km mit Talfahrt und zwei harten Anstiegen.', make: () => pathOpen({ len: 55000, heading: d => 0.8 * Math.sin(d / 3100) + 0.5 * Math.sin(d / 900 + .3) + (d > 18000 && d < 25000 ? 1.2 * Math.sin((d - 18000) / 200) : 0) + (d > 42000 && d < 47000 ? 1.3 * Math.sin((d - 42000) / 170) : 0), ele: d => { let e = 600 + 8 * Math.sin(d / 1300) + 4 * Math.sin(d / 400); if (d > 18000) e += Math.min(d - 18000, 7000) * 0.062; if (d > 25000) e -= Math.min(d - 25000, 9000) * 0.042; if (d > 42000) e += Math.min(d - 42000, 5000) * 0.078; if (d > 47000) e -= Math.min(d - 47000, 8000) * 0.04; return e; }, lat0: 46.9, lon0: 10.8 }), loop: false, climbNames: ['Colle di Fieno', 'Muro Finale'] },
+  { id: 'b-glacier', name: 'Alpen: Gletscherstraße', theme: 'alpine', desc: '24 km in Kehren bis auf 2750 m, oben Schnee und Fels.', make: () => pathOpen({ len: 24000, heading: d => 0.6 + 0.4 * Math.sin(d / 2300) + (d > 9000 ? 1.6 * Math.sin((d - 9000) / 210) : 0.2 * Math.sin(d / 500)), ele: d => 1280 + 25 * Math.sin(d / 900) + Math.min(d, 2000) * 0.01 + Math.max(0, d - 2000) * 0.065 - Math.max(0, d - 23300) * 0.08 + 6 * Math.sin(d / 170), lat0: 46.53, lon0: 10.45 }), loop: false, climbNames: ['Gletscherstraße'] },
+  { id: 'b-alps3', name: 'Alpen: Drei-Pässe-Runde', theme: 'alpine', desc: '62 km Rundfahrt über drei Pässe, dazwischen schnelle Abfahrten durch Täler.', make: () => polarLoop({ len: 62000, lobes: [S(2, .2, .3), S(3, .14, 1.1), S(7, .04, .5)], lat0: 46.6, lon0: 8.5, ele: th => 1200 + 520 * Math.max(0, Math.sin(th * 3 + .4)) ** 1.6 + 40 * Math.sin(th * 11) + 15 * Math.sin(th * 29) }), loop: true, climbNames: ['Furkelpass', 'Grimselhöhe', 'Sustenjoch'] },
+  { id: 'b-rio', name: 'Rio: Strände und Felsen', theme: 'tropical', desc: '21 km an Palmenstränden entlang, ein steiler Hügel mit Blick auf den Felsdom im Meer.', make: () => pathOpen({ len: 21000, heading: d => 0.9 + 0.45 * Math.sin(d / 1500) + 0.2 * Math.sin(d / 380 + 2), ele: d => 8 + 3 * Math.sin(d / 600) + 95 * Math.exp(-(((d - 11500) / 1300) ** 2)) + 20 * Math.exp(-(((d - 4000) / 600) ** 2)), lat0: -22.95, lon0: -43.2 }), loop: false, climbNames: ['Morro Vista', 'Mirante'] },
+  { id: 'b-himalaya', name: 'Himalaya: Pass der Gebetsfahnen', theme: 'himalaya', desc: '30 km von 3800 m auf über 5100 m, dünne Luft, Gebetsfahnen und Gletscherriesen.', make: () => pathOpen({ len: 30000, heading: d => 0.2 + 0.5 * Math.sin(d / 2600) + (d > 14000 && d < 26000 ? 1.3 * Math.sin((d - 14000) / 260) : 0.15 * Math.sin(d / 700)), ele: d => 3800 + 12 * Math.sin(d / 800) + Math.min(d, 27500) * 0.048 - Math.max(0, d - 28200) * 0.06 + 8 * Math.sin(d / 230), lat0: 27.9, lon0: 86.8 }), loop: false, climbNames: ['La Dzong', 'Gebetsfahnen-Pass'] },
+  { id: 'b-desert', name: 'Canyon-Wüste', theme: 'desert', desc: '35 km wellig durch rote Tafelberge, Kakteen und Felsen.', make: () => polarLoop({ len: 35000, lobes: [S(2, .28, .9), S(3, .1, 0), S(5, .05, 2.2)], lat0: 36.9, lon0: -111.5, ele: th => 1300 + 30 * Math.sin(th * 4 + .2) + 14 * Math.sin(th * 9) + 6 * Math.sin(th * 21 + 1) }), loop: true, climbNames: ['Red Mesa'] },
+  { id: 'b-fjord', name: 'Fjordrunde', theme: 'fjord', desc: '26 km am Wasser entlang zwischen steilen Bergflanken und Nadelwald.', make: () => pathOpen({ len: 26000, heading: d => 1.8 + 0.5 * Math.sin(d / 2000) + 0.25 * Math.sin(d / 520 + 1), ele: d => 15 + 10 * Math.sin(d / 1100) + 120 * Math.exp(-(((d - 16000) / 2200) ** 2)) + 4 * Math.sin(d / 240), lat0: 61.1, lon0: 7.1 }), loop: false, climbNames: ['Fjellkante'] },
+  { id: 'b-tuscany', name: 'Toskana-Hügel', theme: 'tuscany', desc: '32 km Runde über sanfte Hügel mit Zypressen und Dörfern.', make: () => polarLoop({ len: 32000, lobes: [S(2, .16, 1.4), S(3, .14, .2), S(6, .05, 1)], lat0: 43.3, lon0: 11.3, ele: th => 280 + 60 * Math.sin(th * 4 + 1) + 22 * Math.sin(th * 9 + .4) + 7 * Math.sin(th * 19) }), loop: true, climbNames: ['Poggio Alto', 'Colle Verde', 'San Ciro', 'Montepino'] },
   { id: 'b-flat', name: 'Flachland-Achter', theme: 'plains', desc: 'Topfebene Runde durch Felder für ERG-Workouts.', make: () => polarLoop({ len: 20000, lobes: [S(2, .35, .3), S(4, .06, 1)], lat0: 52.3, lon0: 9.7, ele: th => 60 + 1.2 * Math.sin(th * 3) }), loop: true, climbNames: [] },
 ];
 // Ortschaften [Beginn m, Länge m, Name] und Tunnel [von m, bis m]
@@ -59,6 +71,13 @@ const EXTRAS = {
   'b-coast': { towns: [[2500, 900, 'Marina Chiara'], [15500, 700, 'San Vento'], [25500, 800, 'Capo Lume']], tunnels: [[9500, 9900], [20000, 20380]] },
   'b-forest': { towns: [[6000, 300, 'Forsthaus']] },
   'b-tour': { towns: [[2000, 1000, 'Talstadt'], [30000, 1200, 'Mittelberg'], [52800, 900, 'Gipfeldorf']], tunnels: [[27000, 27550], [38000, 38420]] },
+  'b-glacier': { towns: [[400, 600, 'Bormino']], tunnels: [[5200, 5550]] },
+  'b-alps3': { towns: [[1500, 800, 'Andermatt-Dorf'], [22000, 700, 'Innertal'], [43000, 800, 'Wassen']], tunnels: [[30000, 30500]] },
+  'b-rio': { towns: [[1200, 1500, 'Praia Clara'], [16000, 1200, 'Leme']], tunnels: [[8200, 8600]] },
+  'b-himalaya': { towns: [[1500, 700, 'Namche'], [12000, 500, 'Tengbo']] },
+  'b-desert': { towns: [[9000, 500, 'Dusty Springs']] },
+  'b-fjord': { towns: [[2000, 900, 'Flåm-by'], [20500, 700, 'Nesvik']], tunnels: [[7000, 7900], [12500, 13100]] },
+  'b-tuscany': { towns: [[3000, 800, 'Montalba'], [13500, 700, 'Pienzia'], [24000, 900, 'Castel Lupo']] },
   'b-flat': { towns: [[5000, 900, 'Feldheim'], [14000, 700, 'Kornau']] },
 };
 export const BUILTIN = BUILTIN_DEF.map(r => ({ id: r.id, name: r.name, theme: r.theme, desc: r.desc, loop: r.loop, builtin: true, climbNames: r.climbNames, _make: r.make, ...EXTRAS[r.id] }));
@@ -216,7 +235,7 @@ export function prepare(raw) {
     const i = clamp(Math.floor(gx), 0, w - 2), j = clamp(Math.floor(gz), 0, dem.nz - 2), fx = clamp(gx - i, 0, 1), fz = clamp(gz - j, 0, 1);
     return lerp(lerp(D[j * w + i], D[j * w + i + 1], fx), lerp(D[(j + 1) * w + i], D[(j + 1) * w + i + 1], fx), fz) * dem.scale;
   } : null;
-  const water = dem ? (dem.min <= .5 ? 0 : null) : theme.lake ? minE - 2.5 : theme.coast ? Math.min(0, minE - 25) : null;
+  const water = dem ? (dem.min <= .5 ? 0 : null) : theme.lake ? minE - 2.5 : theme.coast ? (theme.waterGap != null ? minE - theme.waterGap : Math.min(0, minE - 25)) : null;
 
   // Räumlicher Index: grob (25 m) und fein (5 m)
   const CELL = 100, grid = new Map(), FAR = 600, far = new Map();
