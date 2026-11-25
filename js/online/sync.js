@@ -25,7 +25,7 @@ export async function pushRides() {
   return rows.length;
 }
 export async function leaderboard(routeId) { const { data, error } = await (await client()).rpc('route_leaderboard', { p_route: routeId, p_limit: 20 }); if (error) throw error; return data; }
-export async function announcements() { const { data } = await (await client()).from('announcements').select('*').order('created_at', { ascending: false }).limit(3); return data || []; }
+export async function announcements() { const { data, error } = await (await client()).from('announcements').select('*').order('created_at', { ascending: false }).limit(3); if (error) throw error; return data || []; }
 
 // Alles Online-Gespeicherte entfernen (lokale Daten bleiben)
 export async function deleteOnlineData() {
