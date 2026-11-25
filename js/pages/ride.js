@@ -1,7 +1,7 @@
 // Fahransicht: 3D-Welt, HUD, Steuerung des Trainers, Mitfahrer, Aufzeichnung, Screenshots
 import { $, esc, fmtT, fmtKm, clamp, bus, toast, dialog, fitCanvas, zoneColor, ZONES, HRZONES } from '../util.js';
 import { profile, sel, live, progress, saveSel, levelOf } from '../state.js';
-import { setPower, setGrade, control, trainer, status, demo, click } from '../ble.js';
+import { setPower, setGrade, control, trainer, status, demo, click, setDemo } from '../ble.js';
 import { GEARS, gearPower, integrate, steadySpeed, setSurface } from '../physics.js';
 import { getRoute, clearRouteCache } from '../routes.js';
 import { getWorkout, at as woAt, drawWorkout, total as woTotal } from '../workouts.js';
@@ -15,7 +15,7 @@ import { makeField, stepField, gapOf, rotateNames } from '../npc.js';
 import { rideEggs } from '../eggs.js';
 import { daily, dailyTick, bellsSetup, bellsTick, ttSetup, ttTick } from '../modes.js';
 import { plusInit, plusStep, plusHud, mods, usePup, steerKey, raceSetup, raceTick, lapReset, trafficSetup, photoMode } from '../rideplus.js';
-import { loggedIn } from '../online/client.js';
+import { loggedIn, online } from '../online/client.js';
 import { sound, music } from '../sound.js';
 import { tipFor, cadRange } from '../coach.js';
 import { saveProfile } from '../state.js';
@@ -103,6 +103,7 @@ export async function render(el) {
       <button class="tbtn" id="tSnd" title="Ton (M)">${ICON.sound}<span id="tSndL">Ton</span></button>
       <button class="tbtn" id="tLayout" title="Anzeige anordnen">${ICON.layout}<span>Anordnen</span></button>
       <button class="tbtn" id="tFull" title="Vollbild">${ICON.full}<span>Vollbild</span></button>
+      <button class="tbtn" id="tDemo" title="Demo-Geräte (simulierte Rolle, Puls und Kadenz)"><b class="dots">🧪</b><span id="tDemoL">Demo an</span></button>
     </div>
     <div class="envpanel" id="envPanel" hidden>
       <div class="small muted">Tageszeit</div>
@@ -180,15 +181,23 @@ async function start(el) {
   try { S.joinRider = JSON.parse(sessionStorage.getItem('joinRider') || 'null'); } catch (e) { } sessionStorage.removeItem('joinRider');
   if (S.joinRider) $('#startCard', el).innerHTML = `<b>🌐 Mitfahren bei ${esc(S.joinRider.name)}</b><span>Sobald die Verbindung steht, springst du direkt hinter ${esc(S.joinRider.name)}. Tritt in die Pedale!</span>`;
   if (grp) { $('#startCard', el).innerHTML = `<b>👥 ${esc(grp.title)}</b><span>Gruppenfahrt: alle starten jetzt mit denselben Einstellungen${grp.isHost ? ' (du bist Gastgeber und bestimmst das Wetter)' : ''}. Tritt in die Pedale!</span>`; }
-  if (loggedIn() && !demo.on) import('../online/presence.js').then(m => { window.__presence = m; }).then(() => import('../online/live.js')).then(({ joinRoute }) => {
+  // Nach einem Neuladen läuft die Anmeldung evtl. noch: kurz darauf warten, dann live beitreten
+  const onlineReady = online.ready ? Promise.resolve() : new Promise(r => { const off = bus.on('online', () => { off(); r(); }); setTimeout(() => { off(); r(); }, 20000); });
+  if (!demo.on) onlineReady.then(() => S?.alive && loggedIn() ? import('../online/presence.js') : Promise.reject(0)).then(m => { window.__presence = m; }).then(() => import('../online/live.js')).then(({ joinRoute }) => {
     if (!S?.alive) return;
     const PRm = window.__presence; PRm?.setStatus({ where: 'ride', route: route.id, routeName: route.name });
-    S.live = joinRoute(route.id, () => S.state === 'riding' ? { d: Math.round(S.dist * 10) / 10, v: +S.v.toFixed(2), p: Math.round(S.p3.at(-1) || 0), wkg: +((S.p3.at(-1) || 0) / profile.kg).toFixed(1), cad: live.cadence ?? 0, look: PRm ? PRm.onlineLook() : { jersey: profile.jersey, bikeColor: profile.bikeColor, helmet: profile.helmet, skin: profile.skin, av: profile.av } } : null);
+    // Position immer senden (auch in Pause oder vor dem ersten Tritt), sonst verschwindet man für die anderen
+    S.live = joinRoute(route.id, () => { const go = S.state === 'riding'; return { d: Math.round(S.dist * 10) / 10, v: go ? +S.v.toFixed(2) : 0, p: go ? Math.round(S.p3.at(-1) || 0) : 0, wkg: go ? +((S.p3.at(-1) || 0) / profile.kg).toFixed(1) : 0, cad: go ? live.cadence ?? 0 : 0, pause: !go, env: { time: S.env.time, weather: S.env.weather }, look: PRm ? PRm.onlineLook() : { jersey: profile.jersey, bikeColor: profile.bikeColor, helmet: profile.helmet, skin: profile.skin, av: profile.av } }; });
     S.live.onChange = syncRemote;
+    S.live.onStatus = st => { if (st === 'on') flash('🌐 Live verbunden', 1500); else if (st === 'error' && !S.liveErrShown) { S.liveErrShown = true; flash('🌐 Live-Verbindung unterbrochen, neuer Versuch …', 2500); } };
+    if (S.live.status === 'private' && S.joinRider) flash('🌐 Du bist auf „unsichtbar“ gestellt (Konto › Für andere sichtbar). Mitfahren geht nur sichtbar.', 5000);
+    // Mitfahren: Wetter und Tageszeit vom gewählten Fahrer, Gruppenfahrt: vom Gastgeber
+    S.envLead = S.group && !S.group.isHost ? S.group.hostSid : S.joinRider?.sid || null; S.envLeadName = S.joinRider?.name || 'Gastgeber';
+    if (S.joinRider) S.joinGiveUp = performance.now() + 25e3;
     // Gruppenfahrt: Wetter und Tageszeit kommen vom Gastgeber
     S.live.onEnv = (gid, env, from) => { if (!S?.group || S.group.isHost || gid !== S.group.id || from !== S.group.hostSid) return; if (env.time === S.env.time && env.weather === S.env.weather) return; S.env = env; S.world.setEnv(env); updEnvPanel(); flash('👥 Gastgeber: ' + ENV_L[env.time] + ', ' + ENV_L[env.weather], 2500); };
     if (S.group?.isHost) setTimeout(() => S?.live?.sendEnv(S.group.id, S.env), 3000);
-  });
+  }).catch(e => { if (e) console.warn('Live:', e); });
   $('#load').hidden = true;
   if (wo) { $('#woBox').hidden = false; $('#woName').textContent = S.planLabel ? S.planLabel + ' · ' + wo.name : wo.name; }
   if (S.pacer) $('#pacerBox').hidden = false;
@@ -235,7 +244,7 @@ function syncRemote() {
   for (const [id, p] of peers) if (!keep.some(n => n.id === id)) keep.push({ remote: true, id, i: 100 + k++, name: p.name, wkg: p.wkg || 0, d: p.d || 0, v: p.v || 0, lat: 2.3, latT: 2.3, crank: 0, cadence: p.cad || 85, gap: gapOf(R, p.d || 0, S.dist), look: { ...(p.look || {}), jersey: p.look?.jersey || '#ffffff', name: '🌐 ' + p.name } });
   S.field = keep; if (peers.size && !S.npcOn) { S.npcOn = true; updNpcBtn(); }
   // "Mitfahren" aus "Wer ist online": einmalig direkt hinter den gewählten Fahrer beamen
-  if (S.joinRider && peers.has(S.joinRider.sid)) { const p = peers.get(S.joinRider.sid), name = S.joinRider.name; S.joinRider = null; const d = R.loop ? ((p.d - 10) % R.total + R.total) % R.total : clamp(p.d - 10, 0, R.total - 20); setTimeout(() => { beam(d).then(() => flash('🌐 Du fährst jetzt direkt hinter ' + name, 2500)); }, 300); }
+  if (S.joinRider && peers.has(S.joinRider.sid)) { const p = peers.get(S.joinRider.sid), name = S.joinRider.name; S.joinRider = null; S.joinGiveUp = 0; const d = R.loop ? ((p.d - 10) % R.total + R.total) % R.total : clamp(p.d - 10, 0, R.total - 20); setTimeout(() => { beam(d).then(() => flash('🌐 Du fährst jetzt direkt hinter ' + name, 2500)); }, 300); }
   S.world.setRiders(S.field.map(n => n.look));
   flash(peers.size ? '🌐 ' + peers.size + ' echte' + (peers.size === 1 ? 'r Fahrer' : ' Fahrer') + ' auf der Strecke' : 'Keine echten Fahrer mehr auf der Strecke', 2200);
 }
@@ -271,6 +280,10 @@ function bindUi() {
   // Workout-Box einklappen (Kopfzeile antippen)
   $('#woBox', el).classList.toggle('collapsed', !!profile.woCollapsed);
   $('#woName', el).parentElement.parentElement.onclick = () => { profile.woCollapsed = !profile.woCollapsed; saveProfile(); $('#woBox', el).classList.toggle('collapsed', profile.woCollapsed); requestAnimationFrame(layout); };
+  // Demo-Geräte direkt aus der Fahrt ein- und ausschalten
+  const updDemo = () => { $('#tDemoL', el).textContent = demo.on ? 'Demo aus' : 'Demo an'; $('#tDemo', el).classList.toggle('on', demo.on); };
+  updDemo();
+  $('#tDemo', el).onclick = () => { setDemo(!demo.on); updDemo(); flash(demo.on ? '🧪 Demo-Geräte an: diese Fahrt wird nicht gespeichert' : '🧪 Demo-Geräte aus', 2500); };
   $('#tLayout', el).onclick = () => { closeMap(); $('#envPanel', el).hidden = true; editMode($('#rw', el), true, () => layout()); };
   $('#rw', el).addEventListener('hudresize', () => { S.miniCache = null; hud(); });
   $('#tMenu', el).onclick = () => { if (!S.samples.length) { leave(); location.hash = '#/'; return; } location.hash = '#/'; };
@@ -372,11 +385,20 @@ function groupEnv(g) {
   const G = g.settings || {}, h = [...String(g.id)].reduce((a, c) => a * 31 + c.charCodeAt(0) >>> 0, 7) / 4294967296;
   return { time: G.time && G.time !== 'auto' ? G.time : resolveEnv().time, weather: G.weather && G.weather !== 'auto' ? G.weather : h < .55 ? 'clear' : h < .8 ? 'cloudy' : h < .92 ? 'rain' : 'fog' };
 }
-const groupLocked = () => { if (S.group && !S.group.isHost) { flash('👥 In der Gruppenfahrt bestimmt der Gastgeber Tageszeit und Wetter', 2200); return true; } if (S.group?.isHost) setTimeout(() => S?.live?.sendEnv(S.group.id, S.env), 50); return false; };
+const groupLocked = () => { if (S.envLead && !S.group) { flash('🌦️ Eigenes Wetter: folgt ' + S.envLeadName + ' nicht mehr', 2200); S.envLead = null; return false; } if (S.group && !S.group.isHost) { flash('👥 In der Gruppenfahrt bestimmt der Gastgeber Tageszeit und Wetter', 2200); return true; } if (S.group?.isHost) setTimeout(() => S?.live?.sendEnv(S.group.id, S.env), 50); return false; };
 // Auto: Tageszeit und Wetter wechseln während der Fahrt alle 10 bis 15 Minuten
 const envGap = () => (10 + Math.random() * 5) * 60e3;
 const TIMES = ['morning', 'day', 'evening', 'night'];
+// Wetter folgt dem Gastgeber oder dem Fahrer, bei dem man mitfährt (steckt in jeder Positionsmeldung)
+function followEnv() {
+  const p = S.envLead && S.live?.peers.get(S.envLead); if (!p?.env) return;
+  if (p.env.time === S.env.time && p.env.weather === S.env.weather) return;
+  const first = !S.envSynced; S.envSynced = true;
+  S.env = { ...p.env }; S.world.setEnv(S.env); updEnvPanel();
+  flash((first ? '🌦️ Wetter wie bei ' : '🌦️ ') + S.envLeadName + ': ' + ENV_L[S.env.time] + ', ' + ENV_L[S.env.weather], 2500);
+}
 function envCycle() {
+  if (S?.envLead) return; // folgt einem anderen Fahrer
   const G = S?.group?.settings, autoT = ((G ? G.time : sel.time) || 'auto') === 'auto', autoW = ((G ? G.weather : sel.weather) || 'auto') === 'auto';
   if (S?.group && !S.group.isHost) return; // Gruppenfahrt: nur der Gastgeber wechselt, die anderen folgen per Nachricht
   if (!S || (!autoT && !autoW) || S.route.theme.moon || performance.now() < (S.envNextAt ??= performance.now() + envGap())) return;
@@ -498,6 +520,8 @@ function liveShare() {
 function tick() {
   if (!S?.alive) return;
   if (S.state === 'riding') envCycle();
+  followEnv();
+  if (S.joinRider && S.joinGiveUp && performance.now() > S.joinGiveUp) { S.joinGiveUp = 0; flash(S.live?.status === 'on' ? '🌐 ' + S.joinRider.name + ' ist gerade nicht live auf der Strecke (Fahrt beendet?). Sobald die Fahrt weitergeht, springst du hinterher.' : '🌐 Noch keine Live-Verbindung, es wird weiter versucht …', 4000); }
   if (S.group?.isHost && performance.now() > (S.envBeat ??= performance.now() + 30e3)) { S.envBeat = performance.now() + 30e3; S.live?.sendEnv(S.group.id, S.env); }
   // Alle ~45 s: Mitfahrer außer Sicht (und neu eingesetzte) bekommen neue Namen
   if (S.npcOn && S.field.length && performance.now() > (S.nameAt ??= performance.now() + 45e3)) { S.nameAt = performance.now() + 45e3; for (const i of rotateNames(S.route, S.field, S.dist)) S.world.relabel(i, S.field[i].name, S.field[i].look.jersey); }

@@ -46,8 +46,22 @@ export async function joinPresence() {
   const sb = await client(); await realtimeAuth();
   P.ch = sb.channel('lobby', { config: { private: true, presence: { key: sid } } });
   P.ch.on('presence', { event: 'sync' }, sync);
-  P.ch.subscribe(async st => { if (st === 'SUBSCRIBED') { P.ready = true; await push(); } });
+  const c = P.ch;
+  c.subscribe(async st => {
+    if (c !== P.ch) return;
+    if (st === 'SUBSCRIBED') { P.ready = true; await push(); sync(); }
+    else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') { P.ready = false; bus.emit('presence'); }
+  });
 }
+// Alle 15 s: Liste frisch aus dem Kanal lesen (Zähler oben aktuell halten) und eine abgerissene Verbindung neu aufbauen
+setInterval(async () => {
+  if (!P.ch) return;
+  if (P.ch.state === 'joined') { sync(); return; }
+  if (P.ch.state === 'joining' || !loggedIn() || !access().ok) return;
+  const old = P.ch; P.ch = null; P.ready = false;
+  try { (await client()).removeChannel(old); } catch (e) { }
+  joinPresence().catch(() => { });
+}, 15000);
 export async function leavePresence() { try { await P.ch?.untrack(); P.ch?.unsubscribe(); } catch (e) { } P.ch = null; P.ready = false; P.peers.clear(); bus.emit('presence'); }
 async function push() { if (!P.ch || !P.ready) return; await P.ch.track({ name: online.profile?.display_name || 'Fahrer', look: onlineLook(), ...P.me }); }
 export function setStatus(patch) { Object.assign(P.me, patch); for (const k in P.me) if (P.me[k] == null) delete P.me[k]; push().catch(() => { }); }

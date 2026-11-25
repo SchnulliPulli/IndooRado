@@ -18,17 +18,21 @@ function cleanLook(l = {}) {
 }
 export function clean(m) {
   if (!m || typeof m !== 'object' || typeof m.id !== 'string' || m.id.length > 40) return null;
-  return { id: m.id, name: txt(m.name, 30) || 'Fahrer', d: num(m.d, 0, 1e6), v: num(m.v, 0, 30), p: num(m.p, 0, 2500), wkg: num(m.wkg, 0, 25), cad: num(m.cad, 0, 200, 85), look: cleanLook(m.look) };
+  const T = ['morning', 'day', 'evening', 'night'], W = ['clear', 'cloudy', 'rain', 'fog'];
+  const env = m.env && T.includes(m.env.time) && W.includes(m.env.weather) ? { time: m.env.time, weather: m.env.weather } : null;
+  return { id: m.id, name: txt(m.name, 30) || 'Fahrer', d: num(m.d, 0, 1e6), v: num(m.v, 0, 30), p: num(m.p, 0, 2500), wkg: num(m.wkg, 0, 25), cad: num(m.cad, 0, 200, 85), look: cleanLook(m.look), env, pause: m.pause === true };
 }
 
 export function joinRoute(routeId, me) {
   const peers = new Map(); let ch = null, timer = null, sweep = null, closed = false;
-  const api = { peers, onChange: null, onEnv: null, sendEnv(gid, env) { try { ch?.send({ type: 'broadcast', event: 'env', payload: { gid, from: sid, env } }); } catch (e) { } }, leave() { closed = true; clearInterval(timer); clearInterval(sweep); try { ch?.unsubscribe(); } catch (e) { } peers.clear(); } };
-  if (!loggedIn() || online.profile?.public_profile === false || !access().ok) return api;
+  const api = { peers, status: 'off', onChange: null, onEnv: null, onStatus: null, sendEnv(gid, env) { try { ch?.send({ type: 'broadcast', event: 'env', payload: { gid, from: sid, env } }); } catch (e) { } }, leave() { closed = true; clearInterval(timer); clearInterval(sweep); try { ch?.unsubscribe(); } catch (e) { } peers.clear(); } };
+  if (!loggedIn() || !access().ok) { api.status = 'nologin'; return api; }
+  if (online.profile?.public_profile === false) { api.status = 'private'; return api; }
   (async () => {
     const sb = await client(); await realtimeAuth(); if (closed) return;
     const topic = 'ride:' + String(routeId).replace(/[^\w:-]/g, '').slice(0, 60);
-    ch = sb.channel(topic, { config: { private: true, broadcast: { self: false, ack: false }, presence: { key: sid } } });
+    const mk = () => { const c = sb.channel(topic, { config: { private: true, broadcast: { self: false, ack: false }, presence: { key: sid } } }); bind(c); return c; };
+    const bind = ch => {
     ch.on('broadcast', { event: 'pos' }, ({ payload }) => {
       const m = clean(payload); if (!m || m.id === sid) return;
       const known = peers.has(m.id);
@@ -43,11 +47,23 @@ export function joinRoute(routeId, me) {
       if (!m || typeof m.gid !== 'string' || typeof m.from !== 'string' || !T.includes(m.env?.time) || !W.includes(m.env?.weather)) return;
       api.onEnv?.(m.gid, { time: m.env.time, weather: m.env.weather }, m.from);
     });
-    ch.subscribe(async st => {
-      if (st !== 'SUBSCRIBED') return;
-      await ch.track({ since: Date.now() });
-      timer = setInterval(() => { const s = me(); if (s) ch.send({ type: 'broadcast', event: 'pos', payload: { id: sid, name: online.profile?.display_name || 'Fahrer', ...s } }); }, 1000);
-    });
+    };
+    ch = mk();
+    const setSt = st => { api.status = st; api.onStatus?.(st); };
+    setSt('connecting');
+    // Bei Fehlern oder Verbindungsabbruch nach kurzer Pause neu beitreten
+    const sub = () => { const c = ch; let failed = false; c.subscribe(async (st, err) => {
+      if (closed || c !== ch) return; // veralteter Kanal (nach Neuaufbau) oder Fahrt beendet
+      if (st === 'SUBSCRIBED') {
+        setSt('on'); clearInterval(timer);
+        try { await ch.track({ since: Date.now() }); } catch (e) { }
+        timer = setInterval(() => { const s = me(); if (s) ch.send({ type: 'broadcast', event: 'pos', payload: { id: sid, name: online.profile?.display_name || 'Fahrer', ...s } }); }, 1000);
+      } else if ((st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') && !failed) {
+        failed = true; clearInterval(timer); setSt('error'); if (err) console.warn('Live:', st, err.message);
+        setTimeout(async () => { if (closed) return; try { sb.removeChannel(ch); } catch (e) { } await realtimeAuth().catch(() => { }); if (closed) return; ch = mk(); sub(); }, 5000);
+      }
+    }); };
+    sub();
     sweep = setInterval(() => { let c = false; for (const [k, p] of peers) if (performance.now() - p.t > 10000) { peers.delete(k); c = true; } if (c) api.onChange?.(); }, 3000);
   })().catch(e => console.warn('Live:', e.message));
   return api;

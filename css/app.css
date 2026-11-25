@@ -46,6 +46,7 @@ h3.sub{font-size:13px;color:var(--soft);text-transform:none;letter-spacing:0;mar
 .nav a svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .nav a.on{background:var(--panel2);color:var(--ink)}.nav a.on svg{color:var(--acc)}
 .nav a:hover{color:var(--ink)}
+.nav a .ns{display:none}
 main{margin-left:var(--nav);padding:20px clamp(14px,3vw,32px) 40px;max-width:calc(1240px + var(--nav));display:flex;flex-direction:column;gap:16px}
 .view{display:flex;flex-direction:column;gap:16px}
 .subnav{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--line);margin:-6px 0 2px}
@@ -55,7 +56,10 @@ main{margin-left:var(--nav);padding:20px clamp(14px,3vw,32px) 40px;max-width:cal
 .subnav a.on{color:var(--ink);border-bottom-color:var(--acc)}
 @media(max-width:900px){
   .nav{top:auto;left:0;right:0;bottom:0;width:auto;height:calc(62px + env(safe-area-inset-bottom));padding:4px 4px env(safe-area-inset-bottom);flex-direction:row;justify-content:space-around;border-right:0;border-top:1px solid var(--line);background:rgba(18,22,26,.96);backdrop-filter:blur(10px)}
-  .nav a{flex-direction:column;gap:2px;padding:6px 2px;font-size:11px;flex:1;justify-content:center}
+  .nav a{flex-direction:column;gap:2px;padding:6px 1px;font-size:11px;flex:1 1 0;min-width:0;justify-content:center}
+  .nav a span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .nav a .ns{display:block}
+  @media(max-width:380px){.nav a{font-size:10px;letter-spacing:-.2px}}.nav a:has(.ns) .nl{display:none}
   .logo{font-size:19px}.chips{gap:3px}.chip{width:30px;height:30px}.chip svg{width:17px;height:17px}.topbar{gap:8px;padding:0 10px}
   main{margin-left:0;padding:14px 12px calc(84px + env(safe-area-inset-bottom))}
   h1{font-size:28px}

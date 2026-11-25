@@ -24,16 +24,16 @@ const NAV = [
   { k: '', l: 'Start', i: 'home', also: ['companion'] },
   { k: 'workouts', l: 'Training', i: 'workout', tabs: [['workouts', 'Workouts'], ['plans', 'Trainingspläne']], also: ['editor', 'planner'] },
   { k: 'routes', l: 'Strecken', i: 'route' },
-  { k: 'history', l: 'Aktivitäten', i: 'history', tabs: [['history', 'Verlauf'], ['progress', 'Fortschritt']], also: ['summary'] },
+  { k: 'history', l: 'Aktivitäten', s: 'Fahrten', i: 'history', tabs: [['history', 'Verlauf'], ['progress', 'Fortschritt']], also: ['summary'] },
   { k: 'devices', l: 'Geräte', i: 'devices' },
   { k: 'lobby', l: 'Online', i: 'online', tabs: [['lobby', 'Lobby'], ['players', 'Wer ist online'], ['account', 'Konto'], ['admin', 'Admin']] },
-  { k: 'profile', l: 'Einstellungen', i: 'profile', tabs: [['profile', 'Profil'], ['avatar', 'Avatar'], ['ridesettings', 'Fahransicht'], ['sound', 'Ton'], ['appsettings', 'App'], ['connect', 'Verbindungen'], ['help', 'Anleitung']] },
+  { k: 'profile', l: 'Einstellungen', s: 'Optionen', i: 'profile', tabs: [['profile', 'Profil'], ['avatar', 'Avatar'], ['ridesettings', 'Fahransicht'], ['sound', 'Ton'], ['appsettings', 'App'], ['connect', 'Verbindungen'], ['help', 'Anleitung']] },
 ];
 const groupOf = k => NAV.find(g => g.k === k || g.tabs?.some(t => t[0] === k) || g.also?.includes(k)) || null;
 let current = null, currentKey = null;
 
 function nav() {
-  $('#nav').innerHTML = NAV.map(g => `<a href="#/${g.k}" data-k="${g.k}">${ICON[g.i]}<span>${g.l}</span></a>`).join('');
+  $('#nav').innerHTML = NAV.map(g => `<a href="#/${g.k}" data-k="${g.k}" title="${g.l}">${ICON[g.i]}<span class="nl">${g.l}</span>${g.s ? `<span class="ns">${g.s}</span>` : ''}</a>`).join('');
   $('#chips').innerHTML = ['trainer', 'hr', 'cad', 'click'].map(k => `<a class="chip" href="#/devices" data-d="${k}" title="${k}">${ICON[k]}</a>`).join('');
   const upd = () => { for (const c of document.querySelectorAll('#chips .chip')) c.dataset.st = status[c.dataset.d]; };
   bus.on('dev', upd); upd();
