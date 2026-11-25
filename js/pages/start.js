@@ -118,7 +118,7 @@ export async function render(el) {
         <p class="small muted" id="modeTxt"></p>
         <label class="f small" id="hrBox" ${sel.mode === 'hr' ? '' : 'hidden'}>Zielpuls (bpm)<input class="inp sm" id="hrT" type="number" min="80" max="200" value="${sel.hrTarget || Math.round(profile.hrMax * .72)}"></label>
         <h3 class="sub">Schrittmacher</h3>
-        <div class="seg" id="pacerSeg">${[0, 2, 2.5, 3, 3.5, 4].map(v => `<button data-p="${v}" aria-pressed="${sel.pacer === v}">${v ? String(v).replace('.', ',') + ' W/kg' : 'Aus'}</button>`).join('')}</div>
+        <div class="seg" id="pacerSeg">${[0, 'buddy', 2, 2.5, 3, 3.5, 4].map(v => `<button data-p="${v}" aria-pressed="${sel.pacer === v}" ${v === 'buddy' ? 'title="Fährt immer ein bisschen stärker als du, wartet und kontert wie ein echter Trainingspartner"' : ''}>${v === 'buddy' ? '🤝 Buddy' : v ? String(v).replace('.', ',') + ' W/kg' : 'Aus'}</button>`).join('')}</div>
         <div class="form" style="margin-top:12px">
           <label class="switch"><input type="checkbox" id="optNpc" ${sel.npcs !== false ? 'checked' : ''}><span></span> Mitfahrer auf der Strecke (Windschatten, Überholen)</label>
           <label class="switch"><input type="checkbox" id="optGhost" ${sel.ghost !== false ? 'checked' : ''}><span></span> Gegen meine Bestfahrt auf dieser Strecke fahren (Geist)</label>
@@ -152,7 +152,7 @@ export async function render(el) {
   $('#hrT', el).onchange = e => { sel.hrTarget = clamp(+e.target.value || 140, 80, 200); saveSel(); };
   updMode();
   $('#modeSeg', el).onclick = e => { const b = e.target.closest('[data-m]'); if (b) { sel.mode = b.dataset.m; saveSel(); updMode(); } };
-  $('#pacerSeg', el).onclick = e => { const b = e.target.closest('[data-p]'); if (!b) return; sel.pacer = +b.dataset.p; saveSel(); for (const x of $('#pacerSeg', el).children) x.setAttribute('aria-pressed', String(x === b)); };
+  $('#pacerSeg', el).onclick = e => { const b = e.target.closest('[data-p]'); if (!b) return; sel.pacer = b.dataset.p === 'buddy' ? 'buddy' : +b.dataset.p; saveSel(); for (const x of $('#pacerSeg', el).children) x.setAttribute('aria-pressed', String(x === b)); };
   const updWo = async () => {
     const w = await getWorkout(sel.workoutId);
     const cv = $('#woPrev', el); cv.parentElement.hidden = !w;

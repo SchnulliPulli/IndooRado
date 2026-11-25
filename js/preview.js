@@ -1,6 +1,6 @@
 // Vorschaubild je Strecke: ein einzelnes Bild der 3D-Welt vom Start, einmal gerendert und lokal gespeichert.
 // Eigene kleine IndexedDB (nicht im Cloud-Abgleich, übersteht App-Updates). Gerendert wird immer nur eine Strecke zur Zeit.
-const VER = 1, W = 560, H = 315;
+const VER = 2, W = 560, H = 315;
 let dbp = null;
 function idb() {
   return dbp ||= new Promise((res, rej) => { const r = indexedDB.open('vv-previews', 1); r.onupgradeneeded = () => r.result.createObjectStore('p'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });

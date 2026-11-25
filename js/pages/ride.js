@@ -17,6 +17,7 @@ import { daily, dailyTick, bellsSetup, bellsTick, ttSetup, ttTick } from '../mod
 import { plusInit, plusStep, plusHud, mods, usePup, steerKey, raceSetup, raceTick, lapReset, trafficSetup, photoMode } from '../rideplus.js';
 import { loggedIn, online } from '../online/client.js';
 import { mpInit, mpTick, mpOnMsg, mpRideOn, mpHtml } from '../multiplayer.js';
+import { makeBuddy, buddyStep, buddyDraft } from '../buddy.js';
 import { sound, music } from '../sound.js';
 import { tipFor, cadRange } from '../coach.js';
 import { saveProfile } from '../state.js';
@@ -73,7 +74,7 @@ export async function render(el) {
       <div class="gradebox"><b class="num" id="hGrade">0,0</b><span>% Steigung</span><div class="gradeicon" id="gIcon"></div></div>
       <div class="gearbox"><button class="gbtn" id="gUp" aria-label="Hochschalten">+</button><div class="gearval"><b class="num" id="hGear">12</b><span id="hGearSub">Gang</span></div><button class="gbtn" id="gDn" aria-label="Runterschalten">−</button></div>
       <div class="hbox small draftbox" id="draftBox" hidden><b class="num" id="hDraft">0 %</b><span>Windschatten</span></div>
-      <div class="hbox small" id="pacerBox" hidden><b class="num" id="hPacer">0 m</b><span>zum Schrittmacher</span></div>
+      <div class="hbox small" id="pacerBox" hidden><b class="num" id="hPacer">0 m</b><span id="pacerL">zum Schrittmacher</span></div>
     </div>
     <div class="msgstack" id="msgStack" data-drag="msg">
       <div class="climb" id="climbBox" hidden><div class="climb-name" id="clName"></div><div class="climb-row num"><span id="clLeft"></span><span id="clGrade"></span><span id="clTime"></span></div><div class="bar"><i id="clBar"></i></div></div>
@@ -104,6 +105,7 @@ export async function render(el) {
       <button class="tbtn" id="tSnd" title="Ton (M)">${ICON.sound}<span id="tSndL">Ton</span></button>
       <button class="tbtn" id="tLayout" title="Anzeige anordnen">${ICON.layout}<span>Anordnen</span></button>
       <button class="tbtn" id="tFull" title="Vollbild">${ICON.full}<span>Vollbild</span></button>
+      <button class="tbtn" id="tBuddy" title="Trainingsbuddy, der dich pusht"><b class="dots">🤝</b><span id="tBuddyL">Buddy</span></button>
       <button class="tbtn" id="tDemo" title="Demo-Geräte (simulierte Rolle, Puls und Kadenz)"><b class="dots">🧪</b><span id="tDemoL">Demo an</span></button>
     </div>
     <div class="envpanel" id="envPanel" hidden>
@@ -142,7 +144,7 @@ async function start(el) {
     samples: [], shots: [], kj: 0, asc: 0, lastE: null, lap: 0, startWall: null, idle: 0, curP: 0, lastSend: 0, p3: [],
     climbs: route.climbs.map(c => ({ ...c, state: 'pending' })), climbLog: [], sprints: route.sprints.map(c => ({ ...c, state: 'pending' })), sprintLog: [],
     lastShotT: 0, lastSeg: -1, woDone: false, finished: false, overtakes: 0, gates: 0, draft: 0, wheel: null, rideOnsGot: 0, rideOnsGiven: 0, lapT0: 0, nextRideOn: 60 + Math.random() * 120,
-    pacer: sel.pacer ? { d: 0, v: 0, crank: 0, w: sel.pacer * profile.kg } : null, lastHud: 0, alive: true, offs: [],
+    pacer: sel.pacer === 'buddy' ? makeBuddy(profile) : sel.pacer ? { d: 0, v: 0, crank: 0, w: sel.pacer * profile.kg } : null, lastHud: 0, alive: true, offs: [],
     adapt: { on: sel.adaptive !== false, lowCad: 0, okCad: 0, cap: false, hrHigh: 0, lastAdj: -999, note: '', noteT: 0, weak: 0 },
     np: { buf: [], bs: 0, s4: 0, n: 0 }, field: [], npcOn: sel.npcs !== false, odo: 0, beamed: false, lastBeep: -1, nextDrink: (profile.drinkEvery || 15) * 60,
   };
@@ -157,7 +159,7 @@ async function start(el) {
     const best = progress.routeBest[route.id] && cand.find(r => r.id === progress.routeBest[route.id].rideId) || cand.sort((a, b) => b.sum.avgV - a.sum.avgV)[0];
     if (best) { S.ghost = { d: Float32Array.from(best.samples, s => s.d), date: best.date }; world.setGhost(true); }
   }
-  world.setPacer(!!S.pacer);
+  world.setPacer(!!S.pacer, S.pacer?.buddy ? BUDDY_LOOK : null, S.pacer?.name);
   world.view = clamp(profile.camView ?? 0, 0, 4); world.showNames = profile.npcNames !== false;
   if (profile.fsOnRide && !document.fullscreenElement) toggleFullscreen();
   if (SPEED !== 1) { window.__tw = S; window.__twHud = () => hud(); window.__twMp = () => { mpInit(S); S.live.onMp = m => mpOnMsg(S, MPH, m); }; window.__twSync = () => syncRemote(); } // Testhilfe
@@ -204,7 +206,7 @@ async function start(el) {
   }).catch(e => { if (e) console.warn('Live:', e); });
   $('#load').hidden = true;
   if (wo) { $('#woBox').hidden = false; $('#woName').textContent = S.planLabel ? S.planLabel + ' · ' + wo.name : wo.name; }
-  if (S.pacer) $('#pacerBox').hidden = false;
+  if (S.pacer) { $('#pacerBox').hidden = false; if (S.pacer.buddy) { $('#pacerL').textContent = 'zu ' + S.pacer.name; setTimeout(() => S?.alive && flash(`🤝 ${S.pacer?.name} fährt mit dir: immer ein bisschen stärker als du. Bleib dran oder hau ab!`, 4000), 1500); } }
   updMode(); updGear(); updNpcBtn(); updSnd(); updEnvPanel();
   bindUi();
   S.ro = new ResizeObserver(() => { world.resize(); requestAnimationFrame(layout); }); S.ro.observe(canvas);
@@ -292,6 +294,14 @@ function bindUi() {
   // Workout-Box einklappen (Kopfzeile antippen)
   $('#woBox', el).classList.toggle('collapsed', !!profile.woCollapsed);
   $('#woName', el).parentElement.parentElement.onclick = () => { profile.woCollapsed = !profile.woCollapsed; saveProfile(); $('#woBox', el).classList.toggle('collapsed', profile.woCollapsed); requestAnimationFrame(layout); };
+  // Trainingsbuddy während der Fahrt dazuschalten oder wegschicken (ersetzt einen festen Schrittmacher)
+  const updBuddy = () => { $('#tBuddyL', el).textContent = S.pacer?.buddy ? 'Buddy weg' : 'Buddy'; $('#tBuddy', el).classList.toggle('on', !!S.pacer?.buddy); };
+  updBuddy();
+  $('#tBuddy', el).onclick = () => {
+    if (S.pacer?.buddy) { flash(`🤝 ${S.pacer.name}: Bis zum nächsten Mal!`, 2000); S.pacer = null; S.world.setPacer(false); $('#pacerBox', el).hidden = true; }
+    else { S.pacer = makeBuddy(profile); S.pacer.d = S.route.loop ? (S.dist + 4) % S.route.total : Math.min(S.dist + 4, S.route.total); S.pacer.v = S.v; S.world.setPacer(true, BUDDY_LOOK, S.pacer.name); $('#pacerBox', el).hidden = false; $('#pacerL', el).textContent = 'zu ' + S.pacer.name; flash(`🤝 ${S.pacer.name} fährt jetzt mit dir. Bleib an seinem Hinterrad!`, 3000); }
+    updBuddy();
+  };
   // Demo-Geräte direkt aus der Fahrt ein- und ausschalten
   const updDemo = () => { $('#tDemoL', el).textContent = demo.on ? 'Demo aus' : 'Demo an'; $('#tDemo', el).classList.toggle('on', demo.on); };
   updDemo();
@@ -409,6 +419,8 @@ const groupLocked = () => { if (S.envLead && !S.group) { flash('🌦️ Eigenes 
 // Auto: Tageszeit und Wetter wechseln während der Fahrt alle 10 bis 15 Minuten
 const envGap = () => (10 + Math.random() * 5) * 60e3;
 const TIMES = ['morning', 'day', 'evening', 'night'];
+// Aussehen des Trainingsbuddys
+const BUDDY_LOOK = { jersey: '#7b4fd6', bikeColor: '#f2f4f6', helmet: '#ffffff', skin: '#e3b18c', av: { pattern: 'stripes', jersey2: '#ffd23f', helmetStyle: 'aero', glasses: 'sport', bike: 'road' } };
 // Hilfen für das Multiplayer-Modul
 const MPH = { flash: (t, ms) => flash(t, ms), xpPop: t => xpPop(t), sound: { pass: () => sound.pass(), fanfare: () => sound.fanfare() } };
 // Live-Status auf der Startkarte beim Mitfahren (zeigt, ob Verbindung steht und Daten fließen)
@@ -662,6 +674,7 @@ function step(dt, first) {
   }
   S.crank += (cad || 0) / 60 * Math.PI * 2 * dt;
   S.p3.push(pw); if (S.p3.length > 30) S.p3.shift();
+  if (S.pacer?.buddy && running) S.buddyGap = buddyStep(S, S.pacer, pw, profile.ftp, dt, t => flash(t, 2600));
   if (S.pacer && running) { const p = S.pacer, g = R.gradeAt(p.d); p.v += (steadySpeed(p.w, g) - p.v) * Math.min(1, dt * .8); p.d += p.v * dt; p.crank += 88 / 60 * Math.PI * 2 * dt; if (R.loop) p.d %= R.total; else p.d = Math.min(p.d, R.total); }
   // Mitfahrer
   if (S.live?.peers.size) for (const n of S.field) if (n.remote) { const p = S.live.peers.get(n.id); if (p && p.t !== n.pt) {
@@ -675,6 +688,7 @@ function step(dt, first) {
     if (r.overtook) { S.overtakes += r.overtook; if (first) { xpPop('+' + r.overtook + ' XP Überholt'); sound.pass(); } }
     if (running && first && S.t > S.nextRideOn) { S.nextRideOn = S.t + 90 + Math.random() * 240; const near = S.field.filter(n => Math.abs(gapOf(R, n.d, S.dist)) < 80); if (near.length) gotRideOn(near[Math.floor(Math.random() * near.length)].name); }
   } else S.draft = 0;
+  if (S.pacer?.buddy) S.draft = Math.max(S.draft, buddyDraft(S.buddyGap ?? 99)); // Windschatten hinter dem Buddy
   if (!running) { S.v *= Math.pow(.25, dt); return; }
   // Bewegung
   const md = mods(S, grade, S.draft);
@@ -792,7 +806,7 @@ function hud() {
     $('#clBar', el).style.width = (frac * 100).toFixed(1) + '%';
   }
   plusHud(S, p3, c);
-  if (S.pacer) { const gap = (S.pacer.d - S.dist); $('#hPacer', el).textContent = (gap >= 0 ? '+' : '−') + Math.abs(Math.round(gap)) + ' m'; }
+  if (S.pacer) { const gap = S.pacer.buddy ? gapOf(S.route, S.pacer.d, S.dist) : (S.pacer.d - S.dist); $('#hPacer', el).textContent = (gap >= 0 ? '+' : '−') + Math.abs(Math.round(gap)) + ' m' + (S.pacer.buddy ? ' · ' + Math.round(S.pacer.w) + ' W' : ''); }
   if (S.npcOn && (S.rlN = (S.rlN || 0) + 1) % 3 === 0) riderList(el);
   if ((S.lyN = (S.lyN || 0) + 1) % 5 === 0) arrange($('#rw', el));
   // Zusatz-Widgets
@@ -868,6 +882,7 @@ function riderList(el) {
   const rows = S.field.map(n => ({ n, name: n.name, remote: !!n.remote, gap: gapOf(R, n.d, S.dist), wkg: n.remote ? n.wkg : n.wkg * clamp(1 + R.gradeAt(n.d) * .025, .55, 1.25), c: n.look.jersey, v: n.v }));
   const p3 = S.p3.length ? S.p3.reduce((a, b) => a + b, 0) / S.p3.length : 0;
   rows.push({ me: true, name: profile.name, gap: 0, wkg: p3 / profile.kg, c: profile.jersey });
+  if (S.pacer?.buddy) rows.push({ name: '🤝 ' + S.pacer.name, gap: gapOf(R, S.pacer.d, S.dist), wkg: S.pacer.w / profile.kg, c: '#7b4fd6' });
   rows.sort((a, b) => b.gap - a.gap);
   const mi = rows.findIndex(r => r.me), from = clamp(mi - 3, 0, Math.max(0, rows.length - 7));
   // Echte Mitspieler immer anzeigen, auch wenn sie weit weg sind (unten angehängt)

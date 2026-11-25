@@ -39,6 +39,26 @@ function pteroMesh() {
   return g;
 }
 
+/* ---------- Savanne ---------- */
+function giraffeGeo(H) {
+  const y = '#d9a441', d = '#8a5a2a', parts = [
+    H.colored(box(1, 1.2, 2.2).translate(0, 2.9, 0), y), H.colored(box(.45, 3.2, .45).rotateX(-.35).translate(0, 4.9, -1.4), y),
+    H.colored(box(.5, .5, 1).translate(0, 6.4, -2.2), y), H.colored(box(.12, .35, .12).translate(-.15, 6.85, -2), d), H.colored(box(.12, .35, .12).translate(.15, 6.85, -2), d),
+    H.colored(box(1.02, .3, 1.6).translate(0, 3.2, .1), d),
+  ];
+  for (const [x, z] of [[-.35, -.8], [.35, -.8], [-.35, .8], [.35, .8]]) parts.push(H.colored(box(.22, 2.4, .22).translate(x, 1.2, z), y));
+  return H.merge(parts);
+}
+function elephantGeo(H) {
+  const g = '#8f8a84', parts = [
+    H.colored(box(2.2, 2.2, 3.6).translate(0, 2.6, 0), g), H.colored(box(1.6, 1.6, 1.4).translate(0, 3.1, -2.2), g),
+    H.colored(box(.4, 2, .4).rotateX(.2).translate(0, 1.9, -3.1), g), H.colored(box(.15, 1.4, 1.2).translate(-.9, 3.1, -2), '#7f7a74'), H.colored(box(.15, 1.4, 1.2).translate(.9, 3.1, -2), '#7f7a74'),
+    H.colored(box(.12, .12, .8).rotateX(-.6).translate(-.4, 2.4, -2.9), '#f1ead8'), H.colored(box(.12, .12, .8).rotateX(-.6).translate(.4, 2.4, -2.9), '#f1ead8'),
+  ];
+  for (const [x, z] of [[-.7, -1.1], [.7, -1.1], [-.7, 1.1], [.7, 1.1]]) parts.push(H.colored(box(.6, 1.6, .6).translate(x, .8, z), g));
+  return H.merge(parts);
+}
+
 /* ---------- Tiefsee ---------- */
 function fishGeo() {
   const b = new THREE.OctahedronGeometry(.5, 0).scale(.45, .5, 1.1), t = new THREE.ConeGeometry(.35, .5, 4).rotateX(Math.PI / 2).translate(0, 0, .75);
@@ -91,6 +111,21 @@ export function buildThemeExtras(world, R, H) {
     const lava = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex('#ff7a1a'), color: 0xffaa55, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })); lava.scale.set(260, 200, 1); lava.position.set(p.x, p.y + 700, p.z); scene.add(lava);
     const smat = new THREE.SpriteMaterial({ map: glowTex('#777777'), color: 0x55504c, transparent: true, opacity: .6, depthWrite: false });
     for (let i = 0; i < 8; i++) { const s = new THREE.Sprite(smat.clone()); s.position.set(p.x, p.y + 720, p.z); scene.add(s); X.smoke.push({ s, base: p.clone().setY(p.y + 720), ph: i / 8 }); }
+  }
+  if (th.safari) {
+    const r = rng(93), gg = giraffeGeo(H), eg = elephantGeo(H);
+    for (const [geo, n, near] of [[gg, Math.min(40, Math.floor(R.total / 500)), 18], [eg, Math.min(24, Math.floor(R.total / 900)), 35]]) {
+      const im = new THREE.InstancedMesh(geo, world.vcMat, n);
+      for (let i = 0; i < n; i++) { const d = r() * R.total, p = beside(R, d, (r() < .5 ? -1 : 1) * (near + r() * 110), -.1); q.setFromAxisAngle(up, r() * 6.28); const sc = .85 + r() * .3; m4.compose(p, q, new THREE.Vector3(sc, sc, sc)); im.setMatrixAt(i, m4); }
+      im.castShadow = true; scene.add(im);
+    }
+    // Ein paar Giraffen laufen gemächlich neben der Piste mit
+    for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(gg, world.vcMat); m.castShadow = true; scene.add(m); X.walkers.push({ m, d: R.total * (i + .4) / 3, off: (i % 2 ? 1 : -1) * (16 + i * 5), v: 1.1 + r() * .4 }); }
+  }
+  if (th.landmark === 'fuji') {
+    const d = R.total * .4, p = beside(R, d, -1600), base = p.y - 30;
+    const cone = new THREE.Mesh(new THREE.CylinderGeometry(40, 900, 1100, 28, 1), new THREE.MeshLambertMaterial({ color: 0x5a6478, flatShading: true })); cone.position.set(p.x, base + 550, p.z); scene.add(cone);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(40, 260, 320, 28, 1), new THREE.MeshLambertMaterial({ color: 0xf4f7fb, flatShading: true })); cap.position.set(p.x, base + 1100 - 160 + 1, p.z); scene.add(cap);
   }
   if (th.fish) {
     const r = rng(88), schools = Math.min(16, Math.floor(R.total / 1100)), per = 14, im = new THREE.InstancedMesh(fishGeo(), new THREE.MeshLambertMaterial({ color: 0xffffff }), schools * per);

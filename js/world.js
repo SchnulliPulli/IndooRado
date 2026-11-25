@@ -110,17 +110,17 @@ function merge(geos) {
   return m;
 }
 // light: helle Krone und Stamm, damit Fantasiewelten sie beliebig einfärben können (Lollibäume, Korallen)
-function coniferGeo(light) {
-  const parts = [colored(new THREE.CylinderGeometry(.18, .26, 2.4, 6).translate(0, 1.2, 0), light ? '#f4f4f4' : '#5b4030')];
+function coniferGeo(light, whiteTrunk) {
+  const parts = [colored(new THREE.CylinderGeometry(.18, .26, 2.4, 6).translate(0, 1.2, 0), whiteTrunk ? '#f4f4f4' : '#5b4030')];
   [[3.6, 2.4, 1.6], [2.9, 2.6, 3.4], [2.1, 2.6, 5.1], [1.3, 2.2, 6.6]].forEach(([r, h, y], i) => parts.push(colored(new THREE.ConeGeometry(r, h, 8).translate(0, y + h / 2 - .6, 0), light ? (i % 2 ? '#e8e8e8' : '#d6d6d6') : i % 2 ? '#2f6a3a' : '#2a6034')));
   return merge(parts);
 }
-function leafyGeo(light) {
+function leafyGeo(light, whiteTrunk) {
   const crown = new THREE.IcosahedronGeometry(2.6, 1);
   const p = crown.attributes.position; const r = rng(11);
   for (let i = 0; i < p.count; i++) { const k = .85 + r() * .3; p.setXYZ(i, p.getX(i) * k, p.getY(i) * k * .9, p.getZ(i) * k); }
   crown.computeVertexNormals();
-  return merge([colored(new THREE.CylinderGeometry(.22, .32, 3.4, 6).translate(0, 1.7, 0), light ? '#ffffff' : '#5d4433'), colored(crown.translate(0, 5, 0), light ? '#eeeeee' : '#4f8f3a'), colored(new THREE.IcosahedronGeometry(1.6, 0).translate(1.2, 4.2, .6), light ? '#dddddd' : '#5c9c42')]);
+  return merge([colored(new THREE.CylinderGeometry(.22, .32, 3.4, 6).translate(0, 1.7, 0), whiteTrunk ? '#ffffff' : '#5d4433'), colored(crown.translate(0, 5, 0), light ? '#eeeeee' : '#4f8f3a'), colored(new THREE.IcosahedronGeometry(1.6, 0).translate(1.2, 4.2, .6), light ? '#dddddd' : '#5c9c42')]);
 }
 function rockGeo() {
   const g = new THREE.DodecahedronGeometry(1, 0); const p = g.attributes.position; const r = rng(5);
@@ -539,7 +539,7 @@ export class World {
       im.count = k; if (im.instanceColor) im.instanceColor.needsUpdate = true; this.scene.add(im);
     }
     // Wahrzeichen in der Ferne: steiler Felsdom im Meer (Tropen) oder Tafelberge (Wüste)
-    if (R.theme.landmark && R.theme.landmark !== 'volcano') {
+    if (R.theme.landmark && !['volcano', 'fuji'].includes(R.theme.landmark)) {
       const r = rng(31), isDome = R.theme.landmark === 'dome';
       const mat = new THREE.MeshLambertMaterial({ color: isDome ? 0x7d8a7a : 0xb5653c, flatShading: true });
       for (let i = 0; i < (isDome ? 2 : 6); i++) {
@@ -588,11 +588,13 @@ export class World {
   }
 
   /* Instanzen für Bäume, Felsen, Häuser, Grasbüschel */
+  // Welche Baumarten eingefärbt werden (Herbstlaub, Blüten, Korallen …)
+  tintOn(k) { const th = this.route.theme; return !!th.tints && (!th.tintKinds || th.tintKinds.includes(k)); }
   buildInstances() {
     const cap = Math.round(18000 * this.Q.trees);
     const mk = (geo, mat, n, shadow = true) => { const im = new THREE.InstancedMesh(geo, mat, n); im.count = 0; im.castShadow = shadow; im.receiveShadow = false; im.frustumCulled = false; this.scene.add(im); return im; };
     this.inst = {
-      conifer: mk(coniferGeo(!!this.route.theme.tints), this.vegMat || this.vcMat, cap), leafy: mk(leafyGeo(!!this.route.theme.tints), this.vegMat || this.vcMat, cap),
+      conifer: mk(coniferGeo(this.tintOn('conifer'), !!this.route.theme.candy), this.vegMat || this.vcMat, cap), leafy: mk(leafyGeo(this.tintOn('leafy'), !!this.route.theme.candy), this.vegMat || this.vcMat, cap),
       rock: mk(rockGeo(), this.vcMat, 1500), tuft: mk(tuftGeo(), this.vegMat || this.vcMat, 24000, false),
       palm: mk(palmGeo(), this.vegMat || this.vcMat, Math.round(cap / 3)), cactus: mk(cactusGeo(), this.vcMat, Math.round(cap / 4)),
       wall: mk(new THREE.BoxGeometry(1, 1, 1).translate(0, .5, 0), new THREE.MeshLambertMaterial({ map: windowTex() }), 2000),
@@ -646,7 +648,7 @@ export class World {
     const R = this.route, th = R.theme, res = this.Q.res, n = res + 1, s = CHUNK / res;
     const pos = new Float32Array(n * n * 3), uv = new Float32Array(n * n * 2), colr = new Float32Array(n * n * 3);
     const x0 = cx * CHUNK, z0 = cz * CHUNK;
-    const g0 = col(th.grass[0]), g1 = col(th.grass[1]), g2 = col(th.grass[2]), rockC = col('#7d7a74'), snowC = col('#f3f6f8'), sand = col('#d8c99a');
+    const g0 = col(th.grass[0]), g1 = col(th.grass[1]), g2 = col(th.grass[2]), rockC = col(th.rock || '#7d7a74'), snowC = col('#f3f6f8'), sand = col('#d8c99a'), fields = th.fields?.map(f => f && col(f));
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
       const x = x0 + i * s, z = z0 + j * s, k = j * n + i;
       pos[k * 3] = x; pos[k * 3 + 1] = R.heightAt(x, z); pos[k * 3 + 2] = z;
@@ -660,6 +662,8 @@ export class World {
       const x = pos[k * 3], y = pos[k * 3 + 1], z = pos[k * 3 + 2], ny = nor[k * 3 + 1];
       const nz = fbm(x / 140, z / 140, 3, 4) * .5 + .5, nz2 = fbm(x / 35, z / 35, 2, 8) * .5 + .5;
       c.copy(g0).lerp(g1, nz).lerp(g2, smooth(.55, .9, nz2) * .6);
+      // Flickenteppich aus Feldern (Lavendel, Weizen, Raps …) auf flachem Gelände
+      if (fields && ny > .93) { const fx = Math.floor((x * .8 + z * .6) / 80), fz = Math.floor((-x * .6 + z * .8) / 50), fc = fields[(hash2(fx + 1000, fz + 2000) >>> 7) % fields.length]; if (fc) c.lerp(fc, .85); }
       if (ny < .82) c.lerp(rockC, smooth(.82, .62, ny));
       if (R.water != null && y < R.water + 2.2) c.lerp(sand, smooth(R.water + 2.2, R.water + .3, y));
       if (y > th.snow + (nz - .5) * 120) c.lerp(snowC, smooth(th.snow, th.snow + 90, y + (nz - .5) * 120) * (ny > .6 ? 1 : .4));
@@ -692,7 +696,7 @@ export class World {
     for (let t = 0; t < Math.round(420 * Q); t++) {
       const x = x0 + r() * CHUNK, z = z0 + r() * CHUNK, nn = R.nearest(x, z); if (!nn || nn.dist < 5.5 || nn.dist > 45) continue;
       const y = R.heightAt(x, z); if (R.water != null && y < R.water + 1) continue; if (y > th.snow) continue;
-      if (!th.moon && (!th.dry || r() < .25)) objs.tuft.push([x, y - .05, z, .6 + r() * .9, r() * 6.28, 1]);
+      if (!th.moon && !th.noTufts && (!th.dry || r() < .25)) objs.tuft.push([x, y - .05, z, .6 + r() * .9, r() * 6.28, 1]);
     }
     const hc = Math.round(th.houses * 40);
     for (let t = 0; t < hc; t++) {
@@ -745,9 +749,9 @@ export class World {
         const im = this.inst[k];
         for (const o of ch.objs[k]) {
           if (cnt[k] >= im.instanceMatrix.count) break;
-          q.setFromAxisAngle(up, o[4]); s.set(o[3], o[3] * (k === 'rock' ? .8 : 1), o[3]); p.set(o[0], o[1], o[2]);
+          q.setFromAxisAngle(up, o[4]); s.set(o[3] * (k === 'leafy' && th.flatTrees ? 1.5 : 1), o[3] * (k === 'rock' ? .8 : k === 'leafy' && th.flatTrees ? .55 : 1), o[3] * (k === 'leafy' && th.flatTrees ? 1.5 : 1)); p.set(o[0], o[1], o[2]);
           m.compose(p, q, s); im.setMatrixAt(cnt[k], m);
-          if (k === 'conifer' || k === 'leafy' || k === 'palm' || k === 'cactus') { if (tints) c.copy(tints[Math.abs(Math.floor(o[0] * 7 + o[2] * 13)) % tints.length]).multiplyScalar(o[5]); else c.setRGB(o[5] * .95, o[5], o[5] * .9); im.setColorAt(cnt[k], c); }
+          if (k === 'conifer' || k === 'leafy' || k === 'palm' || k === 'cactus') { if (tints && this.tintOn(k)) c.copy(tints[Math.abs(Math.floor(o[0] * 7 + o[2] * 13)) % tints.length]).multiplyScalar(o[5]); else c.setRGB(o[5] * .95, o[5], o[5] * .9); im.setColorAt(cnt[k], c); }
           cnt[k]++;
         }
       }
@@ -762,9 +766,13 @@ export class World {
     this.instDirty = false;
   }
 
-  setPacer(on) {
-    if (on && !this.pacer) { this.pacer = new Rider({ jersey: '#7b4fd6', bikeColor: '#222831', helmet: '#7b4fd6', skin: '#c99272' }); this.scene.add(this.pacer.root); }
-    if (!on && this.pacer) { this.scene.remove(this.pacer.root); this.pacer = null; }
+  // Schrittmacher bzw. Trainingsbuddy (mit eigenem Aussehen und Namensschild)
+  setPacer(on, look, name) {
+    if (this.pacer && (!on || look)) { this.scene.remove(this.pacer.root); this.pacer = null; }
+    if (on && !this.pacer) {
+      this.pacer = new Rider(look || { jersey: '#7b4fd6', bikeColor: '#222831', helmet: '#7b4fd6', skin: '#c99272' }); this.scene.add(this.pacer.root);
+      if (name) { const lab = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex('🤝 ' + name, { w: 256, h: 56, size: 34, bg: '#7b4fd6', fg: '#fff' }), depthWrite: false, transparent: true, opacity: .92 })); lab.scale.set(1.1, .24, 1); lab.position.set(0, 2.05, 0); this.pacer.root.add(lab); }
+    }
   }
   // Mitfahrer: Liste von { jersey, bikeColor, helmet, skin, name }
   // Namensschild eines Mitfahrers neu beschriften
