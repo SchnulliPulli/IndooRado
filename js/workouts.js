@@ -1,5 +1,5 @@
 // Workouts: Bibliothek, Import (.zwo, .erg, .mrc), Zielberechnung, Vorschau
-import { db } from './db.js';
+import { db, tomb } from './db.js';
 import { zoneColor, fitCanvas } from './util.js';
 
 // Abschnitt: { dur (s), a, b (Anteil FTP, null = frei), cad?, text? }
@@ -35,7 +35,7 @@ export async function listWorkouts() {
 }
 export async function getWorkout(id) { if (!id) return null; return BUILTIN_W.find(w => w.id === id) || EXTRA_W.get(id) || await db.get('workouts', id); }
 export const saveWorkout = w => db.put('workouts', w);
-export const deleteWorkout = id => db.del('workouts', id);
+export const deleteWorkout = async id => { await tomb('deletedWorkouts', id); await db.del('workouts', id); };
 
 export const total = w => w.segs.reduce((s, x) => s + x.dur, 0);
 export function stats(w) {

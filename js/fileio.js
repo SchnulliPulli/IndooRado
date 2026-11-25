@@ -33,6 +33,10 @@ function fromText(name, text, ftp) {
   }
   if (/\.zwo$/i.test(base) || /<workout/i.test(text.slice(0, 4000))) return { workout: parseZwo(text, base.replace(/\.\w+$/, '')) };
   if (/\.(erg|mrc)$/i.test(base) || /\[COURSE DATA\]/i.test(text)) return { workout: parseErg(text, base, ftp) };
+  // Textdatei mit einer kopierten Plan-Übersicht (Wochen, Workouts, Schritte wie „5min @ 196W“)
+  if (/\.(txt|md|text)$/i.test(base) || /\d+\s*(min|sec).*@\s*\d+\s*W/i.test(text.slice(0, 4000))) {
+    const p = parsePlanText(text); if (p?.wos?.length) return { plan: { ...p, name: p.name && p.name !== 'Plan' ? p.name : base.replace(/\.\w+$/, '') } };
+  }
   return null;
 }
 
@@ -42,7 +46,7 @@ export async function readFiles(files, ftp) {
   for (const f of files) {
     try {
       if (/\.zip$/i.test(f.name)) {
-        const entries = (await unzip(f)).filter(e => /\.(zwo|erg|mrc|json|xml)$/i.test(e.name)).sort((a, b) => a.name.localeCompare(b.name, 'de', { numeric: true }));
+        const entries = (await unzip(f)).filter(e => /\.(zwo|erg|mrc|json|xml|txt)$/i.test(e.name)).sort((a, b) => a.name.localeCompare(b.name, 'de', { numeric: true }));
         const wos = [];
         for (const e of entries) { try { const r = fromText(e.name, e.text, ftp); if (r?.workout) wos.push(r.workout); if (r?.plan) res.plans.push(r.plan); } catch (err) { res.errors.push(e.name + ': ' + err.message); } }
         if (wos.length) res.zips.push({ name: f.name.replace(/\.zip$/i, ''), wos });
@@ -67,7 +71,7 @@ export function toZwo(w) {
   });
   return `<workout_file>\n  <author>VeloVerse</author>\n  <name>${x(w.name)}</name>\n  <description>${x(w.desc || '')}</description>\n  <sportType>bike</sportType>\n  <workout>\n    ${segs.join('\n    ')}\n  </workout>\n</workout_file>\n`;
 }
-export const planToJson = p => JSON.stringify({ veloverse: 'plan', version: 1, name: p.name, perWeek: p.perWeek, wos: p.all.map(w => ({ name: w.name, desc: w.desc, segs: w.segs })) }, null, 1);
+export const planToJson = p => JSON.stringify({ veloverse: 'plan', version: 1, name: p.name, perWeek: p.perWeek, weeksLayout: p.weeks?.map(w => w.length), wos: p.all.map(w => ({ name: w.name, desc: w.desc, segs: w.segs })) }, null, 1);
 export const workoutToJson = w => JSON.stringify({ veloverse: 'workout', version: 1, name: w.name, cat: w.cat, desc: w.desc, segs: w.segs }, null, 1);
 
 /* ---------- Plan aus eingefügtem Text (z. B. Wochenübersicht von whatsonzwift) ---------- */

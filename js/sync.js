@@ -3,8 +3,11 @@
 // Aufbau im Ordner: state.json (Einstellungen, Fortschritt, eigene Strecken/Workouts), rides/<id>.json, shots/<id>.jpg
 import { db, kv } from './db.js';
 import { bus } from './util.js';
+import { PROVIDERS, isOAuth, backend, finishOAuth, fresh } from './cloud.js';
 
-const LOCAL_ONLY = new Set(['sync', 'syncMeta', 'demo', 'strava', 'musicFiles', 'device', 'kvTimes']);
+const LOCAL_ONLY = new Set(['sync', 'syncMeta', 'demo', 'strava', 'musicFiles', 'device', 'kvTimes', 'cloudApps']);
+// Listen gelöschter Einträge: werden zwischen den Geräten zusammengeführt, nicht überschrieben
+const TOMBS = ['deletedRides', 'deletedWorkouts', 'deletedRoutes', 'deletedPlans'];
 export const sync = { cfg: null, busy: false, last: null, error: null, dirsOk: false, needLogin: false, rev: null, devices: {}, device: null, info: '' };
 
 export async function loadSync() {
@@ -28,12 +31,22 @@ bus.on('dbchange', ({ s, k }) => {
   kvT[k] = Date.now(); clearTimeout(tSave); tSave = setTimeout(() => kv.set('kvTimes', kvT), 300);
 });
 export async function saveSyncCfg(cfg) {
-  const key = c => c ? [c.mode, c.host, c.folder, c.url].join('|') : '';
+  const key = c => c ? [c.mode, c.host, c.folder, c.url, c.clientId].join('|') : '';
   // Anderes Ziel: zählt als erstes Verbinden, damit dort zuerst nur gelesen wird
   if (key(cfg) !== key(sync.cfg)) { sync.rev = null; sync.last = null; sync.devices = {}; await kv.set('syncMeta', {}); }
   sync.cfg = cfg; sync.dirsOk = false; await kv.set('sync', cfg);
 }
-const configured = () => !!(sync.cfg && (sync.cfg.mode === 'dsm' ? sync.cfg.host && sync.cfg.folder : sync.cfg.url));
+const configured = () => !!(sync.cfg && (isOAuth(sync.cfg.mode) ? sync.cfg.refresh || sync.cfg.access : sync.cfg.mode === 'dsm' ? sync.cfg.host && sync.cfg.folder : sync.cfg.url));
+export const isConfigured = configured;
+// Anzeigename des Speichers: Synology, WebDAV, OneDrive, Google Drive, Dropbox
+export const providerName = (m = sync.cfg?.mode) => PROVIDERS[m]?.name || (m === 'webdav' ? 'WebDAV' : m === 'dsm' ? 'Synology' : 'Cloud');
+// Rückkehr von der Anmeldung bei OneDrive, Google oder Dropbox
+export async function handleCloudRedirect() {
+  const cfg = await finishOAuth(); if (!cfg) return null;
+  const apps = await kv.get('cloudApps', {}); apps[cfg.mode] = { clientId: cfg.clientId, secret: cfg.secret }; await kv.set('cloudApps', apps);
+  await saveSyncCfg(cfg); sync.needLogin = false; sync.error = null; bus.emit('sync');
+  return providerName(cfg.mode) + (cfg.account ? ': ' + cfg.account : '');
+}
 
 /* ---------- Synology DSM (File Station API) ---------- */
 const DSM_ERR = { 400: 'Benutzername oder Passwort falsch', 401: 'Konto deaktiviert', 402: 'Keine Berechtigung', 403: '2FA-Code nötig', 404: '2FA-Code falsch', 406: 'Für dieses Konto muss erst 2FA eingerichtet werden', 407: 'IP-Adresse gesperrt (zu viele Fehlversuche)', 408: 'Ordner oder Datei nicht gefunden', 119: 'Anmeldung abgelaufen', 106: 'Anmeldung abgelaufen', 105: 'Keine Berechtigung für diesen Ordner', 1100: 'Ordner konnte nicht angelegt werden' };
@@ -135,8 +148,12 @@ const DAV = {
   },
   async del(rel) { await dav('DELETE', rel); },
 };
-const B = () => sync.cfg.mode === 'dsm' ? DSM : DAV;
-async function prep() { if (sync.cfg.mode === 'dsm') await ensureSid(); }
+const saveTok = c => kv.set('sync', c);
+const B = () => isOAuth(sync.cfg.mode) ? backend(sync.cfg, saveTok) : sync.cfg.mode === 'dsm' ? DSM : DAV;
+async function prep() {
+  if (sync.cfg.mode === 'dsm') await ensureSid();
+  else if (isOAuth(sync.cfg.mode)) { try { await fresh(sync.cfg, saveTok); } catch (e) { if (e.login) { sync.needLogin = true; bus.emit('sync'); } throw e; } }
+}
 
 // Verbindung prüfen: Ordner anlegen, Testdatei schreiben, lesen, löschen
 export async function testConnection() {
@@ -159,21 +176,30 @@ async function readState() { const b = await B().get('state.json'); if (!b) retu
 
 // Stand vom NAS einarbeiten. how: 'remote' = NAS gewinnt überall (erstes Verbinden, „Vom NAS laden“), 'merge' = je Einstellung gewinnt die neuere Seite
 async function applyRemote(st, how) {
-  const gone = new Set([...(st.kv.deletedRides || []), ...await kv.get('deletedRides', [])]);
+  const T = {}; for (const k of TOMBS) T[k] = new Set([...(st.kv[k] || []), ...await kv.get(k, [])]);
+  const gone = T.deletedRides, goneW = T.deletedWorkouts, goneR = T.deletedRoutes, goneP = T.deletedPlans;
   const rT = st.kvT || {}; let changed = 0;
   applying = true;
   try {
     for (const k in st.kv) {
-      if (LOCAL_ONLY.has(k) || k === 'deletedRides') continue;
-      const remoteT = rT[k] || 0, localT = kvT[k] || 0;
-      if (how === 'remote' || remoteT > localT || (!localT && !remoteT)) {
-        if (JSON.stringify(await db.get('kv', k)) !== JSON.stringify(st.kv[k])) { await db.put('kv', st.kv[k], k); changed++; }
-        kvT[k] = remoteT;
-      }
+      if (LOCAL_ONLY.has(k) || TOMBS.includes(k)) continue;
+      const remoteT = rT[k] || 0, localT = kvT[k] || 0, remoteWins = how === 'remote' || remoteT > localT || (!localT && !remoteT);
+      let val = st.kv[k];
+      if (k === 'customPlans') {
+        // Eigene Pläne je Plan zusammenführen: neue von beiden Seiten behalten, gelöschte entfernen
+        const loc = await kv.get('customPlans', []), m = new Map(loc.map(c => [c.id, c]));
+        for (const c of val || []) if (!m.has(c.id) || remoteWins) m.set(c.id, c);
+        val = [...m.values()].filter(c => !goneP.has(c.id));
+      } else if (!remoteWins) continue;
+      if (JSON.stringify(await db.get('kv', k)) !== JSON.stringify(val)) { await db.put('kv', val, k); changed++; }
+      if (remoteWins) kvT[k] = remoteT;
     }
-    await db.put('kv', [...gone], 'deletedRides');
-    for (const x of st.routes || []) { const loc = await db.get('routes', x.id); if (!loc || how === 'remote' || (x.updated || 0) >= (loc.updated || 0)) await db.put('routes', loc?.dem ? { ...x, dem: loc.dem } : x); }
-    for (const x of st.workouts || []) { const loc = await db.get('workouts', x.id); if (!loc || how === 'remote' || (x.updated || 0) >= (loc.updated || 0)) await db.put('workouts', x); }
+    for (const k of TOMBS) await db.put('kv', [...T[k]], k);
+    for (const x of st.routes || []) { if (goneR.has(x.id)) continue; const loc = await db.get('routes', x.id); if (!loc || how === 'remote' || (x.updated || 0) >= (loc.updated || 0)) await db.put('routes', loc?.dem ? { ...x, dem: loc.dem } : x); }
+    for (const x of st.workouts || []) { if (goneW.has(x.id)) continue; const loc = await db.get('workouts', x.id); if (!loc || how === 'remote' || (x.updated || 0) >= (loc.updated || 0)) await db.put('workouts', x); }
+    // Auf anderen Geräten gelöschte Strecken und Workouts hier entfernen
+    for (const id of goneR) if (await db.get('routes', id)) { await db.del('routes', id); changed++; }
+    for (const id of goneW) if (await db.get('workouts', id)) { await db.del('workouts', id); changed++; }
   } finally { applying = false; await kv.set('kvTimes', kvT); }
   // Fahrten und Fotos: nur ergänzen, gelöschte entfernen
   const haveR = new Set((await db.keys('rides')).map(String)), haveS = new Set((await db.keys('shots')).map(String));
@@ -230,7 +256,7 @@ async function guarded(fn) {
   if (!configured() || sync.busy) return null;
   sync.busy = true; bus.emit('sync');
   try { const res = await fn(); await mark(); return res; }
-  catch (e) { sync.error = e.message === 'Failed to fetch' ? 'NAS nicht erreichbar oder Zugriff von dieser Adresse nicht freigegeben (siehe Einrichtung)' : e.message; bus.emit('sync'); throw e; }
+  catch (e) { if (e.login) sync.needLogin = true; sync.error = e.message === 'Failed to fetch' ? (isOAuth(sync.cfg?.mode) ? providerName() + ' nicht erreichbar (Internetverbindung?)' : 'NAS nicht erreichbar oder Zugriff von dieser Adresse nicht freigegeben (siehe Einrichtung)') : e.message; bus.emit('sync'); throw e; }
   finally { sync.busy = false; bus.emit('sync'); }
 }
 export const pushNow = () => guarded(() => syncAll());

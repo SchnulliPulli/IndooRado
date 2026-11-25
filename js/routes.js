@@ -1,6 +1,6 @@
 // Strecken: eingebaute Welten, GPX-Import, Aufbereitung für Physik und 3D-Welt
 import { clamp, lerp, smooth, fbm, noise1 } from './util.js';
-import { db } from './db.js';
+import { db, tomb } from './db.js';
 
 const R2D = 180 / Math.PI, M_DEG = 111320;
 const TAU = Math.PI * 2;
@@ -168,7 +168,7 @@ export async function loadDem(raw, onProgress = () => { }) {
 }
 
 export async function saveRoute(r) { await db.put('routes', r); cache.delete(r.id); }
-export async function deleteRoute(id) { await db.del('routes', id); cache.delete(id); }
+export async function deleteRoute(id) { await tomb('deletedRoutes', id); await db.del('routes', id); cache.delete(id); }
 
 /* ---------- Aufbereitung ---------- */
 export function prepare(raw) {

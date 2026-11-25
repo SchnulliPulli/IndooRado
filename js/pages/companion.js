@@ -6,7 +6,7 @@ import { totals, fitness } from '../analysis.js';
 import { planProgress, loadPlan } from '../plans.js';
 import { listWorkouts, stats as wStats, getWorkout } from '../workouts.js';
 import { listRoutes, quickStats } from '../routes.js';
-import { sync, syncReady, getLive, pushNow, loadSync } from '../sync.js';
+import { sync, syncReady, getLive, pushNow, loadSync, isConfigured } from '../sync.js';
 import { missionState } from '../game.js';
 import { titleOf } from '../game.js';
 
@@ -18,12 +18,12 @@ export async function render(el) {
   const wk = Date.now() - 7 * 864e5, week = rides.filter(r => +new Date(r.date) > wk);
   const pr = planProgress(), next = pr?.next, chosen = await getWorkout(sel.workoutId);
   const wos = await listWorkouts(), routes = await listRoutes(), route = routes.find(r => r.id === sel.routeId);
-  const nas = !!(sync.cfg && (sync.cfg.mode === 'dsm' ? sync.cfg.host : sync.cfg.url));
+  const nas = isConfigured();
   el.innerHTML = `
   <section class="comp">
     <div class="comphead"><div><div class="small muted">Companion</div><h1>Hallo ${esc(profile.name)}</h1><div class="small muted">Level ${L.lv} · ${titleOf(L.lv)} · FTP ${profile.ftp} W</div></div>
       <button class="btn sm" id="cRefresh" ${nas ? '' : 'disabled'}>↻ Abgleichen</button></div>
-    <div class="small ${nas ? 'muted' : 'warn'}" id="cSync">${nas ? syncText() : 'Ohne NAS-Abgleich siehst du hier nur die Daten dieses Geräts. Unter Profil beim NAS anmelden, dann zeigt das Handy deine Fahrten, Pläne und die laufende Fahrt vom PC.'}</div>
+    <div class="small ${nas ? 'muted' : 'warn'}" id="cSync">${nas ? syncText() : 'Ohne Cloud-Abgleich siehst du hier nur die Daten dieses Geräts. Unter Profil einen Cloud-Speicher verbinden (NAS, OneDrive, Google Drive, Dropbox), dann zeigt das Handy deine Fahrten, Pläne und die laufende Fahrt vom PC.'}</div>
 
     <div class="card live" id="cLive" hidden></div>
 
@@ -31,7 +31,7 @@ export async function render(el) {
       ${next ? `<div class="compnext"><div><div class="small muted">${esc(pr.p.name)} · Woche ${next.week}</div><b>${esc(next.name)}</b><div class="small muted num">${fmtDur(wStats(next).dur)} · TSS ${wStats(next).tss}</div></div>${sel.workoutId === next.id ? '<span class="tag">vorgemerkt</span>' : `<button class="btn sm pri" data-pick="${next.id}">Vormerken</button>`}</div>` : '<p class="small muted">Kein Trainingsplan aktiv.</p>'}
       <label class="f">Workout für die nächste Fahrt<select class="inp" id="cWo"><option value="">Freie Fahrt</option>${pr ? `<optgroup label="Plan ${esc(pr.p.name)}">${pr.p.all.filter(w => w.id === sel.workoutId || w.id === next?.id).map(w => `<option value="${w.id}" ${w.id === sel.workoutId ? 'selected' : ''}>W${w.week} ${esc(w.name)}</option>`).join('')}</optgroup>` : ''}${[...new Set(wos.map(w => w.cat))].map(c => `<optgroup label="${esc(c)}">${wos.filter(w => w.cat === c).map(w => `<option value="${w.id}" ${w.id === sel.workoutId ? 'selected' : ''}>${esc(w.name)} · ${fmtDur(wStats(w).dur)}</option>`).join('')}</optgroup>`).join('')}</select></label>
       <label class="f">Strecke<select class="inp" id="cRoute">${routes.map(r => `<option value="${r.id}" ${r.id === sel.routeId ? 'selected' : ''}>${esc(r.name)} · ${fmtKm(quickStats(r).dist)} km</option>`).join('')}</select></label>
-      <p class="small muted">${nas ? 'Die Auswahl wird über das NAS an VeloVerse auf dem PC übertragen und ist dort beim nächsten Öffnen bereit.' : 'Die Auswahl gilt auf diesem Gerät.'}${chosen ? ` Vorgemerkt: <b>${esc(chosen.name)}</b>` : ''}${route ? ` auf <b>${esc(route.name)}</b>.` : ''}</p>
+      <p class="small muted">${nas ? 'Die Auswahl wird über den Cloud-Speicher an VeloVerse auf dem PC übertragen und ist dort beim nächsten Öffnen bereit.' : 'Die Auswahl gilt auf diesem Gerät.'}${chosen ? ` Vorgemerkt: <b>${esc(chosen.name)}</b>` : ''}${route ? ` auf <b>${esc(route.name)}</b>.` : ''}</p>
     </div>
 
     <div class="card"><h2>Diese Woche</h2>
@@ -61,7 +61,7 @@ export async function render(el) {
   clearInterval(timer);
   if (syncReady()) { const poll = () => liveTick(el); poll(); timer = setInterval(poll, 5000); }
 }
-function syncText() { return sync.needLogin ? '🔑 NAS-Anmeldung abgelaufen, unter Profil neu anmelden' : sync.error ? '⚠ ' + sync.error : sync.last ? 'Mit dem NAS abgeglichen: ' + fmtDate(sync.last, { dateStyle: 'short', timeStyle: 'short' }) : 'Noch nicht abgeglichen'; }
+function syncText() { return sync.needLogin ? '🔑 Anmeldung beim Cloud-Speicher abgelaufen, unter Profil neu anmelden' : sync.error ? '⚠ ' + sync.error : sync.last ? 'Abgeglichen: ' + fmtDate(sync.last, { dateStyle: 'short', timeStyle: 'short' }) : 'Noch nicht abgeglichen'; }
 
 async function liveTick(el) {
   const box = $('#cLive', el); if (!box) { clearInterval(timer); return; }

@@ -14,7 +14,7 @@ const steps = [
       <li><b>Fahren</b>: Strecke wählen, treten, die Fahrt startet von selbst. Virtuelle Gänge, Steigung, ERG oder Puls-Ziel.</li>
       <li><b>Trainieren</b>: Workouts und mehrwöchige Pläne passen sich an deine FTP, Kadenz und deinen Puls an.</li>
       <li><b>Spielen</b>: Mitfahrer, Sprints und Gipfel, Zieltore, ein Geist deiner Bestfahrt, XP, Missionen, Abzeichen.</li>
-      <li><b>Deine Daten</b>: bleiben im Browser, auf Wunsch auch auf deinem NAS, Fahrten gehen auf Wunsch zu Strava.</li>
+      <li><b>Deine Daten</b>: bleiben im Browser, auf Wunsch auch auf deinem NAS oder in OneDrive, Google Drive oder Dropbox, Fahrten gehen auf Wunsch zu Strava.</li>
     </ul><p class="small muted">Die Einrichtung dauert etwa zwei Minuten. Alles lässt sich später unter Profil ändern.</p>` },
   { t: 'Über dich', h: () => `
     <label class="f">Name<input class="inp" data-p="name" value="${esc(profile.name)}" maxlength="30"></label>

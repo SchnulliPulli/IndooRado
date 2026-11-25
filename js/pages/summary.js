@@ -9,7 +9,7 @@ import { deleteRide, applyFtp } from '../ridesave.js';
 import { statTiles, levelBar, ICON } from '../components.js';
 import { drawWorkout } from '../workouts.js';
 import { sound } from '../sound.js';
-import { sync, syncReady, fetchShots, loadSync } from '../sync.js';
+import { sync, syncReady, fetchShots, loadSync, isConfigured, providerName } from '../sync.js';
 import { stravaTitle, stravaText, overviewImage, bestShot } from '../share.js';
 import { strava, connected as stravaConnected, uploadRide, activityUrl } from '../strava.js';
 
@@ -74,7 +74,7 @@ export async function render(el, [id], query) {
     <div class="card"><h2>Bestleistungen</h2><div class="efforts">${[[5, 'Sprint 5 s'], [60, '1 Minute'], [300, '5 Minuten'], [1200, '20 Minuten'], [3600, '60 Minuten']].filter(([k]) => s.curve?.[k]).map(([k, l]) => { const rk = rankOf(s.curve[k], all, k); return `<div class="effort ${rk === 1 ? 'gold' : rk === 2 ? 'silver' : rk === 3 ? 'bronze' : ''}"><span class="medal">${rk === 1 ? '🏆' : rk <= 3 ? '🏅' : '·'}</span><span>${l}</span><b class="num">${s.curve[k]} W</b><small class="muted">${fmtNum(s.curve[k] / (s.kg || profile.kg), 1)} W/kg · ${rk === 1 ? 'Bestwert' : rk + '. bester Wert'}</small></div>`; }).join('') || '<p class="muted">Zu kurz für Bestleistungen.</p>'}</div></div>
     <div class="card"><h2>Abschnitte <span class="small muted">je ${sp.step / 1000} km</span></h2><div class="scroll"><table class="tbl small"><tr><th>km</th><th class="n">Zeit</th><th class="n">km/h</th><th class="n">Watt</th><th class="n">Puls</th><th class="n">Höhe</th></tr>${sp.rows.map(r => `<tr><td>${fmtKm(r.k * sp.step)}</td><td class="n">${fmtT(r.time)}</td><td class="n ${r.v >= fastest ? 'pr' : ''}">${fmtNum(r.v, 1)}</td><td class="n">${r.p}</td><td class="n">${r.hr ?? '–'}</td><td class="n">${r.de > 0 ? '+' : ''}${r.de} m</td></tr>`).join('')}</table></div></div>
   </section>
-  ${shots.length ? `<section class="card"><div class="row between"><h2>Fotos der Fahrt</h2>${sync.cfg && (sync.cfg.host || sync.cfg.url) ? '<span class="small muted">☁ mit der Fahrt im NAS gespeichert</span>' : ''}</div><div class="gallery">${shots.map((x, i) => `<button class="shot" data-i="${i}"><img src="${urls[i]}" alt="${esc(x.caption)}" loading="lazy"><span>${esc(x.caption)} · ${fmtKm(x.d)} km</span></button>`).join('')}</div></section>` : ''}
+  ${shots.length ? `<section class="card"><div class="row between"><h2>Fotos der Fahrt</h2>${isConfigured() ? `<span class="small muted">☁ mit der Fahrt in ${esc(providerName())} gespeichert</span>` : ''}</div><div class="gallery">${shots.map((x, i) => `<button class="shot" data-i="${i}"><img src="${urls[i]}" alt="${esc(x.caption)}" loading="lazy"><span>${esc(x.caption)} · ${fmtKm(x.d)} km</span></button>`).join('')}</div></section>` : ''}
   <section class="card"><div class="row between"><h2>Verlauf</h2><div class="small muted num" id="hov">Fahre mit dem Finger über das Diagramm</div></div><canvas id="ch" class="chart-main"></canvas></section>
   <section class="grid2">
     <div class="card"><h2>Leistungskurve</h2><canvas id="curve" class="curvec"></canvas>

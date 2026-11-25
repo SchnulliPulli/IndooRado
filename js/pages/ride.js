@@ -388,6 +388,13 @@ function togglePause() {
   else if (S.state === 'paused') { S.state = 'riding'; flash('Weiter'); }
   else if (S.state === 'ready') { begin(); }
   $('#tPause', S.el).innerHTML = (S.state === 'paused' ? ICON.play + '<span>Weiter</span>' : ICON.pause + '<span>Pause</span>');
+  endHint(S.state === 'paused');
+}
+// Beim Stehenbleiben den Beenden-Knopf hervorheben und fokussieren (Enter oder Leertaste beendet dann)
+function endHint(on) {
+  const b = S && $('#tEnd', S.el); if (!b) return;
+  b.classList.toggle('pulse', on);
+  if (on) { try { b.focus({ preventScroll: true }); } catch (e) { } } else if (document.activeElement === b) b.blur();
 }
 function begin() { S.state = 'riding'; S.startWall = Date.now(); $('#startCard', S.el).hidden = true; flash('Los geht’s!', 1000); }
 
@@ -446,8 +453,8 @@ function step(dt, first) {
   if (S.resumeOnPedal && S.state === 'paused' && (pw > 10 || (cad || 0) > 20)) { S.resumeOnPedal = false; S.state = 'riding'; flash('Weiter'); $('#tPause', S.el).innerHTML = ICON.pause + '<span>Pause</span>'; }
   // Start und automatische Pause
   if (S.state === 'ready' && (pw > 10 || (cad || 0) > 20)) begin();
-  if (S.state === 'riding' && profile.autoPause && pw < 5 && (cad || 0) < 5 && S.v < .3) { S.idle += dt; if (S.idle > 3) { S.state = 'auto'; flash('Automatische Pause'); } } else S.idle = 0;
-  if (S.state === 'auto' && (pw > 10 || (cad || 0) > 20)) { S.state = 'riding'; flash('Weiter'); }
+  if (S.state === 'riding' && profile.autoPause && pw < 5 && (cad || 0) < 5 && S.v < .3) { S.idle += dt; if (S.idle > 3) { S.state = 'auto'; flash('Automatische Pause'); endHint(true); } } else S.idle = 0;
+  if (S.state === 'auto' && (pw > 10 || (cad || 0) > 20)) { S.state = 'riding'; flash('Weiter'); endHint(false); }
   const running = S.state === 'riding';
   // Ziel bestimmen
   let target = null, wi = null;
@@ -758,10 +765,13 @@ async function endRide(auto = false) {
   if (!S) return;
   const prevState = S.state; if (S.state === 'riding') S.state = 'paused';
   if (!S.samples.length) {
-    const v = await dialog({ title: 'Fahrt beenden?', html: '<p class="muted">Es wurde noch nichts aufgezeichnet.</p>', buttons: [{ label: 'Weiterfahren', value: 'back' }, { label: 'Beenden', value: 'quit', cls: 'pri' }] });
+    const v = await dialog({ title: 'Fahrt beenden?', html: '<p class="muted">Es wurde noch nichts aufgezeichnet.</p>', buttons: [{ label: 'Weiterfahren', value: 'back' }, { label: 'Zum Menü', value: 'menu', cls: 'ghost' }, { label: 'Beenden', value: 'quit', cls: 'pri' }] });
+    if (v === 'menu') { S.state = 'paused'; location.hash = '#/'; return; }
     if (v === 'quit') { leave(); location.hash = '#/'; } else if (S) S.state = prevState === 'ready' ? 'ready' : prevState; return;
   }
-  const v = await dialog({ title: auto ? 'Ziel erreicht' : 'Fahrt beenden?', html: `<p>${fmtKm(S.samples.at(-1).d)} km in ${fmtT(S.t)}.</p><p class="muted small">Gespeicherte Fahrten zählen für Level, Missionen, Trainingsplan und Rekorde.</p>`, buttons: [{ label: 'Weiterfahren', value: 'back', cls: 'ghost' }, { label: 'Verwerfen', value: 'drop' }, { label: 'Speichern', value: 'save', cls: 'pri' }] });
+  const v = await dialog({ title: auto ? 'Ziel erreicht' : 'Fahrt beenden?', html: `<p>${fmtKm(S.samples.at(-1).d)} km in ${fmtT(S.t)}.</p><p class="muted small">Gespeicherte Fahrten zählen für Level, Missionen, Trainingsplan und Rekorde.</p>`, buttons: [{ label: 'Weiterfahren', value: 'back', cls: 'ghost' }, { label: 'Zum Menü (Fahrt bleibt)', value: 'menu', cls: 'ghost' }, { label: 'Verwerfen', value: 'drop' }, { label: 'Speichern', value: 'save', cls: 'pri' }] });
+  // Ins Menü, ohne zu beenden: Fahrt wird pausiert geparkt und lässt sich über „Zurück zur Fahrt“ fortsetzen
+  if (v === 'menu') { if (S) S.state = 'paused'; location.hash = '#/'; return; }
   if (v === 'drop') {
     const ok = await dialog({ title: 'Wirklich verwerfen?', html: '<p class="muted">Die Fahrt und ihre Fotos gehen verloren.</p>', buttons: [{ label: 'Abbrechen', value: false }, { label: 'Verwerfen', value: true, cls: 'danger' }] });
     if (ok) { leave(); location.hash = '#/'; } return;

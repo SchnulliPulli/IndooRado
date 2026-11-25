@@ -72,7 +72,7 @@ export function applySaved(root) {
     const p = L.w[el.dataset.drag] || {};
     el.classList.toggle('w-hidden', !!p.hid);
     el.style.zoom = '';
-    el.style.scale = p.z && p.z !== 1 && kindOf(el) === 'zoom' ? String(p.z) : '';
+    el.style.scale = p.z && p.z !== 1 && kindOf(el) === 'zoom' ? String(p.z) : ''; el.style.setProperty('--inv', String(1 / (kindOf(el) === 'zoom' && p.z ? p.z : 1)));
     if (kindOf(el) === 'size' && p.w) { el.style.width = p.w * innerWidth + 'px'; el.style.height = p.h * innerHeight + 'px'; }
     else if (kindOf(el) === 'size' && p.x == null) { el.style.width = ''; el.style.height = ''; }
     if (p.x != null) place(el, p.x * innerWidth, p.y * innerHeight); else unplace(el);
@@ -118,32 +118,89 @@ export function arrange(root) {
 }
 
 /* ---------- Anordnen-Modus ---------- */
-// Verschieben mit einem Finger/der Maus, Größe über den Eckgriff oder mit zwei Fingern (Zusammenziehen/Auseinanderziehen)
+// Verschieben mit einem Finger/der Maus. Größe an allen Kanten und Ecken ziehen, mit zwei Fingern zusammenziehen/auseinanderziehen,
+// mit dem Mausrad oder den Knöpfen −/+ über dem gewählten Widget zoomen.
+// Sinnvolle Grenzen je Widget (Anteile der Fenstergröße bzw. Zoomfaktor)
+const LIMITS = { mini: { w: [100, .6], h: [80, .7] }, elev: { w: [160, 1], h: [50, .45] }, graph: { w: [120, .6], h: [50, .45] } };
+const ZMIN = .4, ZMAX = 2.5;
+const limOf = el => LIMITS[el.dataset.drag] || (el.classList.contains('xgraph') ? LIMITS.graph : { w: [80, .9], h: [40, .8] });
+const HANDLES = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 export function editMode(root, on, onDone) {
   root.classList.toggle('hudedit', on);
-  root.querySelectorAll('.rz,.rzl').forEach(h => h.remove());
+  root.querySelectorAll('.rh,.rzl,.wzoom').forEach(h => h.remove());
+  root.querySelectorAll('[data-drag].sel').forEach(el => el.classList.remove('sel'));
   const bar = root.querySelector('#editBar'); bar.hidden = !on;
   root.onpointerdown = null; root.ontouchstart = null;
+  if (root._wheel) { root.removeEventListener('wheel', root._wheel); root._wheel = null; }
   if (!on) return;
-  for (const el of root.querySelectorAll('[data-drag]')) { el.style.translate = ''; const h = document.createElement('i'); h.className = 'rz'; h.title = 'Größe ändern'; el.appendChild(h); }
+  for (const el of root.querySelectorAll('[data-drag]')) {
+    el.style.translate = ''; el.style.setProperty('--inv', String(1 / scaleOf(el)));
+    for (const h of HANDLES) { const i = document.createElement('i'); i.className = 'rh ' + (h.length === 1 ? 'edge' : 'corner'); i.dataset.h = h; i.title = 'Größe ändern'; el.appendChild(i); }
+  }
   const tb = root.querySelector('.toolbar'), th = document.createElement('i'); th.className = 'rzl'; th.title = 'Breite ändern'; tb.appendChild(th);
   panel(root, bar, onDone);
 
   const L = lay(), touches = new Map(); // aktive Finger: pointerId -> { x, y }
-  let g = null; // laufende Geste
+  let g = null, selEl = null; // laufende Geste, gewähltes Widget
+  // Zoomleiste über dem gewählten Widget
+  const zb = document.createElement('div'); zb.className = 'wzoom'; zb.hidden = true;
+  zb.innerHTML = '<button class="btn xs" data-z="-" title="Kleiner">−</button><b class="num" data-zv>100 %</b><button class="btn xs" data-z="+" title="Größer">+</button><button class="btn xs ghost" data-z="0" title="Ursprüngliche Größe">⟲</button>';
+  root.appendChild(zb);
+  const pct = el => kindOf(el) === 'size' ? Math.round((parseFloat(el.style.width) || el.getBoundingClientRect().width) / (+el.dataset.w0 || parseFloat(el.style.width) || 1) * 100) : Math.round(scaleOf(el) * 100);
+  const showZoom = () => {
+    if (!selEl || !root.contains(selEl)) { zb.hidden = true; return; }
+    zb.hidden = false; const r = selEl.getBoundingClientRect(), zr = zb.getBoundingClientRect();
+    const top = r.top - zr.height - 10 >= 0 ? r.top - zr.height - 10 : Math.min(innerHeight - zr.height, r.bottom + 10);
+    Object.assign(zb.style, { left: clampN(r.left + r.width / 2 - zr.width / 2, 4, innerWidth - zr.width - 4) + 'px', top: top + 'px' });
+    zb.querySelector('[data-zv]').textContent = pct(selEl) + ' %';
+  };
+  const select = el => {
+    if (selEl !== el) { selEl?.classList.remove('sel'); selEl = el; el?.classList.add('sel'); }
+    if (el && kindOf(el) === 'size' && !el.dataset.w0) { const r = el.getBoundingClientRect(); el.dataset.w0 = parseFloat(el.style.width) || r.width; }
+    showZoom();
+  };
   const save = (el) => {
     const q = el.getBoundingClientRect(), key = el.dataset.drag, p = L.w[key] ||= {};
     p.x = q.left / innerWidth; p.y = q.top / innerHeight;
     if (kindOf(el) === 'size') { p.w = parseFloat(el.style.width) / innerWidth; p.h = parseFloat(el.style.height) / innerHeight; } else p.z = scaleOf(el);
     saveProfile();
   };
-  // Größe setzen: Widgets mit Inhalt skalieren gleichmäßig, Karte/Profil/Kurven ändern Breite und Höhe
-  const resize = (el, f, fx, fy) => {
-    if (kindOf(el) === 'size') { el.style.width = clampN(g.w0 * (fx ?? f), 80, innerWidth) + 'px'; el.style.height = clampN(g.h0 * (fy ?? f), 40, innerHeight) + 'px'; }
-    else { const max = Math.min(2.5, innerWidth * .98 / g.bw, innerHeight * .9 / g.bh); el.style.scale = String(Math.round(clampN(g.s0 * f, .5, Math.max(.5, max)) * 100) / 100); }
+  const setScale = (el, s, bw, bh) => {
+    const max = Math.min(ZMAX, innerWidth * .98 / bw, innerHeight * .9 / bh);
+    s = Math.round(clampN(s, ZMIN, Math.max(ZMIN, max)) * 100) / 100;
+    el.style.scale = String(s); el.style.setProperty('--inv', String(1 / s)); return s;
   };
+  const setBox = (el, w, h) => {
+    const lm = limOf(el);
+    w = clampN(w, lm.w[0], Math.max(lm.w[0], lm.w[1] * innerWidth)); h = clampN(h, lm.h[0], Math.max(lm.h[0], lm.h[1] * innerHeight));
+    el.style.width = w + 'px'; el.style.height = h + 'px'; return [w, h];
+  };
+  // Zoomen um Faktor f, Mittelpunkt bleibt stehen
+  const zoomBy = (el, f) => {
+    if (!el.dataset.user) { const r = el.getBoundingClientRect(); place(el, r.left, r.top); }
+    const r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    if (kindOf(el) === 'size') setBox(el, (parseFloat(el.style.width) || r.width) * f, (parseFloat(el.style.height) || r.height) * f);
+    else { const s0 = scaleOf(el); setScale(el, s0 * f, r.width / s0, r.height / s0); }
+    const q = el.getBoundingClientRect(); place(el, cx - q.width / 2, cy - q.height / 2);
+    save(el); showZoom(); root.dispatchEvent(new Event('hudresize'));
+  };
+  zb.onclick = e => {
+    const b = e.target.closest('[data-z]'); if (!b || !selEl) return;
+    if (b.dataset.z === '+') zoomBy(selEl, 1.1);
+    else if (b.dataset.z === '-') zoomBy(selEl, 1 / 1.1);
+    else {
+      const r = selEl.getBoundingClientRect(), p = L.w[selEl.dataset.drag] || {};
+      delete p.z; delete p.w; delete p.h; selEl.style.scale = ''; selEl.style.setProperty('--inv', '1');
+      if (kindOf(selEl) === 'size') { selEl.style.width = ''; selEl.style.height = ''; delete selEl.dataset.w0; }
+      place(selEl, r.left, r.top); save(selEl); showZoom(); root.dispatchEvent(new Event('hudresize'));
+    }
+  };
+  zb.onpointerdown = e => e.stopPropagation();
+  root._wheel = e => { const el = e.target.closest?.('[data-drag]'); if (!el) return; e.preventDefault(); select(el); zoomBy(el, e.deltaY < 0 ? 1.06 : 1 / 1.06); };
+  root.addEventListener('wheel', root._wheel, { passive: false });
+
   root.onpointerdown = e => {
-    if (e.target.closest('.editbar')) return;
+    if (e.target.closest('.editbar') || e.target.closest('.wzoom')) return;
     // Breite der Knopfleiste (bleibt unten rechts verankert)
     if (e.target.classList.contains('rzl')) {
       e.preventDefault(); try { e.target.setPointerCapture(e.pointerId); } catch (_) { }
@@ -152,19 +209,21 @@ export function editMode(root, on, onDone) {
       const up = () => { e.target.removeEventListener('pointermove', mv); e.target.removeEventListener('pointerup', up); e.target.removeEventListener('pointercancel', up); L.tbw = tb.getBoundingClientRect().width / innerWidth; saveProfile(); };
       e.target.addEventListener('pointermove', mv); e.target.addEventListener('pointerup', up); e.target.addEventListener('pointercancel', up); return;
     }
-    const el = e.target.closest('[data-drag]'); if (!el) return;
+    const el = e.target.closest('[data-drag]'); if (!el) { select(null); return; }
     e.preventDefault();
     touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
     try { root.setPointerCapture(e.pointerId); } catch (_) { }
     if (!el.dataset.user) { const r = el.getBoundingClientRect(); place(el, r.left, r.top); }
-    const r = el.getBoundingClientRect();
+    select(el); zb.hidden = true;
+    const r = el.getBoundingClientRect(), s0 = scaleOf(el);
+    const base = { el, s0, bw: r.width / s0, bh: r.height / s0, w0: parseFloat(el.style.width) || r.width, h0: parseFloat(el.style.height) || r.height, r0: { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height } };
     if (touches.size === 2 && g?.el === el) {
       // zweiter Finger auf demselben Widget: Zwei-Finger-Größenänderung
       const [a, b] = [...touches.values()];
-      g = { el, mode: 'pinch', bw: r.width / scaleOf(el), bh: r.height / scaleOf(el), d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, dx0: Math.abs(a.x - b.x) || 1, dy0: Math.abs(a.y - b.y) || 1, s0: scaleOf(el), w0: parseFloat(el.style.width) || r.width, h0: parseFloat(el.style.height) || r.height, x0: r.left, y0: r.top };
+      g = { ...base, mode: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, dx0: Math.abs(a.x - b.x) || 1, dy0: Math.abs(a.y - b.y) || 1 };
       return;
     }
-    if (e.target.classList.contains('rz')) g = { el, mode: 'rz', bw: r.width / scaleOf(el), bh: r.height / scaleOf(el), px: e.clientX, py: e.clientY, s0: scaleOf(el), w0: parseFloat(el.style.width) || r.width, h0: parseFloat(el.style.height) || r.height, rw: r.width, rh: r.height };
+    if (e.target.classList.contains('rh')) g = { ...base, mode: 'edge', h: e.target.dataset.h, px: e.clientX, py: e.clientY };
     else g = { el, mode: 'move', ox: e.clientX - r.left, oy: e.clientY - r.top };
     el.classList.add('grab');
   };
@@ -173,25 +232,34 @@ export function editMode(root, on, onDone) {
     touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const el = g.el;
     if (g.mode === 'move') { place(el, e.clientX - g.ox, e.clientY - g.oy); return; }
-    if (g.mode === 'rz') {
-      // Faktor aus der Diagonalen: wirkt auf Touch und Maus gleich ruhig
-      const dx = e.clientX - g.px, dy = e.clientY - g.py;
-      if (kindOf(el) === 'size') resize(el, 1, (g.rw + dx) / g.rw, (g.rh + dy) / g.rh);
-      else resize(el, (g.rw + g.rh + dx + dy) / (g.rw + g.rh));
+    if (g.mode === 'edge') {
+      // Gegenüberliegende Kante bleibt stehen
+      const h = g.h, dx = e.clientX - g.px, dy = e.clientY - g.py, R = g.r0;
+      const sx = h.includes('e') ? 1 : h.includes('w') ? -1 : 0, sy = h.includes('s') ? 1 : h.includes('n') ? -1 : 0;
+      let W, H;
+      if (kindOf(el) === 'size') [W, H] = setBox(el, g.w0 + sx * dx, g.h0 + sy * dy);
+      else {
+        const fx = sx ? (R.width + sx * dx) / R.width : null, fy = sy ? (R.height + sy * dy) / R.height : null;
+        const f = fx != null && fy != null ? (fx + fy) / 2 : (fx ?? fy);
+        const s = setScale(el, g.s0 * f, g.bw, g.bh); W = g.bw * s; H = g.bh * s;
+      }
+      const left = sx < 0 ? R.right - W : sx > 0 ? R.left : R.left + (R.width - W) / 2;
+      const top = sy < 0 ? R.bottom - H : sy > 0 ? R.top : R.top + (R.height - H) / 2;
+      place(el, left, top);
       return;
     }
     if (g.mode === 'pinch' && touches.size >= 2) {
-      const [a, b] = [...touches.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
-      if (kindOf(el) === 'size') resize(el, 1, Math.max(.3, Math.abs(a.x - b.x) / g.dx0 * .5 + d / g.d0 * .5), Math.max(.3, Math.abs(a.y - b.y) / g.dy0 * .5 + d / g.d0 * .5));
-      else resize(el, d / g.d0);
-      place(el, g.x0, g.y0);
+      const [a, b] = [...touches.values()], d = Math.hypot(a.x - b.x, a.y - b.y), R = g.r0;
+      if (kindOf(el) === 'size') setBox(el, g.w0 * Math.max(.3, Math.abs(a.x - b.x) / g.dx0 * .5 + d / g.d0 * .5), g.h0 * Math.max(.3, Math.abs(a.y - b.y) / g.dy0 * .5 + d / g.d0 * .5));
+      else setScale(el, g.s0 * d / g.d0, g.bw, g.bh);
+      const q = el.getBoundingClientRect(); place(el, R.left + R.width / 2 - q.width / 2, R.top + R.height / 2 - q.height / 2);
     }
   };
   const end = e => {
     touches.delete(e.pointerId);
     if (!g) return;
     if (g.mode === 'pinch' && touches.size === 1) { const [p] = touches.values(), r = g.el.getBoundingClientRect(); g = { el: g.el, mode: 'move', ox: p.x - r.left, oy: p.y - r.top }; return; }
-    if (touches.size === 0) { g.el.classList.remove('grab'); save(g.el); if (g.mode !== 'move') root.dispatchEvent(new Event('hudresize')); g = null; }
+    if (touches.size === 0) { g.el.classList.remove('grab'); save(g.el); if (g.mode !== 'move') root.dispatchEvent(new Event('hudresize')); g = null; showZoom(); }
   };
   root.onpointerup = end; root.onpointercancel = end;
 }
@@ -208,7 +276,7 @@ function panel(root, bar, onDone) {
   bar.innerHTML = `
     <div class="edhead" title="Ziehen zum Verschieben"><span class="edgrip">⠿</span><b>Anzeige anordnen</b><span class="row"><button class="btn xs ghost" id="edMin" title="Einklappen">${P.c ? '▸' : '▾'}</button><button class="btn xs pri" id="edDone">Fertig</button></span></div>
     <div class="edbody">
-      <div class="small muted">Ziehen verschiebt. Größe: Eckgriff unten rechts oder mit zwei Fingern auf dem Widget. Gilt für ${cls() === 'small' ? 'kleine' : 'große'} Bildschirme.</div>
+      <div class="small muted">Ziehen verschiebt. Größe: an jeder Kante oder Ecke ziehen, mit zwei Fingern auf dem Widget oder mit dem Mausrad. Antippen zeigt − / + zum Zoomen und ⟲ für die ursprüngliche Größe. Gilt für ${cls() === 'small' ? 'kleine' : 'große'} Bildschirme.</div>
       <div class="edgrid">
         <label class="f">Vorlage<select class="inp sm" id="edPreset"><option value="">– wählen –</option>${Object.entries(PRESETS).map(([k, v]) => `<option value="${k}">${v.n}</option>`).join('')}</select></label>
         <label class="f">Stil<select class="inp sm" id="edStyle">${Object.entries(STYLES).map(([k, v]) => `<option value="${k}" ${(profile.hudStyle || 'dark') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>

@@ -4,7 +4,9 @@ import { profile, saveProfile, progress, levelOf } from '../state.js';
 import { UNLOCKS } from '../game.js';
 import { backup, restore, wipeAll, usage, persist } from '../db.js';
 import { autoQuality } from '../world.js';
-import { sync, saveSyncCfg, testConnection, pushNow, pullNow, dsmLogin, dsmLogout, normalizeHost, renameDevice } from '../sync.js';
+import { sync, saveSyncCfg, testConnection, pushNow, pullNow, dsmLogin, dsmLogout, normalizeHost, renameDevice, providerName } from '../sync.js';
+import { PROVIDERS, isOAuth, startOAuth, redirectUri } from '../cloud.js';
+import { kv } from '../db.js';
 import { sound } from '../sound.js';
 import { strava, connected as stravaConnected, setApp as setStravaApp, setAuto as setStravaAuto, authorize as stravaAuthorize, disconnect as stravaDisconnect } from '../strava.js';
 
@@ -33,16 +35,52 @@ function stravaCard(box) {
   });
 }
 
-// NAS-Speicher: Synology-Anmeldung (DSM-Konto mit 2FA) oder WebDAV
-function nasCard(box) {
-  const c = sync.cfg || { mode: 'dsm', auto: true };
-  const mode = c.mode || (c.url ? 'webdav' : 'dsm'), on = mode === 'dsm' ? !!c.host : !!c.url;
+// Cloud-Speicher: Synology-Anmeldung (DSM-Konto mit 2FA), WebDAV/Nextcloud, OneDrive, Google Drive, Dropbox
+const MODES = [['dsm', 'Synology'], ['webdav', 'WebDAV / Nextcloud'], ['onedrive', 'OneDrive'], ['gdrive', 'Google Drive'], ['dropbox', 'Dropbox']];
+// Anleitung zur App-Registrierung je Dienst
+function oauthHelp(mode) {
+  const ru = esc(redirectUri()), og = esc(location.origin);
+  if (mode === 'onedrive') return `<ol class="tips"><li><a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank" rel="noopener">Microsoft Entra → App-Registrierungen</a> → <b>Neue Registrierung</b> (mit deinem Microsoft-Konto, kostenlos).</li>
+    <li>Name z. B. „VeloVerse“. Unterstützte Kontotypen: <b>Konten in einem beliebigen Organisationsverzeichnis und persönliche Microsoft-Konten</b>.</li>
+    <li>Umleitungs-URI: Plattform <b>Single-Page-Anwendung (SPA)</b>, Adresse <code>${ru}</code>.</li>
+    <li>Die <b>Anwendungs-ID (Client-ID)</b> von der Übersichtsseite hier eintragen. Ein Geheimnis ist nicht nötig.</li>
+    <li>Beim Verbinden fragt Microsoft einmal nach der Erlaubnis. VeloVerse sieht nur seinen eigenen Ordner <b>Apps/VeloVerse</b>, nicht deine übrigen Dateien.</li>
+    <li>Hinweis: Microsoft lässt Browser-Apps höchstens 24 Stunden ohne neue Anmeldung zu. Danach einmal auf „Neu verbinden“ tippen, die Daten bleiben.</li></ol>`;
+  if (mode === 'gdrive') return `<ol class="tips"><li><a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a> → neues Projekt anlegen.</li>
+    <li>APIs &amp; Dienste → Bibliothek → <b>Google Drive API</b> aktivieren.</li>
+    <li>OAuth-Zustimmungsbildschirm: Typ <b>Extern</b>, App-Name, deine E-Mail. Danach unter „Zielgruppe“ <b>App veröffentlichen</b> (der verwendete Zugriff „nur von der App erstellte Dateien“ braucht keine Google-Prüfung). Im Testmodus läuft die Anmeldung sonst nach 7 Tagen ab.</li>
+    <li>Anmeldedaten → <b>OAuth-Client-ID</b> → Typ <b>Webanwendung</b>. Autorisierte JavaScript-Quellen: <code>${og}</code>, autorisierte Weiterleitungs-URIs: <code>${ru}</code>.</li>
+    <li><b>Client-ID</b> und <b>Clientschlüssel</b> hier eintragen (bleiben nur in diesem Browser). Die Daten landen sichtbar im Ordner <b>VeloVerse</b> in „Meine Ablage“.</li></ol>`;
+  return `<ol class="tips"><li><a href="https://www.dropbox.com/developers/apps" target="_blank" rel="noopener">Dropbox App Console</a> → <b>Create app</b> → Scoped access → <b>App folder</b> → Name z. B. „VeloVerse“.</li>
+    <li>Reiter <b>Permissions</b>: <code>files.metadata.read</code>, <code>files.content.read</code>, <code>files.content.write</code> anhaken → Submit.</li>
+    <li>Reiter <b>Settings</b>: unter OAuth 2 Redirect URIs <code>${ru}</code> hinzufügen, „Allow public clients (Implicit Grant &amp; PKCE)“ auf <b>Allow</b>.</li>
+    <li>Den <b>App key</b> hier eintragen. Ein Geheimnis ist nicht nötig, die Anmeldung bleibt dauerhaft bestehen.</li></ol>`;
+}
+async function oauthBlock(box, mode, c, connected) {
+  const P = PROVIDERS[mode], app = (await kv.get('cloudApps', {}))[mode] || {};
+  if (connected) return `<p>Verbunden mit <b>${esc(P.name)}</b>${c.account ? ' als <b>' + esc(c.account) + '</b>' : ''}<br><span class="small muted">Dateien: ${esc(P.where)}</span></p>
+      <label class="switch"><input type="checkbox" id="nAuto" ${c.auto !== false ? 'checked' : ''}><span></span> Automatisch abgleichen (beim Start und nach jeder Änderung)</label>
+      <div class="row"><button class="btn sm" id="nPush">Jetzt abgleichen</button><button class="btn sm" id="nPull">Alles aus ${esc(P.name)} übernehmen</button><button class="btn sm ghost danger" id="nOff">Trennen</button></div>`;
+  return `${c.mode === mode && sync.needLogin ? `<p class="warn small">🔑 Die Anmeldung bei ${esc(P.name)} ist abgelaufen. Einmal neu verbinden, die Daten bleiben.</p>` : ''}
+      <p class="small muted">Einmalig eine eigene, kostenlose App bei ${esc(P.name)} anlegen und die Kennung hier eintragen. VeloVerse spricht ${esc(P.name)} dann direkt aus dem Browser an, ohne fremden Server.</p>
+      <details class="small"><summary><b>So legst du die App an</b></summary>${oauthHelp(mode)}</details>
+      <label class="f">${mode === 'dropbox' ? 'App key' : 'Client-ID'}<input class="inp" id="oId" value="${esc(app.clientId || (c.mode === mode ? c.clientId : '') || '')}" autocomplete="off" spellcheck="false"></label>
+      ${P.secret ? `<label class="f">Clientschlüssel (Client-Secret)<input class="inp" id="oSec" type="password" value="${esc(app.secret || (c.mode === mode ? c.secret : '') || '')}" autocomplete="off"></label>` : ''}
+      <div class="row"><button class="btn pri sm" id="oConnect">${c.mode === mode && c.clientId ? 'Neu verbinden' : 'Mit ' + esc(P.name) + ' verbinden'}</button>${c.mode === mode && c.clientId ? '<button class="btn sm ghost danger" id="nOff">Trennen</button>' : ''}</div>`;
+}
+const isConfiguredCfg = c => !!c && (isOAuth(c.mode) ? !!(c.refresh || c.access) : c.mode === 'dsm' ? !!c.host : !!c.url);
+async function nasCard(box) {
+  const c = sync.cfg || { mode: box.dataset.mode || 'dsm', auto: true };
+  const mode = box.dataset.mode || c.mode || (c.url ? 'webdav' : 'dsm');
+  const oauthOn = isOAuth(mode) && c.mode === mode && !!(c.refresh || c.access);
+  const on = c.mode === mode && (isOAuth(mode) ? oauthOn : mode === 'dsm' ? !!c.host : !!c.url);
+  const oblock = isOAuth(mode) ? await oauthBlock(box, mode, c, oauthOn && !sync.needLogin) : '';
   const status = () => sync.busy ? '⏳ Abgleich läuft …' : sync.needLogin ? '<span style="color:var(--warn)">🔑 Anmeldung abgelaufen, bitte neu anmelden</span>' : sync.error ? `<span style="color:#ff8b97">⚠ ${esc(sync.error)}</span>` : sync.last ? `✅ Zuletzt abgeglichen: ${fmtDate(sync.last)}` : on ? 'Noch nicht abgeglichen' : 'Nicht eingerichtet';
-  box.innerHTML = `<h2>NAS-Speicher (Synology)</h2>
-    <p class="small muted">Zusätzlich zum Browser landen alle Daten in einem Ordner auf deinem NAS: <code>state.json</code> mit Einstellungen und Fortschritt, jede Fahrt als eigene Datei, Fotos als JPG. Fotos der Fahrten werden mitgespeichert.</p>
-    <p class="small muted">Ein neu verbundenes Gerät holt zuerst den Stand vom NAS und überschreibt dort nichts. Danach gewinnt bei jeder Einstellung die zuletzt geänderte Seite; Fahrten und Fotos werden nur ergänzt, gelöschte Fahrten verschwinden überall.</p>
-    <div class="seg sm" id="nMode"><button data-m="dsm" aria-pressed="${mode === 'dsm'}">Synology-Anmeldung</button><button data-m="webdav" aria-pressed="${mode === 'webdav'}">WebDAV</button></div>
-    ${mode === 'dsm' ? (c.host && (c.sid || c.pass) && !sync.needLogin ? `
+  box.innerHTML = `<h2>Cloud-Speicher</h2>
+    <p class="small muted">Zusätzlich zum Browser landen alle Daten in einem Ordner auf deinem NAS oder in deiner Cloud (immer nur ein Speicher gleichzeitig): <code>state.json</code> mit Einstellungen und Fortschritt, jede Fahrt als eigene Datei, Fotos als JPG. Fotos der Fahrten werden mitgespeichert.</p>
+    <p class="small muted">Ein neu verbundenes Gerät holt zuerst den Stand aus dem Speicher und überschreibt dort nichts. Danach gewinnt bei jeder Einstellung die zuletzt geänderte Seite; Fahrten, Fotos und eigene Pläne werden nur ergänzt, gelöschte Fahrten, Workouts, Strecken und Pläne verschwinden überall.</p>
+    <div class="seg sm wrap" id="nMode">${MODES.map(([m, l]) => `<button data-m="${m}" aria-pressed="${mode === m}">${l}${sync.cfg?.mode === m && isConfiguredCfg(sync.cfg) ? ' ✓' : ''}</button>`).join('')}</div>
+    ${isOAuth(mode) ? oblock : mode === 'dsm' ? (c.host && (c.sid || c.pass) && !sync.needLogin ? `
       <p>Angemeldet als <b>${esc(c.user)}</b> auf <b>${esc(c.host)}</b><br><span class="small muted">Ordner: ${esc(c.folder)}${c.pass ? ' · bleibt angemeldet' : ''}${c.did ? ' · Gerät für 2FA gemerkt' : ''}</span></p>
       <label class="switch"><input type="checkbox" id="nAuto" ${c.auto ? 'checked' : ''}><span></span> Automatisch abgleichen (beim Start und nach jeder Änderung)</label>
       <div class="row"><button class="btn sm" id="nPush">Jetzt abgleichen</button><button class="btn sm" id="nPull">Alles vom NAS übernehmen</button><button class="btn sm ghost" id="nLogout">Abmelden</button></div>`
@@ -51,12 +89,12 @@ function nasCard(box) {
     : `<label class="f">WebDAV-Adresse des Ordners<input class="inp" id="nUrl" type="url" placeholder="https://dav.deine-domain.de/home/veloverse" value="${esc(c.url || '')}"></label>
       <div class="grid2 tight"><label class="f">Benutzer<input class="inp" id="nUser" autocomplete="username" value="${esc(c.user || '')}"></label><label class="f">Passwort<input class="inp" id="nPass" type="password" autocomplete="current-password" value="${esc(c.pass || '')}"></label></div>
       <label class="switch"><input type="checkbox" id="nAuto" ${c.auto !== false ? 'checked' : ''}><span></span> Automatisch abgleichen</label>
-      <p class="small muted">WebDAV kennt keine 2FA, das Passwort bleibt dafür in diesem Browser. Besser die Synology-Anmeldung nutzen.</p>
+      <p class="small muted">WebDAV kennt keine 2FA, das Passwort bleibt dafür in diesem Browser. Für Synology besser die Synology-Anmeldung nutzen. <b>Nextcloud/ownCloud</b>: Adresse <code>https://cloud.example.de/remote.php/dav/files/BENUTZER/VeloVerse</code>, dazu ein App-Passwort (Einstellungen → Sicherheit) und eine CORS-Freigabe für ${esc(location.origin)} auf dem Server.</p>
       <div class="row"><button class="btn sm" id="nSave">Speichern und testen</button><button class="btn sm" id="nPush">Jetzt abgleichen</button><button class="btn sm" id="nPull">Alles vom NAS übernehmen</button>${c.url ? '<button class="btn sm ghost danger" id="nOff">Trennen</button>' : ''}</div>`}
     <div class="small" id="nStat">${status()}</div>
     ${on && sync.device ? `<div class="devlist small"><label class="f">Name dieses Geräts<input class="inp" id="nDev" value="${esc(sync.device.name)}" maxlength="40"></label>
       ${Object.keys(sync.devices || {}).length ? `<div class="muted">Mit diesem NAS-Ordner verbunden:</div><ul class="tips">${Object.entries(sync.devices).sort((a, b) => b[1].last.localeCompare(a[1].last)).map(([id, d]) => `<li><b>${esc(d.name)}</b>${id === sync.device.id ? ' (dieses Gerät)' : ''} · zuletzt ${fmtDate(d.last)}</li>`).join('')}</ul><div class="muted">Stand Nr. ${sync.rev ?? '–'}</div>` : ''}</div>` : ''}
-    <details class="small muted"><summary>Einrichtung auf der Synology</summary>
+    ${isOAuth(mode) ? '' : `<details class="small muted"><summary>Einrichtung auf der Synology</summary>
       <p>Der Browser darf das NAS von <b>${esc(location.origin)}</b> aus nur ansprechen, wenn das NAS das erlaubt. Die DSM-Anmeldeseite selbst lässt sich aus Sicherheitsgründen nicht in fremde Seiten einbetten, darum meldet sich die App direkt über die DSM-Schnittstelle an, mit denselben Zugangsdaten und 2FA.</p>
       <ol class="tips">
         <li>Das NAS braucht HTTPS mit gültigem Zertifikat (Systemsteuerung → Sicherheit → Zertifikat, z. B. Let’s Encrypt für deine Domain).</li>
@@ -66,10 +104,17 @@ function nasCard(box) {
         <li>Am besten ein eigenes DSM-Konto nur mit Zugriff auf diesen Ordner und auf File Station verwenden.</li>
         <li><b>NAS hinter einem eigenen Server (VPS, Tunnel)</b>: Die Kopfzeile dann im Proxy auf dem VPS setzen statt in DSM, die NAS-Adresse ist die öffentliche Subdomain (Port 443).<br>nginx: <code>add_header Access-Control-Allow-Origin "${esc(location.origin)}" always;</code>${mode === 'webdav' ? ' <code>add_header Access-Control-Allow-Methods "GET, PUT, DELETE, MKCOL, PROPFIND, OPTIONS" always; add_header Access-Control-Allow-Headers "Authorization, Content-Type, Depth" always;</code>' : ''}<br>Caddy: <code>header Access-Control-Allow-Origin "${esc(location.origin)}"</code><br>Weiterleiten muss der Proxy dabei mindestens den Pfad <code>/webapi/</code> an DSM (Port 5001).</li>
       </ol>
-    </details>`;
+    </details>`}`;
   const stat = () => { const s = box.querySelector('#nStat'); if (s) s.innerHTML = status(); };
   const off = bus.on('sync', stat); const mo = new MutationObserver(() => { if (!box.isConnected) { off(); mo.disconnect(); } }); mo.observe(document.body, { childList: true, subtree: true });
-  box.querySelector('#nMode').onclick = async e => { const b = e.target.closest('[data-m]'); if (!b || b.dataset.m === mode) return; if (on && !(await dialog({ title: 'Verfahren wechseln?', html: '<p class="muted">Die aktuelle NAS-Verbindung wird getrennt. Die Daten im Browser und auf dem NAS bleiben.</p>', buttons: [{ label: 'Abbrechen', value: false }, { label: 'Wechseln', value: true, cls: 'pri' }] }))) return; await dsmLogout(); await saveSyncCfg({ mode: b.dataset.m, auto: true }); nasCard(box); };
+  // Reiter wechseln zeigt nur die Einrichtung; der aktive Speicher bleibt, bis ein anderer verbunden wird
+  box.querySelector('#nMode').onclick = e => { const b = e.target.closest('[data-m]'); if (!b || b.dataset.m === mode) return; box.dataset.mode = b.dataset.m; nasCard(box); };
+  box.querySelector('#oConnect')?.addEventListener('click', async () => {
+    const id = box.querySelector('#oId').value.trim(), sec = box.querySelector('#oSec')?.value.trim() || '';
+    const apps = await kv.get('cloudApps', {}); apps[mode] = { clientId: id, secret: sec || undefined }; await kv.set('cloudApps', apps);
+    if (sync.cfg && sync.cfg.mode !== mode && isConfiguredCfg(sync.cfg) && !(await dialog({ title: `Zu ${PROVIDERS[mode].name} wechseln?`, html: `<p class="muted">Der Abgleich mit ${esc(providerName(sync.cfg.mode))} wird beendet. Die Daten dort und im Browser bleiben. ${esc(PROVIDERS[mode].name)} wird beim ersten Verbinden zuerst nur gelesen.</p>`, buttons: [{ label: 'Abbrechen', value: false }, { label: 'Wechseln', value: true, cls: 'pri' }] }))) return;
+    try { await startOAuth(mode, id, sec); } catch (err) { toast(err.message, 5000); }
+  });
   box.querySelector('#nAuto')?.addEventListener('change', async e => { sync.cfg.auto = e.target.checked; await saveSyncCfg(sync.cfg); });
   box.querySelector('#nPush')?.addEventListener('click', () => connectSync(box));
   box.querySelector('#nPull')?.addEventListener('click', async () => {
@@ -77,7 +122,7 @@ function nasCard(box) {
     try { const r = await pullNow(); if (r) { toast(`Vom NAS übernommen (${r.rides} neue Fahrten), App wird neu geladen`); setTimeout(() => location.reload(), 1200); } } catch (e) { }
   });
   box.querySelector('#nDev')?.addEventListener('change', e => renameDevice(e.target.value));
-  box.querySelector('#nOff')?.addEventListener('click', async () => { await dsmLogout(); await saveSyncCfg(null); sync.last = null; sync.error = null; sync.needLogin = false; nasCard(box); toast('NAS getrennt, die Daten im Browser bleiben'); });
+  box.querySelector('#nOff')?.addEventListener('click', async () => { if (!isOAuth(sync.cfg?.mode)) await dsmLogout(); await saveSyncCfg(null); sync.last = null; sync.error = null; sync.needLogin = false; nasCard(box); toast('Cloud-Speicher getrennt, die Daten im Browser bleiben'); });
   box.querySelector('#nLogout')?.addEventListener('click', async () => { await dsmLogout(); nasCard(box); toast('Abgemeldet'); });
   box.querySelector('#nLogin')?.addEventListener('click', async () => { if (await loginDialog()) { toast('Angemeldet, Verbindung klappt'); nasCard(box); connectSync(box); } });
   box.querySelector('#nSave')?.addEventListener('click', async () => {
@@ -172,7 +217,7 @@ export async function render(el) {
       <p class="small muted">Ruckelt die Fahrt, senkt die App die Auflösung automatisch. Auf schwachen Geräten hilft zusätzlich „Mittel“ oder „Niedrig“.</p>
       <h2 style="margin-top:18px">Daten</h2>
       <p class="small muted">Gespeichert werden Profil, Einstellungen, gekoppelte Geräte und Tastenbelegung, Fahrten mit Fotos, Level, Abzeichen, Missionen, Bestzeiten, Trainingsplan-Fortschritt sowie eigene Strecken, Pläne und Workouts. Die Sicherung enthält alles davon in einer Datei, aber keine Passwörter oder Schlüssel.</p>
-      <p class="small muted">Alles wird in diesem Browser unter <b>${esc(location.origin)}</b> gespeichert. Unter einer anderen Adresse siehst du andere Daten. Sichere regelmäßig oder richte unten den NAS-Speicher ein.</p>
+      <p class="small muted">Alles wird in diesem Browser unter <b>${esc(location.origin)}</b> gespeichert. Unter einer anderen Adresse siehst du andere Daten. Sichere regelmäßig oder richte unten einen Cloud-Speicher ein (NAS, OneDrive, Google Drive, Dropbox).</p>
       <p class="small muted">Belegt: ${u ? (u.usage / 1048576).toFixed(1).replace('.', ',') + ' MB' : 'unbekannt'} · Dauerhafter Speicher: ${pers ? 'ja' : 'nicht bestätigt'}</p>
       <div class="row"><button class="btn" id="bk">Sicherung herunterladen</button><label class="btn">Sicherung einspielen<input type="file" id="rs" accept=".json" hidden></label></div>
       <div class="row"><button class="btn ghost danger" id="wp">Alle lokalen Daten löschen</button></div>

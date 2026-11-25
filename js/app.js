@@ -5,7 +5,7 @@ import { loadClickMap, setDemo, status, support, reconnectKnown } from './ble.js
 import { kv, persist } from './db.js';
 import { ICON } from './components.js';
 import { loadPlan } from './plans.js';
-import { loadSync, autoSync, sync } from './sync.js';
+import { loadSync, autoSync, sync, isConfigured, providerName, handleCloudRedirect } from './sync.js';
 import { loadStrava, handleRedirect, strava, connected as stravaConnected } from './strava.js';
 
 const PAGES = {
@@ -26,12 +26,12 @@ function nav() {
   cc.innerHTML = '<svg viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.1 9.2 4.5 4.5 0 0 0 7 18Z"/></svg><i></i>';
   $('#chips').after(cc);
   const cloudUpd = () => {
-    const nas = sync.cfg && (sync.cfg.mode === 'dsm' ? sync.cfg.host : sync.cfg.url), st = stravaConnected();
+    const nas = isConfigured() || !!(sync.cfg && (sync.cfg.host || sync.cfg.url || sync.cfg.clientId)), st = stravaConnected();
     cc.hidden = !nas && !st;
     const state = !nas ? 'strava' : sync.busy ? 'busy' : sync.needLogin ? 'login' : sync.error ? 'error' : sync.last ? 'on' : 'off';
     cc.dataset.st = state;
     const when = sync.last ? new Date(sync.last).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : 'noch nie';
-    cc.title = [nas ? `NAS-Speicher (${sync.cfg.mode === 'dsm' ? 'Synology' : 'WebDAV'}): ${{ busy: 'Abgleich läuft', login: 'Anmeldung abgelaufen', error: 'Fehler: ' + sync.error, on: 'zuletzt abgeglichen ' + when, off: 'noch nicht abgeglichen' }[state]}` : '', st ? `Strava verbunden${strava.cfg?.auto ? ', Fahrten werden automatisch hochgeladen' : ''}` : ''].filter(Boolean).join(' · ');
+    cc.title = [nas ? `Cloud-Speicher (${providerName()}): ${{ busy: 'Abgleich läuft', login: 'Anmeldung abgelaufen', error: 'Fehler: ' + sync.error, on: 'zuletzt abgeglichen ' + when, off: 'noch nicht abgeglichen' }[state]}` : '', st ? `Strava verbunden${strava.cfg?.auto ? ', Fahrten werden automatisch hochgeladen' : ''}` : ''].filter(Boolean).join(' · ');
   };
   bus.on('sync', cloudUpd); bus.on('strava', cloudUpd); setInterval(cloudUpd, 30000); cloudUpd(); window.__cloudUpd = cloudUpd;
   // Vollbild-Knopf in der Kopfleiste
@@ -81,6 +81,9 @@ async function init() {
   bus.on('toast', m => toast(m));
   if (await kv.get('demo', !support().ok)) setDemo(true);
   persist();
+  // Rückkehr von OneDrive/Google/Dropbox-Anmeldung zuerst auswerten (sonst hält Strava den Code für seinen)
+  await loadSync();
+  try { const who = await handleCloudRedirect(); if (who) toast('Verbunden mit ' + who, 4000); } catch (e) { toast(e.message, 7000); }
   await loadStrava(); window.__cloudUpd?.();
   try { const who = await handleRedirect(); if (who) toast('Mit Strava verbunden' + (typeof who === 'string' && who ? ': ' + who : '')); }
   catch (e) { toast(e.message, 6000); }

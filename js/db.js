@@ -46,6 +46,8 @@ export const db = {
   }),
 };
 
+// Gelöschten Eintrag merken, damit er beim Abgleich auch auf anderen Geräten und in der Cloud verschwindet
+export async function tomb(key, id) { const l = await kv.get(key, []); if (!l.includes(id)) await kv.set(key, [...l, id]); }
 export const kv = {
   get: async (k, d) => { try { const v = await db.get('kv', k); return v === undefined ? d : v; } catch (e) { return d; } },
   set: (k, v) => db.put('kv', v, k),
@@ -64,7 +66,7 @@ export async function usage() {
 export async function backup() {
   const out = { app: 'trittwerk', version: 1, date: new Date().toISOString(), kv: {}, rides: [], shots: [], routes: [], workouts: [] };
   // Zugangsdaten (NAS-Passwort, Strava-Schlüssel) gehören nicht in die Sicherungsdatei
-  for (const k of await db.keys('kv')) if (!['sync', 'strava', 'syncMeta', 'musicFiles'].includes(k)) out.kv[k] = await db.get('kv', k);
+  for (const k of await db.keys('kv')) if (!['sync', 'strava', 'syncMeta', 'musicFiles', 'cloudApps', 'device', 'kvTimes'].includes(k)) out.kv[k] = await db.get('kv', k);
   out.rides = await db.all('rides');
   out.routes = (await db.all('routes')).map(r => ({ ...r, dem: undefined })); // Gelände wird bei Bedarf neu geladen
   out.workouts = await db.all('workouts');

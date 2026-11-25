@@ -1,6 +1,6 @@
 // Trainingspläne: mehrwöchige Folgen von Workouts, Fortschritt im Browser (kv 'plan')
 import { WB, EXTRA_W, stats } from './workouts.js';
-import { kv } from './db.js';
+import { kv, tomb } from './db.js';
 import { bus } from './util.js';
 
 const { ss, ramp, free, rep } = WB;
@@ -112,6 +112,7 @@ export async function saveCustomPlan(c) {
 }
 export const customRecord = async id => (await kv.get('customPlans', [])).find(c => c.id === id);
 export async function deleteCustomPlan(id) {
+  await tomb('deletedPlans', id);
   await kv.set('customPlans', (await kv.get('customPlans', [])).filter(c => c.id !== id));
   const i = CUSTOM.findIndex(p => p.id === id); if (i >= 0) CUSTOM.splice(i, 1);
   if (plan.active?.id === id) stopPlan();
