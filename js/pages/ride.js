@@ -115,7 +115,7 @@ export async function render(el) {
     <div class="bigmap" id="bigMap" hidden>
       <div class="bigmap-card">
         <div class="row between"><b id="bmTitle">Karte</b><button class="btn sm ghost" id="bmClose">Schließen</button></div>
-        <canvas id="bmCanvas"></canvas>
+        <div class="bmwrap"><canvas id="bmCanvas"></canvas><div class="bmzoom"><button class="btn sm" id="bmZin" title="Hineinzoomen">+</button><button class="btn sm" id="bmZout" title="Herauszoomen">−</button><button class="btn sm" id="bmMe" title="Auf mich zentrieren">◎</button><button class="btn sm" id="bmAll" title="Ganze Strecke">⤢</button></div></div>
         <canvas id="bmProf" class="bmprof"></canvas>
         <div class="row between"><span class="small muted" id="bmInfo">Tippe auf die Strecke oder ins Höhenprofil, um ein Ziel zu wählen.</span><button class="btn pri" id="bmGo" disabled>Hierhin beamen</button></div>
         <div class="row small" id="bmQuick"></div>
@@ -188,7 +188,7 @@ async function start(el) {
     if (!S?.alive) return;
     const PRm = window.__presence; PRm?.setStatus({ where: 'ride', route: route.id, routeName: route.name });
     // Position immer senden (auch in Pause oder vor dem ersten Tritt), sonst verschwindet man für die anderen
-    S.live = joinRoute(route.id, () => { const go = S.state === 'riding'; return { d: Math.round(S.dist * 10) / 10, v: go ? +S.v.toFixed(2) : 0, p: go ? Math.round(S.p3.at(-1) || 0) : 0, wkg: go ? +((S.p3.at(-1) || 0) / profile.kg).toFixed(1) : 0, cad: go ? live.cadence ?? 0 : 0, pause: !go, env: { time: S.env.time, weather: S.env.weather }, look: PRm ? PRm.onlineLook() : { jersey: profile.jersey, bikeColor: profile.bikeColor, helmet: profile.helmet, skin: profile.skin, av: profile.av } }; });
+    S.live = joinRoute(route.id, () => { const go = S.state === 'riding'; return { d: Math.round(S.dist * 10) / 10, v: go ? +S.v.toFixed(2) : 0, p: go ? Math.round(S.p3.at(-1) || 0) : 0, wkg: go ? +((S.p3.at(-1) || 0) / profile.kg).toFixed(1) : 0, cad: go && live.fresh ? Math.round(live.cadence ?? (live.power > 15 ? 85 : 0)) : 0, pause: !go, env: { time: S.env.time, weather: S.env.weather }, look: PRm ? PRm.onlineLook() : { jersey: profile.jersey, bikeColor: profile.bikeColor, helmet: profile.helmet, skin: profile.skin, av: profile.av } }; });
     S.live.onChange = syncRemote;
     S.live.onStatus = st => { if (st === 'on') flash('🌐 Live verbunden', 1500); else if (st === 'error' && !S.liveErrShown) { S.liveErrShown = true; flash('🌐 Live-Verbindung unterbrochen, neuer Versuch …', 2500); } };
     if (S.live.status === 'private' && S.joinRider) flash('🌐 Du bist auf „unsichtbar“ gestellt (Konto › Für andere sichtbar). Mitfahren geht nur sichtbar.', 5000);
@@ -242,7 +242,7 @@ function syncRemote() {
   if (!S?.alive || !S.live) return;
   const R = S.route, peers = S.live.peers, keep = S.field.filter(n => !n.remote || peers.has(n.id));
   let k = 0;
-  for (const [id, p] of peers) if (!keep.some(n => n.id === id)) keep.push({ remote: true, id, i: 100 + k++, name: p.name, wkg: p.wkg || 0, d: p.d || 0, v: p.v || 0, lat: 2.3, latT: 2.3, crank: 0, cadence: p.cad || 85, gap: gapOf(R, p.d || 0, S.dist), look: { ...(p.look || {}), jersey: p.look?.jersey || '#ffffff', name: '🌐 ' + p.name, remote: true } });
+  for (const [id, p] of peers) if (!keep.some(n => n.id === id)) keep.push({ remote: true, id, i: 100 + k++, name: p.name, wkg: p.wkg || 0, d: p.d || 0, v: p.v || 0, lat: 2.3, latT: 2.3, crank: 0, cadence: p.cad ?? 0, gap: gapOf(R, p.d || 0, S.dist), look: { ...(p.look || {}), jersey: p.look?.jersey || '#ffffff', name: '🌐 ' + p.name, remote: true } });
   S.field = keep; if (peers.size && !S.npcOn) { S.npcOn = true; updNpcBtn(); }
   // "Mitfahren" aus "Wer ist online": einmalig direkt hinter den gewählten Fahrer beamen
   if (S.joinRider && peers.has(S.joinRider.sid)) { const p = peers.get(S.joinRider.sid), name = S.joinRider.name; S.joinRider = null; S.joinGiveUp = 0; const d = R.loop ? ((p.d - 10) % R.total + R.total) % R.total : clamp(p.d - 10, 0, R.total - 20); setTimeout(() => { beam(d).then(() => { flash('🌐 Du fährst jetzt direkt hinter ' + name + '. Tritt in die Pedale!', 3000); $('#startCard', S.el).hidden = true; }); }, 300); }
@@ -296,7 +296,11 @@ function bindUi() {
   $('#bmClose', el).onclick = closeMap;
   $('#bigMap', el).onclick = e => { if (e.target.id === 'bigMap') closeMap(); };
   $('#bmGo', el).onclick = () => { if (S.mapPick != null) beam(S.mapPick); };
-  $('#bmCanvas', el).onclick = e => mapClick(e, 'map'); $('#bmProf', el).onclick = e => mapClick(e, 'prof');
+  bindMapZoom($('#bmCanvas', el));
+  $('#bmZin', el).onclick = () => zoomMap(1.6); $('#bmZout', el).onclick = () => zoomMap(1 / 1.6);
+  $('#bmMe', el).onclick = () => { S.mz = Math.max(S.mz || 1, 4); S.mc = [S.route.xAt(S.dist), S.route.zAt(S.dist)]; drawBigMap(); };
+  $('#bmAll', el).onclick = () => { S.mz = 1; S.mc = null; drawBigMap(); };
+  $('#bmCanvas', el).onclick = e => { if (S.mapDragged) { S.mapDragged = false; return; } mapClick(e, 'map'); }; $('#bmProf', el).onclick = e => mapClick(e, 'prof');
   $('#bmQuick', el).onclick = e => { const b = e.target.closest('[data-d]'); if (b) { S.mapPick = +b.dataset.d; drawBigMap(); } };
   $('#adapt', el).onclick =() => { S.adapt.on = !S.adapt.on; sel.adaptive = S.adapt.on; saveSel(); S.adapt.cap = false; flash('Adaptive Steuerung ' + (S.adapt.on ? 'an' : 'aus')); };
   S.key = e => {
@@ -416,7 +420,7 @@ function envCycle() {
   if (S?.envLead) return; // folgt einem anderen Fahrer
   const G = S?.group?.settings, autoT = ((G ? G.time : sel.time) || 'auto') === 'auto', autoW = ((G ? G.weather : sel.weather) || 'auto') === 'auto';
   if (S?.group && !S.group.isHost) return; // Gruppenfahrt: nur der Gastgeber wechselt, die anderen folgen per Nachricht
-  if (!S || (!autoT && !autoW) || S.route.theme.moon || performance.now() < (S.envNextAt ??= performance.now() + envGap())) return;
+  if (!S || (!autoT && !autoW) || S.route.theme.moon || S.route.theme.underwater || performance.now() < (S.envNextAt ??= performance.now() + envGap())) return;
   S.envNextAt = performance.now() + envGap();
   const env = { ...S.env };
   if (autoT) env.time = TIMES[(TIMES.indexOf(env.time) + 1) % 4];
@@ -443,8 +447,11 @@ function mapGeo(cv) {
   const R = S.route, { w, h, d } = fitCanvas(cv);
   if (!S.bounds) { let a = Infinity, b = -Infinity, c = Infinity, e = -Infinity; for (let i = 0; i <= R.N; i += 4) { a = Math.min(a, R.x[i]); b = Math.max(b, R.x[i]); c = Math.min(c, R.z[i]); e = Math.max(e, R.z[i]); } S.bounds = [a, b, c, e]; }
   const [a, b, c, e] = S.bounds;
-  const pad = 18 * d, s = Math.min((w - 2 * pad) / (b - a || 1), (h - 2 * pad) / (e - c || 1)), ox = (w - (b - a) * s) / 2, oz = (h - (e - c) * s) / 2;
-  return { w, h, d, X: x => ox + (x - a) * s, Y: z => oz + (z - c) * s };
+  // Große Karte: zoombar (S.mz) und verschiebbar (S.mc = Mittelpunkt in Weltkoordinaten)
+  const big = cv.id === 'bmCanvas', z = big ? S.mz || 1 : 1;
+  const pad = 18 * d, s = Math.min((w - 2 * pad) / (b - a || 1), (h - 2 * pad) / (e - c || 1)) * z;
+  const cx = big && S.mc ? S.mc[0] : (a + b) / 2, cz = big && S.mc ? S.mc[1] : (c + e) / 2;
+  return { w, h, d, s, cx, cz, X: x => w / 2 + (x - cx) * s, Y: q => h / 2 + (q - cz) * s, inv: (px, py) => [cx + (px - w / 2) / s, cz + (py - h / 2) / s] };
 }
 function drawRouteMap(cv, big, layer = 'all') {
   const R = S.route, G = mapGeo(cv), c = cv.getContext('2d'), d = G.d;
@@ -482,6 +489,30 @@ function drawBigMap() {
   const R = S.route, n = 300, dist = [], ele = []; for (let i = 0; i <= n; i++) { const d = R.total * i / n; dist.push(d); ele.push(R.eleAt(d)); }
   profileChart($('#bmProf', S.el), dist, ele, { pos: S.dist, ghost: S.mapPick, climbs: R.climbs });
   if (S.mapPick != null) { const d = S.mapPick; $('#bmInfo', S.el).textContent = `Ziel: km ${fmtKm(d)} · ${Math.round(R.eleAt(d))} m ü. NN · ${R.gradeAt(d).toFixed(1).replace('.', ',')} %${R.townAt(d) ? ' · ' + R.townAt(d).name : ''}`; $('#bmGo', S.el).disabled = false; }
+}
+// Zoomen um einen Punkt (Pixel in Canvas-Koordinaten), Standard: Mitte
+function zoomMap(f, px, py) {
+  const cv = $('#bmCanvas', S.el), G = mapGeo(cv); px ??= G.w / 2; py ??= G.h / 2;
+  const [wx, wz] = G.inv(px, py), nz = clamp((S.mz || 1) * f, 1, 40);
+  if (nz === 1) { S.mz = 1; S.mc = null; drawBigMap(); return; }
+  const k = (S.mz || 1) / nz; // Punkt unter dem Finger bleibt stehen
+  S.mc = [wx + (G.cx - wx) * k, wz + (G.cz - wz) * k]; S.mz = nz; drawBigMap();
+}
+function bindMapZoom(cv) {
+  const pts = new Map(); let last = null, pinch = 0, moved = 0;
+  const pos = e => { const r = cv.getBoundingClientRect(), k = cv.width / r.width; return [(e.clientX - r.left) * k, (e.clientY - r.top) * k]; };
+  cv.addEventListener('wheel', e => { e.preventDefault(); const [x, y] = pos(e); zoomMap(Math.exp(-e.deltaY * .0015), x, y); }, { passive: false });
+  cv.addEventListener('pointerdown', e => { pts.set(e.pointerId, pos(e)); last = pos(e); moved = 0; S.mapDragged = false; if (pts.size === 2) { const [p, q] = [...pts.values()]; pinch = Math.hypot(p[0] - q[0], p[1] - q[1]); } });
+  cv.addEventListener('pointermove', e => {
+    if (!pts.has(e.pointerId)) return; const p = pos(e); pts.set(e.pointerId, p);
+    if (pts.size === 2) { const [a, b] = [...pts.values()], dd = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch) zoomMap(dd / pinch, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2); pinch = dd; S.mapDragged = true; return; }
+    if ((S.mz || 1) <= 1) return;
+    const G = mapGeo(cv), dx = p[0] - last[0], dy = p[1] - last[1]; moved += Math.abs(dx) + Math.abs(dy); last = p;
+    if (moved > 8 * G.d) { cv.setPointerCapture?.(e.pointerId); S.mapDragged = true; S.mc = [G.cx - dx / G.s, G.cz - dy / G.s]; drawBigMap(); }
+  });
+  const up = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = 0; };
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  cv.style.touchAction = 'none';
 }
 function mapClick(e, kind) {
   const R = S.route, cv = e.currentTarget, rect = cv.getBoundingClientRect(), dpr = cv.width / rect.width, mx = (e.clientX - rect.left) * dpr, my = (e.clientY - rect.top) * dpr;
@@ -619,7 +650,7 @@ function step(dt, first) {
   if (S.live?.peers.size) for (const n of S.field) if (n.remote) { const p = S.live.peers.get(n.id); if (p && p.t !== n.pt) {
     // Großer Sprung = der andere hat sich gebeamt: Hinweis, wenn er jetzt in der Nähe ist
     if (n.pt && Math.abs(gapOf(S.route, p.d, n.d)) > 60) { const g = gapOf(S.route, p.d, S.dist); if (Math.abs(g) < 80) flash(`🌐 ${n.name} ist ${g < 0 ? 'direkt hinter dir' : 'direkt vor dir'} aufgetaucht`, 2500); }
-    n.pt = p.t; n.d = p.d; n.v = p.v; n.wkg = p.wkg; n.cadence = p.cad || 85; } }
+    n.pt = p.t; n.d = p.d; n.v = p.v; n.wkg = p.wkg; n.cadence = p.cad ?? 0; } }
   if (S.npcOn && S.field.length) {
     const r = stepField(R, S.field, { d: S.dist, lat: S.lat ?? 1.5, v: S.v, kg: profile.kg, race: S.race }, dt, running);
     S.draft = r.draft; S.wheel = r.wheel;

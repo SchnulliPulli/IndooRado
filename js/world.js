@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { rng, hash2, fbm, clamp, lerp, smooth } from './util.js';
 import * as FX from './worldfx.js';
+import { buildThemeExtras, updateThemeExtras, ringPlanetTex } from './worldthemes.js';
 
 const CHUNK = 256;
 const QUALITY = {
@@ -35,7 +36,7 @@ function roadTexture() {
 }
 // Wege abseits der Straße: Schotter, Feldweg, Waldpfad, Mondstaub (ohne Markierungen)
 function pathTexture(kind) {
-  const C = { gravel: ['#a69a86', [150, 140, 122], [95, 88, 78]], dirt: ['#8a6a4a', [120, 92, 64], [70, 52, 36]], trail: ['#5e4630', [88, 66, 44], [40, 30, 20]], moon: ['#8f9195', [170, 172, 176], [90, 92, 96]] }[kind] || ['#4b5056', [80, 80, 84], [40, 40, 44]];
+  const C = { gravel: ['#a69a86', [150, 140, 122], [95, 88, 78]], dirt: ['#8a6a4a', [120, 92, 64], [70, 52, 36]], trail: ['#5e4630', [88, 66, 44], [40, 30, 20]], moon: ['#8f9195', [170, 172, 176], [90, 92, 96]], cosmic: ['#1a1030', [120, 90, 255], [255, 80, 220]], sand: ['#c9b48a', [215, 200, 160], [160, 140, 105]], candy: ['#ff9ccf', [255, 255, 255], [255, 210, 80]] }[kind] || ['#4b5056', [80, 80, 84], [40, 40, 44]];
   return canvasTex(256, 512, (x, w, h) => {
     x.fillStyle = C[0]; x.fillRect(0, 0, w, h); const r = rng(7);
     for (let i = 0; i < 7000; i++) { const c = r() < .5 ? C[1] : C[2], s = kind === 'gravel' ? 1 + r() * 4 : 1 + r() * 2.5; x.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${.3 + r() * .5})`; x.beginPath(); x.arc(r() * w, r() * h, s / 2, 0, 7); x.fill(); }
@@ -108,17 +109,18 @@ function merge(geos) {
   m.setAttribute('position', new THREE.BufferAttribute(pos, 3)); m.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); m.setAttribute('color', new THREE.BufferAttribute(colr, 3));
   return m;
 }
-function coniferGeo() {
-  const parts = [colored(new THREE.CylinderGeometry(.18, .26, 2.4, 6).translate(0, 1.2, 0), '#5b4030')];
-  [[3.6, 2.4, 1.6], [2.9, 2.6, 3.4], [2.1, 2.6, 5.1], [1.3, 2.2, 6.6]].forEach(([r, h, y], i) => parts.push(colored(new THREE.ConeGeometry(r, h, 8).translate(0, y + h / 2 - .6, 0), i % 2 ? '#2f6a3a' : '#2a6034')));
+// light: helle Krone und Stamm, damit Fantasiewelten sie beliebig einfärben können (Lollibäume, Korallen)
+function coniferGeo(light) {
+  const parts = [colored(new THREE.CylinderGeometry(.18, .26, 2.4, 6).translate(0, 1.2, 0), light ? '#f4f4f4' : '#5b4030')];
+  [[3.6, 2.4, 1.6], [2.9, 2.6, 3.4], [2.1, 2.6, 5.1], [1.3, 2.2, 6.6]].forEach(([r, h, y], i) => parts.push(colored(new THREE.ConeGeometry(r, h, 8).translate(0, y + h / 2 - .6, 0), light ? (i % 2 ? '#e8e8e8' : '#d6d6d6') : i % 2 ? '#2f6a3a' : '#2a6034')));
   return merge(parts);
 }
-function leafyGeo() {
+function leafyGeo(light) {
   const crown = new THREE.IcosahedronGeometry(2.6, 1);
   const p = crown.attributes.position; const r = rng(11);
   for (let i = 0; i < p.count; i++) { const k = .85 + r() * .3; p.setXYZ(i, p.getX(i) * k, p.getY(i) * k * .9, p.getZ(i) * k); }
   crown.computeVertexNormals();
-  return merge([colored(new THREE.CylinderGeometry(.22, .32, 3.4, 6).translate(0, 1.7, 0), '#5d4433'), colored(crown.translate(0, 5, 0), '#4f8f3a'), colored(new THREE.IcosahedronGeometry(1.6, 0).translate(1.2, 4.2, .6), '#5c9c42')]);
+  return merge([colored(new THREE.CylinderGeometry(.22, .32, 3.4, 6).translate(0, 1.7, 0), light ? '#ffffff' : '#5d4433'), colored(crown.translate(0, 5, 0), light ? '#eeeeee' : '#4f8f3a'), colored(new THREE.IcosahedronGeometry(1.6, 0).translate(1.2, 4.2, .6), light ? '#dddddd' : '#5c9c42')]);
 }
 function rockGeo() {
   const g = new THREE.DodecahedronGeometry(1, 0); const p = g.attributes.position; const r = rng(5);
@@ -537,7 +539,7 @@ export class World {
       im.count = k; if (im.instanceColor) im.instanceColor.needsUpdate = true; this.scene.add(im);
     }
     // Wahrzeichen in der Ferne: steiler Felsdom im Meer (Tropen) oder Tafelberge (Wüste)
-    if (R.theme.landmark) {
+    if (R.theme.landmark && R.theme.landmark !== 'volcano') {
       const r = rng(31), isDome = R.theme.landmark === 'dome';
       const mat = new THREE.MeshLambertMaterial({ color: isDome ? 0x7d8a7a : 0xb5653c, flatShading: true });
       for (let i = 0; i < (isDome ? 2 : 6); i++) {
@@ -564,9 +566,11 @@ export class World {
     }
     // Mond: die Erde am Himmel
     if (R.theme.moon) {
-      const tex = canvasTex(256, 256, (x, w, h) => { const g = x.createRadialGradient(w * .42, h * .4, 10, w / 2, h / 2, w / 2); g.addColorStop(0, '#6fb2ff'); g.addColorStop(.75, '#1d5fbf'); g.addColorStop(1, 'rgba(10,30,80,0)'); x.fillStyle = g; x.beginPath(); x.arc(w / 2, h / 2, w / 2, 0, 7); x.fill(); const r = rng(3); x.fillStyle = '#3f9a4a'; for (let i = 0; i < 9; i++) { x.beginPath(); x.ellipse(w * (.25 + r() * .5), h * (.25 + r() * .5), 10 + r() * 30, 6 + r() * 18, r() * 3, 0, 7); x.fill(); } x.fillStyle = 'rgba(255,255,255,.75)'; for (let i = 0; i < 7; i++) { x.beginPath(); x.ellipse(w * (.2 + r() * .6), h * (.2 + r() * .6), 14 + r() * 30, 4 + r() * 6, r() * 3, 0, 7); x.fill(); } }, false);
-      this.earth = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, fog: false, depthWrite: false })); this.earth.scale.set(520, 520, 1); this.earth.renderOrder = -4; this.scene.add(this.earth);
+      const tex = R.theme.planet === 'ring' ? ringPlanetTex(canvasTex) : canvasTex(256, 256, (x, w, h) => { const g = x.createRadialGradient(w * .42, h * .4, 10, w / 2, h / 2, w / 2); g.addColorStop(0, '#6fb2ff'); g.addColorStop(.75, '#1d5fbf'); g.addColorStop(1, 'rgba(10,30,80,0)'); x.fillStyle = g; x.beginPath(); x.arc(w / 2, h / 2, w / 2, 0, 7); x.fill(); const r = rng(3); x.fillStyle = '#3f9a4a'; for (let i = 0; i < 9; i++) { x.beginPath(); x.ellipse(w * (.25 + r() * .5), h * (.25 + r() * .5), 10 + r() * 30, 6 + r() * 18, r() * 3, 0, 7); x.fill(); } x.fillStyle = 'rgba(255,255,255,.75)'; for (let i = 0; i < 7; i++) { x.beginPath(); x.ellipse(w * (.2 + r() * .6), h * (.2 + r() * .6), 14 + r() * 30, 4 + r() * 6, r() * 3, 0, 7); x.fill(); } }, false);
+      this.earth = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, fog: false, depthWrite: false })); if (R.theme.planet === 'ring') this.earth.scale.set(1500, 750, 1); else this.earth.scale.set(520, 520, 1); this.earth.renderOrder = -4; this.scene.add(this.earth);
     }
+    // Fantasiewelten (Dinos, Vulkan, Tiefsee, Zuckerland, Kristalle)
+    this.themeX = buildThemeExtras(this, R, { colored, merge, canvasTex });
     // Intervall-Zieltor (wird bei Bedarf positioniert)
     const gate = this.gate = new THREE.Group(); gate.visible = false;
     const gm = new THREE.MeshLambertMaterial({ color: 0x1b1e22 });
@@ -588,7 +592,7 @@ export class World {
     const cap = Math.round(18000 * this.Q.trees);
     const mk = (geo, mat, n, shadow = true) => { const im = new THREE.InstancedMesh(geo, mat, n); im.count = 0; im.castShadow = shadow; im.receiveShadow = false; im.frustumCulled = false; this.scene.add(im); return im; };
     this.inst = {
-      conifer: mk(coniferGeo(), this.vegMat || this.vcMat, cap), leafy: mk(leafyGeo(), this.vegMat || this.vcMat, cap),
+      conifer: mk(coniferGeo(!!this.route.theme.tints), this.vegMat || this.vcMat, cap), leafy: mk(leafyGeo(!!this.route.theme.tints), this.vegMat || this.vcMat, cap),
       rock: mk(rockGeo(), this.vcMat, 1500), tuft: mk(tuftGeo(), this.vegMat || this.vcMat, 24000, false),
       palm: mk(palmGeo(), this.vegMat || this.vcMat, Math.round(cap / 3)), cactus: mk(cactusGeo(), this.vcMat, Math.round(cap / 4)),
       wall: mk(new THREE.BoxGeometry(1, 1, 1).translate(0, .5, 0), new THREE.MeshLambertMaterial({ map: windowTex() }), 2000),
@@ -735,7 +739,7 @@ export class World {
   rebuildInstances() {
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), c = new THREE.Color();
     const cnt = { conifer: 0, leafy: 0, rock: 0, tuft: 0, wall: 0, roof: 0, palm: 0, cactus: 0 };
-    const wallCols = ['#f4efe6', '#efe2c4', '#e8d3b0', '#f6f6f2'].map(col), roofCols = ['#a8442f', '#8b3a2b', '#5e5650', '#b5562c'].map(col);
+    const th = this.route.theme, tints = th.tints?.map(col), wallCols = (th.walls || ['#f4efe6', '#efe2c4', '#e8d3b0', '#f6f6f2']).map(col), roofCols = (th.roofs || ['#a8442f', '#8b3a2b', '#5e5650', '#b5562c']).map(col);
     for (const ch of this.chunks.values()) {
       for (const k of ['conifer', 'leafy', 'rock', 'tuft', 'palm', 'cactus']) {
         const im = this.inst[k];
@@ -743,7 +747,7 @@ export class World {
           if (cnt[k] >= im.instanceMatrix.count) break;
           q.setFromAxisAngle(up, o[4]); s.set(o[3], o[3] * (k === 'rock' ? .8 : 1), o[3]); p.set(o[0], o[1], o[2]);
           m.compose(p, q, s); im.setMatrixAt(cnt[k], m);
-          if (k === 'conifer' || k === 'leafy' || k === 'palm' || k === 'cactus') { c.setRGB(o[5] * .95, o[5], o[5] * .9); im.setColorAt(cnt[k], c); }
+          if (k === 'conifer' || k === 'leafy' || k === 'palm' || k === 'cactus') { if (tints) c.copy(tints[Math.abs(Math.floor(o[0] * 7 + o[2] * 13)) % tints.length]).multiplyScalar(o[5]); else c.setRGB(o[5] * .95, o[5], o[5] * .9); im.setColorAt(cnt[k], c); }
           cnt[k]++;
         }
       }
@@ -829,6 +833,13 @@ export class World {
     this.roadMeshes[2].material.color.setScalar(time === 'night' ? .4 : time === 'day' ? 1 : .75);
     this.lamp.intensity = time === 'night' ? 30 : time === 'evening' && (cloudy || fog) ? 10 : 0;
     if (this.water) this.water.material.color.setHex(time === 'night' ? 0x0a1c2c : cloudy ? 0x2f4f63 : 0x1f5f8f);
+    // Tiefsee: türkises Dämmerlicht von oben, dichter blauer Dunst, Lampe am Rad, kein Wetter
+    if (this.route.theme.underwater) {
+      this.skyMat.uniforms.top.value.set('#020a12'); this.skyMat.uniforms.hor.value.set('#0b4660'); this.skyMat.uniforms.sun.value.set(0, 0, 0);
+      this.stars.material.opacity = 0; for (const c of this.clouds) c.material.opacity = 0; this.rain.visible = false; this.env.weather = 'clear';
+      this.scene.background = col('#06324a'); this.scene.fog.color.set('#073a52'); this.scene.fog.near = 6; this.scene.fog.far = 170;
+      this.sunDir.set(.1, 1, .2).normalize(); this.sun.color.set(0x7fd8ff); this.sun.intensity = time === 'night' ? .5 : 1.1; this.hemi.color.set('#5fc0e0'); this.hemi.intensity = .8; this.lamp.intensity = 28; this.far.material.color.setScalar(.3);
+    }
     // Mond: immer schwarzer Himmel mit Sternen, keine Wolken, kein Wetter, harte Sonne
     if (this.route.theme.moon) {
       const blk = col('#000000'); this.skyMat.uniforms.top.value.copy(blk); this.skyMat.uniforms.hor.value.set(.03, .03, .05); this.skyMat.uniforms.sun.value.copy(this.sunDir);
@@ -982,6 +993,7 @@ export class World {
     if (this.water) this.water.position.set(cx, R.water, cz);
     for (const cl of this.clouds) { const u = cl.userData; let ox = ((u.ox - cx * .15) % 6000 + 9000) % 6000 - 3000, oz = ((u.oz - cz * .15) % 6000 + 9000) % 6000 - 3000; cl.position.set(cx + ox, R.maxE + u.y, cz + oz); }
     if (this.earth) this.earth.position.set(this.camPos.x + 2600, this.camPos.y + 1500, this.camPos.z - 3800);
+    if (this.themeX) updateThemeExtras(this.themeX, R, dt);
     this.sun.position.copy(rp).addScaledVector(this.sunDir, 200); this.sun.target.position.copy(rp);
     this.updateChunks(rp.x, rp.z, st.loading ? 40 : 5);
     const now = performance.now();

@@ -12,16 +12,21 @@ async function terrain(r) {
   try { await loadDem(r, f => box.textContent = `Echtes Gelände wird geladen … ${Math.round(f * 100)} %`); }
   finally { box.remove(); }
 }
-const THEME_N = { meadow: 'Hügel und Wiesen', lake: 'Bergsee', alpine: 'Hochgebirge', coast: 'Küste', forest: 'Wald', plains: 'Flachland', tropical: 'Tropen', himalaya: 'Himalaya', desert: 'Wüste', fjord: 'Fjord', tuscany: 'Toskana', ridge: 'Gipfelgrat', farm: 'Bauernhof', moon: 'Mond', auto: 'Automatisch' };
+const THEME_N = { space: 'Weltall', deepsea: 'Tiefsee', dino: 'Urzeit (Dinos)', candy: 'Zuckerland', meadow: 'Hügel und Wiesen', lake: 'Bergsee', alpine: 'Hochgebirge', coast: 'Küste', forest: 'Wald', plains: 'Flachland', tropical: 'Tropen', himalaya: 'Himalaya', desert: 'Wüste', fjord: 'Fjord', tuscany: 'Toskana', ridge: 'Gipfelgrat', farm: 'Bauernhof', moon: 'Mond', auto: 'Automatisch' };
 export async function render(el, [rid]) {
   const routes = await listRoutes();
   const cur = routes.find(r => r.id === (rid || sel.routeId)) || routes[0];
   el.innerHTML = `
   <section class="pagehead"><h1>Strecken</h1><span class="row"><button class="btn" id="rStrava">Von Strava laden</button><label class="btn pri">GPX importieren<input type="file" id="rFile" accept=".gpx,.xml" multiple hidden></label></span></section>
   <div class="routes-layout">
-    <div class="rlist">${routes.map(r => { const s = quickStats(r); return `<a class="ritem ${r.id === cur.id ? 'on' : ''}" href="#/routes/${esc(r.id)}">${routeMapSvg(r, 48)}<div style="flex:1;min-width:0"><div class="t">${progress.routeBadges?.[r.id] ? '🏅 ' : ''}${esc(r.name)}</div><div class="small muted num">${fmtKm(s.dist)} km · ${Math.round(s.asc)} hm${r.builtin ? '' : ' · eigene'}</div></div></a>`; }).join('')}</div>
+    <div class="rlistwrap"><input class="inp sm" id="rQ" type="search" placeholder="🔍 Strecke suchen … (${routes.length})">
+    <div class="rlist">${routes.map(r => { const s = quickStats(r); return `<a class="ritem ${r.id === cur.id ? 'on' : ''}" data-q="${esc((r.name + ' ' + (r.desc || '') + ' ' + (THEME_N[r.theme] || '')).toLowerCase())}" href="#/routes/${esc(r.id)}">${routeMapSvg(r, 48)}<div style="flex:1;min-width:0"><div class="t">${progress.routeBadges?.[r.id] ? '🏅 ' : ''}${esc(r.name)}</div><div class="small muted num">${fmtKm(s.dist)} km · ${Math.round(s.asc)} hm${r.builtin ? '' : ' · eigene'}</div></div></a>`; }).join('')}</div>
+    </div>
     <div class="card rdetail" id="rd"><div class="spinner"></div></div>
   </div>`;
+  // Suche und ausgewählte Strecke in der scrollbaren Liste sichtbar machen
+  $('#rQ', el).oninput = e => { const q = e.target.value.trim().toLowerCase(); for (const a of el.querySelectorAll('.ritem')) a.hidden = !!q && !a.dataset.q.includes(q); };
+  el.querySelector('.ritem.on')?.scrollIntoView({ block: 'nearest' });
   const load = async files => {
     let n = 0;
     for (const f of files) {

@@ -60,13 +60,15 @@ export function updateFlare(F, cam, sunDir, on) {
 }
 
 // Partikel rund um die Kamera
-const PK = { leaves: ['#d98a2b', '#b5651d', '#8fae3a', '#e0b030'], pollen: ['#ffffff', '#fff6c8'], dust: ['#b9a689', '#a08a6a'], moon: ['#c8cacf'], snow: ['#ffffff'] };
+const PK = { leaves: ['#d98a2b', '#b5651d', '#8fae3a', '#e0b030'], pollen: ['#ffffff', '#fff6c8'], dust: ['#b9a689', '#a08a6a'], moon: ['#c8cacf'], snow: ['#ffffff'], bubbles: ['#cfefff', '#a8e4ff'], sprinkles: ['#ff4fa3', '#ffd23f', '#6fe0ff', '#9a7bff', '#5affb0'] };
 export function makeParticles(scene, kind, n = 260) {
   if (!kind) return null;
   const pos = new Float32Array(n * 3), col = new Float32Array(n * 3), vel = new Float32Array(n * 3), c = new THREE.Color();
-  for (let i = 0; i < n; i++) { pos.set([(Math.random() - .5) * 40, Math.random() * 12, (Math.random() - .5) * 40], i * 3); c.set(PK[kind][i % PK[kind].length]); col.set([c.r, c.g, c.b], i * 3); vel.set([(Math.random() - .5) * .6, kind === 'leaves' ? -.5 - Math.random() * .5 : kind === 'snow' ? -.8 : (Math.random() - .3) * .25, (Math.random() - .5) * .6], i * 3); }
+  for (let i = 0; i < n; i++) { pos.set([(Math.random() - .5) * 40, Math.random() * 12, (Math.random() - .5) * 40], i * 3); c.set(PK[kind][i % PK[kind].length]); col.set([c.r, c.g, c.b], i * 3); vel.set([(Math.random() - .5) * .6, kind === 'leaves' ? -.5 - Math.random() * .5 : kind === 'snow' ? -.8 : kind === 'bubbles' ? .6 + Math.random() * .9 : kind === 'sprinkles' ? -.35 - Math.random() * .3 : (Math.random() - .3) * .25, (Math.random() - .5) * .6], i * 3); }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  const pts = new THREE.Points(g, new THREE.PointsMaterial({ size: kind === 'leaves' ? .13 : kind === 'pollen' ? .05 : .07, vertexColors: true, transparent: true, opacity: kind === 'dust' || kind === 'moon' ? .55 : .9, depthWrite: false }));
+  // runde, weiche Punkte statt Quadrate
+  const dot = document.createElement('canvas'); dot.width = dot.height = 32; { const x = dot.getContext('2d'), gr = x.createRadialGradient(16, 16, 0, 16, 16, 16); gr.addColorStop(0, '#fff'); gr.addColorStop(kind === 'bubbles' ? .55 : .6, kind === 'bubbles' ? 'rgba(255,255,255,.25)' : '#fff'); gr.addColorStop(kind === 'bubbles' ? .8 : .75, kind === 'bubbles' ? 'rgba(255,255,255,.9)' : 'rgba(255,255,255,.5)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, 32, 32); }
+  const pts = new THREE.Points(g, new THREE.PointsMaterial({ map: new THREE.CanvasTexture(dot), alphaTest: .02, size: kind === 'leaves' ? .13 : kind === 'pollen' ? .05 : kind === 'bubbles' ? .1 : kind === 'sprinkles' ? .09 : .07, vertexColors: true, transparent: true, opacity: kind === 'dust' || kind === 'moon' ? .55 : .9, depthWrite: false }));
   pts.frustumCulled = false; scene.add(pts);
   return { pts, vel, n, kind, base: new THREE.Vector3(), t: 0 };
 }
@@ -86,7 +88,7 @@ export function updateParticles(P, cam, dt, v, ground) {
   // Staub nur bei Fahrt sichtbar, je schneller desto mehr
   if (P.kind === 'dust' || P.kind === 'moon') P.pts.material.opacity = Math.min(.6, .1 + v * .05);
 }
-export const particleKind = th => th.moon ? 'moon' : th.cactus || th.dry ? 'dust' : th.snow < 2000 ? 'snow' : th.trees >= .8 ? 'leaves' : 'pollen';
+export const particleKind = th => th.underwater ? 'bubbles' : th.candy ? 'sprinkles' : th.moon ? 'moon' : th.cactus || th.dry ? 'dust' : th.snow < 2000 ? 'snow' : th.trees >= .8 ? 'leaves' : 'pollen';
 
 // Zuschauer an den letzten 300 m jedes Anstiegs
 export function makeSpectators(world, R, mat) {

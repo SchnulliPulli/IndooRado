@@ -20,7 +20,7 @@ export function clean(m) {
   if (!m || typeof m !== 'object' || typeof m.id !== 'string' || m.id.length > 40) return null;
   const T = ['morning', 'day', 'evening', 'night'], W = ['clear', 'cloudy', 'rain', 'fog'];
   const env = m.env && T.includes(m.env.time) && W.includes(m.env.weather) ? { time: m.env.time, weather: m.env.weather } : null;
-  return { id: m.id, name: txt(m.name, 30) || 'Fahrer', d: num(m.d, 0, 1e6), v: num(m.v, 0, 30), p: num(m.p, 0, 2500), wkg: num(m.wkg, 0, 25), cad: num(m.cad, 0, 200, 85), look: cleanLook(m.look), env, pause: m.pause === true };
+  return { id: m.id, name: txt(m.name, 30) || 'Fahrer', d: num(m.d, 0, 1e6), v: num(m.v, 0, 30), p: num(m.p, 0, 2500), wkg: num(m.wkg, 0, 25), cad: num(m.cad, 0, 200, 0), look: cleanLook(m.look), env, pause: m.pause === true };
 }
 
 export function joinRoute(routeId, me) {

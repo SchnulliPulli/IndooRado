@@ -8,7 +8,7 @@ export const mass = () => profile.kg + profile.bike + 1.5;
 
 // Je Strecke: Belag (Rollwiderstand) und Schwerkraft (Mond!). Wird beim Fahrtstart gesetzt.
 export const env = { g: G, crr: CRR };
-const CRR_OF = { asphalt: .004, gravel: .0075, dirt: .009, trail: .013, moon: .012 };
+const CRR_OF = { asphalt: .004, gravel: .0075, dirt: .009, trail: .013, moon: .012, cosmic: .004, sand: .011, candy: .006 };
 export function setSurface(R) { env.crr = CRR_OF[R?.surface] ?? CRR; env.g = R?.theme?.gravity ?? G; }
 export function resist(v, gradePct, draft = 0) {
   const th = Math.atan(gradePct / 100), m = mass();
