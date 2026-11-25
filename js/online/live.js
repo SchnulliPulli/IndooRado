@@ -78,7 +78,7 @@ export function joinRoute(routeId, me) {
       }
     }); } catch (e) { setSt('error'); console.warn('Live:', e.message); setTimeout(async () => { if (closed) return; await purge(); ch = mk(); sub(); }, 5000); } };
     sub();
-    sweep = setInterval(() => { let c = false; for (const [k, p] of peers) if (performance.now() - p.t > 10000) { peers.delete(k); c = true; } if (c) api.onChange?.(); }, 3000);
+    sweep = setInterval(() => { let c = false; for (const [k, p] of peers) if (performance.now() - p.t > 30000) { peers.delete(k); c = true; } if (c) api.onChange?.(); }, 3000);
   })().catch(e => console.warn('Live:', e.message));
   return api;
 }

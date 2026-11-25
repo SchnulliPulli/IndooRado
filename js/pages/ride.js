@@ -253,8 +253,10 @@ function syncRemote() {
   // Benachrichtigung: wer neu dazukommt oder die Strecke verlässt
   const was = S.peerNames || new Map(), now = new Map([...peers].map(([id, p]) => [id, p.name]));
   const pos = p => { const g = gapOf(R, p.d || 0, S.dist), a = Math.abs(g); return a < 30 ? 'direkt bei dir' : (a < 1000 ? Math.round(a) + ' m' : (a / 1000).toFixed(1).replace('.', ',') + ' km') + (g > 0 ? ' vor dir' : ' hinter dir'); };
-  for (const [id, p] of peers) if (!was.has(id)) { flash(`🌐 ${p.name} ist deiner Fahrt beigetreten · ${pos(p)}`, 3500); sound.pass(); }
-  for (const [id, name] of was) if (!now.has(id)) flash(`👋 ${name} hat die Strecke verlassen`, 2500);
+  // Kurz weg und wieder da (Verbindung, gedrosselter Hintergrund-Tab): leise melden statt erneut „beigetreten“ mit Ton
+  const gone = S.peerGone ||= new Map();
+  for (const [id, p] of peers) if (!was.has(id)) { if (performance.now() - (gone.get(id) || -1e9) < 120e3) flash(`🌐 ${p.name} ist wieder da`, 1500); else { flash(`🌐 ${p.name} ist deiner Fahrt beigetreten · ${pos(p)}`, 3500); sound.pass(); } }
+  for (const [id, name] of was) if (!now.has(id)) { gone.set(id, performance.now()); flash(`👋 ${name} hat die Strecke verlassen`, 2500); }
   S.peerNames = now;
 }
 function spawnField() {
