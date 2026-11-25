@@ -92,7 +92,7 @@ async function init() {
   loadSync().then(() => window.__cloudUpd?.()).then(autoSync).then(async pulled => {
     if (sync.needLogin) toast('NAS: Anmeldung abgelaufen, unter Profil neu anmelden', 5000);
     if (!pulled) return;
-    await loadState(); await loadPlan(); await loadClickMap(); toast('Daten vom NAS übernommen');
+    await loadState(); await loadPlan(); await loadClickMap(); toast(sync.info || 'Neuerer Stand vom NAS übernommen', sync.info ? 6000 : 3000); sync.info = '';
     if (currentKey !== 'ride') route();
   }).catch(e => toast('NAS-Abgleich: ' + (sync.error || e.message), 5000));
   document.addEventListener('visibilitychange', async () => {

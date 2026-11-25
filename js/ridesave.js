@@ -1,5 +1,5 @@
 // Fahrt auswerten und dauerhaft speichern, Fortschritt fortschreiben
-import { db } from './db.js';
+import { db, kv } from './db.js';
 import { profile, progress, saveProgress, saveProfile, levelOf } from './state.js';
 import { summarize, intervals, xpFor, BADGES, totals, bestCurve, bestAvg } from './analysis.js';
 import { total as woTotal } from './workouts.js';
@@ -68,6 +68,8 @@ export async function saveRide(S) {
 }
 
 export async function deleteRide(id) {
+  // Merken, damit die Fahrt auch im Cloud-Speicher und auf anderen Geräten verschwindet
+  const gone = await kv.get('deletedRides', []); if (!gone.includes(id)) await kv.set('deletedRides', [...gone, id]);
   await db.del('rides', id); await db.delByIndex('shots', 'ride', id);
 }
 export async function applyFtp(ftp, source) {

@@ -4,7 +4,7 @@ import { profile, saveProfile, progress, levelOf } from '../state.js';
 import { UNLOCKS } from '../game.js';
 import { backup, restore, wipeAll, usage, persist } from '../db.js';
 import { autoQuality } from '../world.js';
-import { sync, saveSyncCfg, testConnection, pushNow, pullNow, dsmLogin, dsmLogout, normalizeHost } from '../sync.js';
+import { sync, saveSyncCfg, testConnection, pushNow, pullNow, dsmLogin, dsmLogout, normalizeHost, renameDevice } from '../sync.js';
 import { sound } from '../sound.js';
 import { strava, connected as stravaConnected, setApp as setStravaApp, setAuto as setStravaAuto, authorize as stravaAuthorize, disconnect as stravaDisconnect } from '../strava.js';
 
@@ -39,20 +39,23 @@ function nasCard(box) {
   const mode = c.mode || (c.url ? 'webdav' : 'dsm'), on = mode === 'dsm' ? !!c.host : !!c.url;
   const status = () => sync.busy ? '⏳ Abgleich läuft …' : sync.needLogin ? '<span style="color:var(--warn)">🔑 Anmeldung abgelaufen, bitte neu anmelden</span>' : sync.error ? `<span style="color:#ff8b97">⚠ ${esc(sync.error)}</span>` : sync.last ? `✅ Zuletzt abgeglichen: ${fmtDate(sync.last)}` : on ? 'Noch nicht abgeglichen' : 'Nicht eingerichtet';
   box.innerHTML = `<h2>NAS-Speicher (Synology)</h2>
-    <p class="small muted">Zusätzlich zum Browser landen alle Daten in einem Ordner auf deinem NAS: <code>state.json</code> mit Einstellungen und Fortschritt, jede Fahrt als eigene Datei, Fotos als JPG. Auf einem anderen Gerät anmelden und „Vom NAS laden“ tippen.</p>
+    <p class="small muted">Zusätzlich zum Browser landen alle Daten in einem Ordner auf deinem NAS: <code>state.json</code> mit Einstellungen und Fortschritt, jede Fahrt als eigene Datei, Fotos als JPG. Fotos der Fahrten werden mitgespeichert.</p>
+    <p class="small muted">Ein neu verbundenes Gerät holt zuerst den Stand vom NAS und überschreibt dort nichts. Danach gewinnt bei jeder Einstellung die zuletzt geänderte Seite; Fahrten und Fotos werden nur ergänzt, gelöschte Fahrten verschwinden überall.</p>
     <div class="seg sm" id="nMode"><button data-m="dsm" aria-pressed="${mode === 'dsm'}">Synology-Anmeldung</button><button data-m="webdav" aria-pressed="${mode === 'webdav'}">WebDAV</button></div>
     ${mode === 'dsm' ? (c.host && (c.sid || c.pass) && !sync.needLogin ? `
       <p>Angemeldet als <b>${esc(c.user)}</b> auf <b>${esc(c.host)}</b><br><span class="small muted">Ordner: ${esc(c.folder)}${c.pass ? ' · bleibt angemeldet' : ''}${c.did ? ' · Gerät für 2FA gemerkt' : ''}</span></p>
       <label class="switch"><input type="checkbox" id="nAuto" ${c.auto ? 'checked' : ''}><span></span> Automatisch abgleichen (beim Start und nach jeder Änderung)</label>
-      <div class="row"><button class="btn sm" id="nPush">Jetzt hochladen</button><button class="btn sm" id="nPull">Vom NAS laden</button><button class="btn sm ghost" id="nLogout">Abmelden</button></div>`
+      <div class="row"><button class="btn sm" id="nPush">Jetzt abgleichen</button><button class="btn sm" id="nPull">Alles vom NAS übernehmen</button><button class="btn sm ghost" id="nLogout">Abmelden</button></div>`
     : `<p class="small muted">Anmeldung wie in DSM, Synology Drive oder Photos, mit deinem DSM-Konto und, falls aktiviert, dem 2FA-Code aus der Authenticator-App.</p>
       <div class="row"><button class="btn pri sm" id="nLogin">${c.host ? 'Neu anmelden' : 'Beim NAS anmelden'}</button>${c.host ? '<button class="btn sm ghost danger" id="nOff">Trennen</button>' : ''}</div>`)
     : `<label class="f">WebDAV-Adresse des Ordners<input class="inp" id="nUrl" type="url" placeholder="https://dav.deine-domain.de/home/veloverse" value="${esc(c.url || '')}"></label>
       <div class="grid2 tight"><label class="f">Benutzer<input class="inp" id="nUser" autocomplete="username" value="${esc(c.user || '')}"></label><label class="f">Passwort<input class="inp" id="nPass" type="password" autocomplete="current-password" value="${esc(c.pass || '')}"></label></div>
       <label class="switch"><input type="checkbox" id="nAuto" ${c.auto !== false ? 'checked' : ''}><span></span> Automatisch abgleichen</label>
       <p class="small muted">WebDAV kennt keine 2FA, das Passwort bleibt dafür in diesem Browser. Besser die Synology-Anmeldung nutzen.</p>
-      <div class="row"><button class="btn sm" id="nSave">Speichern und testen</button><button class="btn sm" id="nPush">Jetzt hochladen</button><button class="btn sm" id="nPull">Vom NAS laden</button>${c.url ? '<button class="btn sm ghost danger" id="nOff">Trennen</button>' : ''}</div>`}
+      <div class="row"><button class="btn sm" id="nSave">Speichern und testen</button><button class="btn sm" id="nPush">Jetzt abgleichen</button><button class="btn sm" id="nPull">Alles vom NAS übernehmen</button>${c.url ? '<button class="btn sm ghost danger" id="nOff">Trennen</button>' : ''}</div>`}
     <div class="small" id="nStat">${status()}</div>
+    ${on && sync.device ? `<div class="devlist small"><label class="f">Name dieses Geräts<input class="inp" id="nDev" value="${esc(sync.device.name)}" maxlength="40"></label>
+      ${Object.keys(sync.devices || {}).length ? `<div class="muted">Mit diesem NAS-Ordner verbunden:</div><ul class="tips">${Object.entries(sync.devices).sort((a, b) => b[1].last.localeCompare(a[1].last)).map(([id, d]) => `<li><b>${esc(d.name)}</b>${id === sync.device.id ? ' (dieses Gerät)' : ''} · zuletzt ${fmtDate(d.last)}</li>`).join('')}</ul><div class="muted">Stand Nr. ${sync.rev ?? '–'}</div>` : ''}</div>` : ''}
     <details class="small muted"><summary>Einrichtung auf der Synology</summary>
       <p>Der Browser darf das NAS von <b>${esc(location.origin)}</b> aus nur ansprechen, wenn das NAS das erlaubt. Die DSM-Anmeldeseite selbst lässt sich aus Sicherheitsgründen nicht in fremde Seiten einbetten, darum meldet sich die App direkt über die DSM-Schnittstelle an, mit denselben Zugangsdaten und 2FA.</p>
       <ol class="tips">
@@ -68,19 +71,32 @@ function nasCard(box) {
   const off = bus.on('sync', stat); const mo = new MutationObserver(() => { if (!box.isConnected) { off(); mo.disconnect(); } }); mo.observe(document.body, { childList: true, subtree: true });
   box.querySelector('#nMode').onclick = async e => { const b = e.target.closest('[data-m]'); if (!b || b.dataset.m === mode) return; if (on && !(await dialog({ title: 'Verfahren wechseln?', html: '<p class="muted">Die aktuelle NAS-Verbindung wird getrennt. Die Daten im Browser und auf dem NAS bleiben.</p>', buttons: [{ label: 'Abbrechen', value: false }, { label: 'Wechseln', value: true, cls: 'pri' }] }))) return; await dsmLogout(); await saveSyncCfg({ mode: b.dataset.m, auto: true }); nasCard(box); };
   box.querySelector('#nAuto')?.addEventListener('change', async e => { sync.cfg.auto = e.target.checked; await saveSyncCfg(sync.cfg); });
-  box.querySelector('#nPush')?.addEventListener('click', async () => { try { const r = await pushNow(); if (r) toast(`Hochgeladen (${r.rides} neue Fahrten)`); } catch (e) { } });
-  box.querySelector('#nPull')?.addEventListener('click', async () => { try { const r = await pullNow(); if (r === null && !sync.error) toast('Auf dem NAS liegt noch nichts'); else if (r) { toast(`Vom NAS geladen (${r.rides} Fahrten), App wird neu geladen`); setTimeout(() => location.reload(), 1200); } } catch (e) { } });
+  box.querySelector('#nPush')?.addEventListener('click', () => connectSync(box));
+  box.querySelector('#nPull')?.addEventListener('click', async () => {
+    if (!(await dialog({ title: 'Alles vom NAS übernehmen?', html: '<p class="muted">Einstellungen, Profil, Fortschritt und Pläne werden durch den Stand auf dem NAS ersetzt. Fahrten und Fotos auf diesem Gerät bleiben und werden ergänzt.</p>', buttons: [{ label: 'Abbrechen', value: false }, { label: 'Übernehmen', value: true, cls: 'pri' }] }))) return;
+    try { const r = await pullNow(); if (r) { toast(`Vom NAS übernommen (${r.rides} neue Fahrten), App wird neu geladen`); setTimeout(() => location.reload(), 1200); } } catch (e) { }
+  });
+  box.querySelector('#nDev')?.addEventListener('change', e => renameDevice(e.target.value));
   box.querySelector('#nOff')?.addEventListener('click', async () => { await dsmLogout(); await saveSyncCfg(null); sync.last = null; sync.error = null; sync.needLogin = false; nasCard(box); toast('NAS getrennt, die Daten im Browser bleiben'); });
   box.querySelector('#nLogout')?.addEventListener('click', async () => { await dsmLogout(); nasCard(box); toast('Abgemeldet'); });
-  box.querySelector('#nLogin')?.addEventListener('click', async () => { if (await loginDialog()) { toast('Angemeldet, Verbindung klappt'); nasCard(box); pushNow().catch(() => { }); } });
+  box.querySelector('#nLogin')?.addEventListener('click', async () => { if (await loginDialog()) { toast('Angemeldet, Verbindung klappt'); nasCard(box); connectSync(box); } });
   box.querySelector('#nSave')?.addEventListener('click', async () => {
     const cfg = { mode: 'webdav', url: normalizeHost(box.querySelector('#nUrl').value), user: box.querySelector('#nUser').value.trim(), pass: box.querySelector('#nPass').value, auto: box.querySelector('#nAuto').checked };
     if (!/^https?:\/\//.test(cfg.url)) { toast('Bitte eine vollständige Adresse mit https:// eingeben'); return; }
     if (location.protocol === 'https:' && cfg.url.startsWith('http:')) { toast('Die App läuft über https, das NAS muss auch über https erreichbar sein', 5000); return; }
     await saveSyncCfg(cfg); sync.error = null;
-    try { await testConnection(); toast('Verbindung klappt'); nasCard(box); }
+    try { await testConnection(); toast('Verbindung klappt'); nasCard(box); connectSync(box); }
     catch (e) { sync.error = e.message === 'Failed to fetch' ? 'NAS nicht erreichbar oder Zugriff nicht freigegeben (siehe Einrichtung)' : e.message; stat(); }
   });
+}
+
+// Abgleichen; hat sich dabei lokal etwas geändert (z. B. beim ersten Verbinden), die App neu laden
+async function connectSync(box) {
+  try {
+    const r = await pushNow(); if (!r) return;
+    if (r.pulled) { toast(sync.info || `Neuerer Stand vom NAS übernommen (${r.rides} Fahrten), App wird neu geladen`, 5000); sync.info = ''; setTimeout(() => location.reload(), 2500); }
+    else { toast(`Abgeglichen${r.up.rides || r.up.shots ? ` (${r.up.rides} Fahrten, ${r.up.shots} Fotos hochgeladen)` : ''}`); nasCard(box); }
+  } catch (e) { }
 }
 
 // Anmeldedialog wie bei den Synology-Apps: Adresse, Konto, Passwort, bei Bedarf 2FA-Code

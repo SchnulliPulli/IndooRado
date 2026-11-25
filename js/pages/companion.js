@@ -6,7 +6,7 @@ import { totals, fitness } from '../analysis.js';
 import { planProgress, loadPlan } from '../plans.js';
 import { listWorkouts, stats as wStats, getWorkout } from '../workouts.js';
 import { listRoutes, quickStats } from '../routes.js';
-import { sync, syncReady, getLive, pullNow, loadSync } from '../sync.js';
+import { sync, syncReady, getLive, pushNow, loadSync } from '../sync.js';
 import { missionState } from '../game.js';
 import { titleOf } from '../game.js';
 
@@ -54,7 +54,7 @@ export async function render(el) {
     const b = e.target.closest('[data-pick]'); if (b) { sel.workoutId = b.dataset.pick; saveSel(); toast('Vorgemerkt'); render(el); return; }
     if (e.target.id === 'cRefresh') {
       e.target.disabled = true; e.target.textContent = '↻ …';
-      try { const r = await pullNow(); if (r) { await loadState(); await loadPlan(); toast('Aktualisiert'); } render(el); } catch (err) { toast(sync.error || err.message, 5000); e.target.disabled = false; e.target.textContent = '↻ Abgleichen'; }
+      try { const r = await pushNow(); if (r?.pulled) { await loadState(); await loadPlan(); toast('Aktualisiert'); } render(el); } catch (err) { toast(sync.error || err.message, 5000); e.target.disabled = false; e.target.textContent = '↻ Abgleichen'; }
     }
   };
   // Laufende Fahrt vom PC alle 5 Sekunden abfragen

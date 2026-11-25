@@ -4,11 +4,35 @@
 import { db, kv } from './db.js';
 import { bus } from './util.js';
 
-const LOCAL_ONLY = new Set(['sync', 'syncMeta', 'demo', 'strava', 'musicFiles']);
-export const sync = { cfg: null, busy: false, last: null, error: null, dirsOk: false, needLogin: false };
+const LOCAL_ONLY = new Set(['sync', 'syncMeta', 'demo', 'strava', 'musicFiles', 'device', 'kvTimes']);
+export const sync = { cfg: null, busy: false, last: null, error: null, dirsOk: false, needLogin: false, rev: null, devices: {}, device: null, info: '' };
 
-export async function loadSync() { sync.cfg = await kv.get('sync', null); sync.last = (await kv.get('syncMeta', {})).at || null; }
-export async function saveSyncCfg(cfg) { sync.cfg = cfg; sync.dirsOk = false; await kv.set('sync', cfg); }
+export async function loadSync() {
+  sync.cfg = await kv.get('sync', null);
+  const m = await kv.get('syncMeta', {}); sync.last = m.at || null; sync.rev = m.rev ?? null; sync.devices = m.devices || {};
+  sync.device = await kv.get('device', null);
+  if (!sync.device) { sync.device = { id: Math.random().toString(36).slice(2, 10), name: deviceName() }; await kv.set('device', sync.device); }
+  kvT = await kv.get('kvTimes', {});
+}
+// Kurzer Gerätename aus dem Browser, z. B. „Windows · Chrome“ oder „Android · Chrome“
+function deviceName() {
+  const u = navigator.userAgent, os = /Android/.test(u) ? 'Android' : /iPhone|iPad/.test(u) ? 'iPhone/iPad' : /Windows/.test(u) ? 'Windows' : /Mac/.test(u) ? 'Mac' : /Linux/.test(u) ? 'Linux' : 'Gerät';
+  const br = /Edg\//.test(u) ? 'Edge' : /Firefox/.test(u) ? 'Firefox' : /Chrome/.test(u) ? 'Chrome' : /Safari/.test(u) ? 'Safari' : 'Browser';
+  return os + ' · ' + br;
+}
+export async function renameDevice(name) { sync.device.name = name.trim().slice(0, 40) || deviceName(); await kv.set('device', sync.device); schedulePush(1000); }
+// Änderungszeit je Einstellung, damit beim Abgleich die jeweils neuere Seite gewinnt
+let kvT = {}, applying = false, tSave = null;
+bus.on('dbchange', ({ s, k }) => {
+  if (s !== 'kv' || applying || LOCAL_ONLY.has(k)) return;
+  kvT[k] = Date.now(); clearTimeout(tSave); tSave = setTimeout(() => kv.set('kvTimes', kvT), 300);
+});
+export async function saveSyncCfg(cfg) {
+  const key = c => c ? [c.mode, c.host, c.folder, c.url].join('|') : '';
+  // Anderes Ziel: zählt als erstes Verbinden, damit dort zuerst nur gelesen wird
+  if (key(cfg) !== key(sync.cfg)) { sync.rev = null; sync.last = null; sync.devices = {}; await kv.set('syncMeta', {}); }
+  sync.cfg = cfg; sync.dirsOk = false; await kv.set('sync', cfg);
+}
 const configured = () => !!(sync.cfg && (sync.cfg.mode === 'dsm' ? sync.cfg.host && sync.cfg.folder : sync.cfg.url));
 
 /* ---------- Synology DSM (File Station API) ---------- */
@@ -125,45 +149,83 @@ export async function testConnection() {
   return true;
 }
 
-async function stateObj() {
-  const out = { app: 'trittwerk', savedAt: new Date().toISOString(), kv: {}, routes: (await db.all('routes')).map(r => ({ ...r, dem: undefined })), workouts: await db.all('workouts') };
-  for (const k of await db.keys('kv')) if (!LOCAL_ONLY.has(k)) out.kv[k] = await db.get('kv', k);
+async function stateObj(rev) {
+  const now = new Date().toISOString();
+  const out = { app: 'trittwerk', savedAt: now, rev, by: { ...sync.device }, devices: { ...sync.devices, [sync.device.id]: { name: sync.device.name, last: now } }, kvT: {}, kv: {}, routes: (await db.all('routes')).map(r => ({ ...r, dem: undefined })), workouts: await db.all('workouts') };
+  for (const k of await db.keys('kv')) if (!LOCAL_ONLY.has(k)) { out.kv[k] = await db.get('kv', k); out.kvT[k] = kvT[k] || 0; }
   return out;
-}
-
-// Browser -> NAS: Zustand immer, Fahrten und Fotos nur, wenn sie dort fehlen
-export async function push() {
-  await prep();
-  if (!sync.dirsOk) { await B().mkdir(''); await B().mkdir('rides'); await B().mkdir('shots'); sync.dirsOk = true; }
-  const st = await stateObj();
-  await B().put('state.json', JSON.stringify(st), 'application/json');
-  const haveR = new Set(await B().list('rides/')), haveS = new Set(await B().list('shots/'));
-  let n = 0;
-  for (const r of await db.all('rides')) if (!haveR.has(r.id + '.json')) { await B().put('rides/' + r.id + '.json', JSON.stringify(r), 'application/json'); n++; }
-  for (const s of await db.all('shots')) if (!haveS.has(s.id + '.jpg')) { await B().put('shots/' + s.id + '.jpg', s.blob, 'image/jpeg'); await B().put('shots/' + s.id + '.json', JSON.stringify({ ...s, blob: undefined }), 'application/json'); }
-  return { savedAt: st.savedAt, rides: n };
 }
 async function readState() { const b = await B().get('state.json'); if (!b) return null; const st = JSON.parse(await b.text()); if (st.app !== 'trittwerk') throw new Error('state.json gehört nicht zu VeloVerse'); return st; }
 
-// NAS -> Browser: Zustand übernehmen, fehlende Fahrten und Fotos laden
-export async function pull(st) {
-  await prep();
-  st = st || await readState(); if (!st) return null;
-  for (const k in st.kv) await db.put('kv', st.kv[k], k);
-  for (const x of st.routes || []) { const loc = await db.get('routes', x.id); await db.put('routes', loc?.dem ? { ...x, dem: loc.dem } : x); }
-  for (const x of st.workouts || []) await db.put('workouts', x);
+// Stand vom NAS einarbeiten. how: 'remote' = NAS gewinnt überall (erstes Verbinden, „Vom NAS laden“), 'merge' = je Einstellung gewinnt die neuere Seite
+async function applyRemote(st, how) {
+  const gone = new Set([...(st.kv.deletedRides || []), ...await kv.get('deletedRides', [])]);
+  const rT = st.kvT || {}; let changed = 0;
+  applying = true;
+  try {
+    for (const k in st.kv) {
+      if (LOCAL_ONLY.has(k) || k === 'deletedRides') continue;
+      const remoteT = rT[k] || 0, localT = kvT[k] || 0;
+      if (how === 'remote' || remoteT > localT || (!localT && !remoteT)) {
+        if (JSON.stringify(await db.get('kv', k)) !== JSON.stringify(st.kv[k])) { await db.put('kv', st.kv[k], k); changed++; }
+        kvT[k] = remoteT;
+      }
+    }
+    await db.put('kv', [...gone], 'deletedRides');
+    for (const x of st.routes || []) { const loc = await db.get('routes', x.id); if (!loc || how === 'remote' || (x.updated || 0) >= (loc.updated || 0)) await db.put('routes', loc?.dem ? { ...x, dem: loc.dem } : x); }
+    for (const x of st.workouts || []) { const loc = await db.get('workouts', x.id); if (!loc || how === 'remote' || (x.updated || 0) >= (loc.updated || 0)) await db.put('workouts', x); }
+  } finally { applying = false; await kv.set('kvTimes', kvT); }
+  // Fahrten und Fotos: nur ergänzen, gelöschte entfernen
   const haveR = new Set((await db.keys('rides')).map(String)), haveS = new Set((await db.keys('shots')).map(String));
+  for (const id of gone) if (haveR.has(id)) { await db.del('rides', id); await db.delByIndex('shots', 'ride', id); changed++; }
   let n = 0;
-  for (const f of await B().list('rides/')) { const id = f.replace(/\.json$/, ''); if (f.endsWith('.json') && !haveR.has(id)) { const b = await B().get('rides/' + f); if (b) { await db.put('rides', JSON.parse(await b.text())); n++; } } }
+  for (const f of await B().list('rides/')) { const id = f.replace(/\.json$/, ''); if (f.endsWith('.json') && !haveR.has(id) && !gone.has(id)) { const b = await B().get('rides/' + f); if (b) { await db.put('rides', JSON.parse(await b.text())); n++; } } }
   for (const f of await B().list('shots/')) {
-    if (!f.endsWith('.json')) continue; const id = f.replace(/\.json$/, ''); if (haveS.has(id)) continue;
+    if (!f.endsWith('.json')) continue; const id = f.replace(/\.json$/, ''); if (haveS.has(id) || [...gone].some(g => id.startsWith(g + '-'))) continue;
     const m = await B().get('shots/' + f), img = await B().get('shots/' + id + '.jpg');
     if (m && img) await db.put('shots', { ...JSON.parse(await m.text()), blob: img });
   }
-  return { savedAt: st.savedAt, rides: n };
+  return { rides: n, changed: changed + n };
 }
 
-async function mark() { sync.last = new Date().toISOString(); sync.error = null; await kv.set('syncMeta', { at: sync.last }); bus.emit('sync'); }
+// Fahrten und Fotos hochladen, die auf dem NAS fehlen; gelöschte dort entfernen
+async function pushFiles() {
+  const haveR = new Set(await B().list('rides/')), haveS = new Set(await B().list('shots/')), gone = new Set(await kv.get('deletedRides', []));
+  let n = 0, f = 0;
+  for (const r of await db.all('rides')) if (!haveR.has(r.id + '.json') && !gone.has(r.id)) { await B().put('rides/' + r.id + '.json', JSON.stringify(r), 'application/json'); n++; }
+  // Foto zuerst, Beschreibung danach: fehlt die Beschreibung, wird beim nächsten Mal beides neu geschrieben
+  for (const s of await db.all('shots')) if (!haveS.has(s.id + '.json') && !gone.has(s.rideId)) { await B().put('shots/' + s.id + '.jpg', s.blob, 'image/jpeg'); await B().put('shots/' + s.id + '.json', JSON.stringify({ ...s, blob: undefined }), 'application/json'); f++; }
+  for (const id of gone) {
+    if (haveR.has(id + '.json')) await B().del('rides/' + id + '.json');
+    for (const x of haveS) if (x.startsWith(id + '-')) await B().del('shots/' + x);
+  }
+  return { rides: n, shots: f };
+}
+
+// Ein Abgleich: erst den Stand auf dem NAS lesen und einarbeiten, dann den gemeinsamen Stand mit neuer Versionsnummer schreiben.
+// Ein neu verbundenes Gerät übernimmt zuerst alles vom NAS und überschreibt dort nichts.
+export async function syncAll({ preferRemote = false } = {}) {
+  await prep();
+  if (!sync.dirsOk) { await B().mkdir(''); await B().mkdir('rides'); await B().mkdir('shots'); sync.dirsOk = true; }
+  let st = await readState(), pulled = null;
+  if (st) {
+    const rRev = st.rev || 0, first = sync.rev == null && !sync.last;
+    const legacyLocalWins = sync.rev == null && sync.last && st.savedAt <= sync.last; // älterer Stand ohne Versionsnummer, NAS seitdem unverändert
+    if (preferRemote || first) { pulled = await applyRemote(st, 'remote'); sync.info = first ? `Erstes Verbinden: Daten von „${st.by?.name || 'einem anderen Gerät'}“ übernommen, auf dem NAS wurde nichts überschrieben.` : ''; }
+    else if (rRev !== sync.rev && !legacyLocalWins) pulled = await applyRemote(st, 'merge');
+    sync.devices = st.devices || {};
+    // Kurz vor dem Schreiben erneut prüfen, ob inzwischen ein anderes Gerät geschrieben hat
+    const again = await readState();
+    if (again && (again.rev || 0) !== rRev) { const p2 = await applyRemote(again, 'merge'); pulled = { rides: (pulled?.rides || 0) + p2.rides, changed: (pulled?.changed || 0) + p2.changed }; st = again; sync.devices = again.devices || {}; }
+  }
+  const files = await pushFiles();
+  const rev = (st?.rev || 0) + 1, mine = await stateObj(rev);
+  await B().put('state.json', JSON.stringify(mine), 'application/json');
+  sync.rev = rev; sync.devices = mine.devices;
+  return { pulled: pulled && pulled.changed ? pulled : null, rides: pulled?.rides || 0, up: files, savedAt: mine.savedAt };
+}
+
+async function mark() { sync.last = new Date().toISOString(); sync.error = null; await kv.set('syncMeta', { at: sync.last, rev: sync.rev, devices: sync.devices }); bus.emit('sync'); }
 async function guarded(fn) {
   if (!configured() || sync.busy) return null;
   sync.busy = true; bus.emit('sync');
@@ -171,21 +233,15 @@ async function guarded(fn) {
   catch (e) { sync.error = e.message === 'Failed to fetch' ? 'NAS nicht erreichbar oder Zugriff von dieser Adresse nicht freigegeben (siehe Einrichtung)' : e.message; bus.emit('sync'); throw e; }
   finally { sync.busy = false; bus.emit('sync'); }
 }
-export const pushNow = () => guarded(push);
-export const pullNow = () => guarded(() => pull());
+export const pushNow = () => guarded(() => syncAll());
+export const pullNow = () => guarded(() => syncAll({ preferRemote: true }));
 
-// Beim Start: ist der Stand auf dem NAS neuer als der letzte Abgleich, erst holen, dann hochladen
+// Beim Start und beim Zurückkehren zur App: abgleichen; Rückgabe ist gesetzt, wenn sich lokal etwas geändert hat
 export async function autoSync() {
   if (!configured() || !sync.cfg.auto) return;
   if (sync.cfg.mode === 'dsm' && !sync.cfg.sid && !sync.cfg.pass) { sync.needLogin = true; bus.emit('sync'); return; }
-  return guarded(async () => {
-    await prep();
-    const st = await readState().catch(() => null);
-    let pulled = null;
-    if (st && (!sync.last || st.savedAt > sync.last)) pulled = await pull(st);
-    await push();
-    return pulled;
-  });
+  const r = await guarded(() => syncAll());
+  return r?.pulled || null;
 }
 // Nach Änderungen verzögert hochladen (nicht während eines Abgleichs)
 let pend = null;
@@ -208,4 +264,18 @@ export async function getLive() {
   await prep();
   const b = await B().get('live.json'); if (!b) return null;
   try { return JSON.parse(await b.text()); } catch (e) { return null; }
+}
+
+// Fotos einer Fahrt direkt vom NAS holen, falls sie auf diesem Gerät fehlen (z. B. auf dem Handy)
+export async function fetchShots(rideId, count) {
+  if (!syncReady() || !count) return 0;
+  await prep();
+  let n = 0;
+  for (let k = 0; k < count; k++) {
+    const id = rideId + '-' + k; if (await db.get('shots', id)) continue;
+    const m = await B().get('shots/' + id + '.json'); if (!m) continue;
+    const img = await B().get('shots/' + id + '.jpg'); if (!img) continue;
+    await db.put('shots', { ...JSON.parse(await m.text()), blob: img }); n++;
+  }
+  return n;
 }
