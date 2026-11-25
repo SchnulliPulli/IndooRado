@@ -128,7 +128,7 @@ async function route() {
     el.innerHTML = '';
     await mod.render(el, params.map(decodeURIComponent), query);
     sessionStorage.removeItem('vvReloaded');
-    if (k === '' || k === 'companion') announce(el);
+    if (k === '' || k === 'companion' || k === 'lobby') announce(el);
   } catch (e) {
     console.error(e);
     // Nach einem Update können kurz alte und neue Dateien gemischt im Browser liegen: einmal frisch laden
@@ -158,7 +158,10 @@ export function isPhone() {
 }
 export function wantsPhoneView() { const m = profile.phoneView || 'auto'; return m === 'always' || (m === 'auto' && isPhone()); }
 async function announce(el) {
-  const O = await import('./online/client.js'); if (!O.configured() || !O.online.ready || !O.loggedIn()) return; // nur angemeldet: sonst kein Kontakt zum Server
+  const O = await import('./online/client.js'); if (!O.configured()) return;
+  // Beim App-Start läuft die Anmeldung noch: einmal auf das Ergebnis warten statt die Ankündigungen zu verpassen
+  if (!O.online.ready) await new Promise(r => { const off = bus.on('online', () => { off(); r(); }); setTimeout(() => { off(); r(); }, 15000); });
+  if (!O.online.ready || !O.loggedIn() || O.needsMfa() || !document.body.contains(el) || el.querySelector('.annbox')) return; // nur angemeldet: sonst kein Kontakt zum Server
   try {
     const list = await (await import('./online/sync.js')).announcements(), seen = JSON.parse(localStorage.getItem('vvAnnSeen') || '[]');
     const box = document.createElement('div'); box.className = 'annbox';

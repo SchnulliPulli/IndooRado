@@ -183,7 +183,7 @@ export async function diagnose(onStep) {
     if (existing) return res('schon offen, Status: ' + existing.state);
     const tap = m => { if (m.topic === full) log.push(m.event + ' ' + JSON.stringify(m.payload).slice(0, 220)); };
     rt.stateChangeCallbacks.message.push(tap);
-    const done = (ok, msg) => { const k = rt.stateChangeCallbacks.message.indexOf(tap); if (k >= 0) rt.stateChangeCallbacks.message.splice(k, 1); ok ? res(msg) : rej(new Error(msg + (log.length ? ' · Server: ' + log.join(' | ') : ' · keine Serverantwort'))); };
+    const done = (ok, msg) => setTimeout(() => { const k = rt.stateChangeCallbacks.message.indexOf(tap); if (k >= 0) rt.stateChangeCallbacks.message.splice(k, 1); ok ? res(msg) : rej(new Error(msg + (log.length ? ' · Server: ' + log.join(' | ') : ' · keine Serverantwort'))); }, 300);
     const ch = sb.channel(topic, { config: { private: true } });
     ch.subscribe((st, err) => { if (st === 'SUBSCRIBED') { ch.unsubscribe(); done(true, 'verbunden'); } else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') { sb.removeChannel(ch); done(false, st + (err?.message ? ': ' + err.message : '')); } });
   });
