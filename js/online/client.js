@@ -176,6 +176,17 @@ export async function diagnose(onStep) {
   }));
   await step('Live-Dienst erreichbar (öffentlicher Testkanal)', () => new Promise((res, rej) => { const ch = sb.channel('diag-public-' + Math.random().toString(36).slice(2, 6)); ch.subscribe((st, err) => { if (st === 'SUBSCRIBED') { ch.unsubscribe(); res('verbunden'); } else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') { ch.unsubscribe(); rej(new Error(st + (err?.message ? ': ' + err.message : '') + ' (bei ausgeschaltetem „Allow public access“ ist ❌ hier normal)')); } }); }));
   await step('Anmeldeschlüssel an Live-Dienst', async () => (await realtimeAuth()) ? 'gesetzt' : 'keine Sitzung');
-  await step('Live-Kanal (Strecke)', () => new Promise((res, rej) => { const ch = sb.channel('ride:diagnose', { config: { private: true } }); ch.subscribe((st, err) => { if (st === 'SUBSCRIBED') { ch.unsubscribe(); res('verbunden'); } else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') { ch.unsubscribe(); rej(new Error(st + (err?.message ? ': ' + err.message : ''))); } }); }));
-  await step('Live-Kanal mit Berechtigung (lobby)', () => new Promise((res, rej) => { const ch = sb.channel('lobby', { config: { private: true } }); ch.subscribe((st, err) => { if (st === 'SUBSCRIBED') { ch.unsubscribe(); res('verbunden'); } else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') { ch.unsubscribe(); rej(new Error(st + (err?.message ? ': ' + err.message : ''))); } }); }));
+  // Privaten Kanal beitreten und die Rohantworten des Servers mitschneiden (Grund bei Ablehnung)
+  const tryJoin = topic => new Promise((res, rej) => {
+    const rt = sb.realtime, log = [], full = 'realtime:' + topic;
+    const existing = sb.getChannels().find(c => c.topic === full);
+    if (existing) return res('schon offen, Status: ' + existing.state);
+    const tap = m => { if (m.topic === full) log.push(m.event + ' ' + JSON.stringify(m.payload).slice(0, 220)); };
+    rt.stateChangeCallbacks.message.push(tap);
+    const done = (ok, msg) => { const k = rt.stateChangeCallbacks.message.indexOf(tap); if (k >= 0) rt.stateChangeCallbacks.message.splice(k, 1); ok ? res(msg) : rej(new Error(msg + (log.length ? ' · Server: ' + log.join(' | ') : ' · keine Serverantwort'))); };
+    const ch = sb.channel(topic, { config: { private: true } });
+    ch.subscribe((st, err) => { if (st === 'SUBSCRIBED') { ch.unsubscribe(); done(true, 'verbunden'); } else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') { sb.removeChannel(ch); done(false, st + (err?.message ? ': ' + err.message : '')); } });
+  });
+  await step('Live-Kanal (Strecke)', () => tryJoin('ride:diagnose'));
+  await step('Live-Kanal (lobby)', () => tryJoin('lobby'));
 }

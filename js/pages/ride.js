@@ -177,6 +177,8 @@ async function start(el) {
   }
   // Online: echte Fahrer auf derselben Strecke
   const grp = S.group;
+  try { S.joinRider = JSON.parse(sessionStorage.getItem('joinRider') || 'null'); } catch (e) { } sessionStorage.removeItem('joinRider');
+  if (S.joinRider) $('#startCard', el).innerHTML = `<b>🌐 Mitfahren bei ${esc(S.joinRider.name)}</b><span>Sobald die Verbindung steht, springst du direkt hinter ${esc(S.joinRider.name)}. Tritt in die Pedale!</span>`;
   if (grp) { $('#startCard', el).innerHTML = `<b>👥 ${esc(grp.title)}</b><span>Gruppenfahrt: alle starten jetzt mit denselben Einstellungen${grp.isHost ? ' (du bist Gastgeber und bestimmst das Wetter)' : ''}. Tritt in die Pedale!</span>`; }
   if (loggedIn() && !demo.on) import('../online/presence.js').then(m => { window.__presence = m; }).then(() => import('../online/live.js')).then(({ joinRoute }) => {
     if (!S?.alive) return;
@@ -232,6 +234,8 @@ function syncRemote() {
   let k = 0;
   for (const [id, p] of peers) if (!keep.some(n => n.id === id)) keep.push({ remote: true, id, i: 100 + k++, name: p.name, wkg: p.wkg || 0, d: p.d || 0, v: p.v || 0, lat: 2.3, latT: 2.3, crank: 0, cadence: p.cad || 85, gap: gapOf(R, p.d || 0, S.dist), look: { ...(p.look || {}), jersey: p.look?.jersey || '#ffffff', name: '🌐 ' + p.name } });
   S.field = keep; if (peers.size && !S.npcOn) { S.npcOn = true; updNpcBtn(); }
+  // "Mitfahren" aus "Wer ist online": einmalig direkt hinter den gewählten Fahrer beamen
+  if (S.joinRider && peers.has(S.joinRider.sid)) { const p = peers.get(S.joinRider.sid), name = S.joinRider.name; S.joinRider = null; const d = R.loop ? ((p.d - 10) % R.total + R.total) % R.total : clamp(p.d - 10, 0, R.total - 20); setTimeout(() => { beam(d).then(() => flash('🌐 Du fährst jetzt direkt hinter ' + name, 2500)); }, 300); }
   S.world.setRiders(S.field.map(n => n.look));
   flash(peers.size ? '🌐 ' + peers.size + ' echte' + (peers.size === 1 ? 'r Fahrer' : ' Fahrer') + ' auf der Strecke' : 'Keine echten Fahrer mehr auf der Strecke', 2200);
 }
@@ -262,7 +266,7 @@ function bindUi() {
   const pop = $('#tbPop', el), more = $('#tMore', el), popSet = o => { pop.hidden = !o; more.setAttribute('aria-expanded', String(o)); more.classList.toggle('on', o); };
   more.onclick = e => { e.stopPropagation(); popSet(pop.hidden); };
   pop.addEventListener('click', e => { if (e.target.closest('.tbtn')) setTimeout(() => popSet(false), 120); });
-  el.addEventListener('pointerdown', e => { if (!pop.hidden && !e.target.closest('#tbPop,#tMore')) popSet(false); });
+  el.addEventListener('pointerdown', e => { if (!pop.hidden && !e.target.closest('#tbPop,#tMore')) popSet(false); const env = $('#envPanel', el); if (env && !env.hidden && !e.target.closest('#envPanel,#tEnv')) env.hidden = true; });
   el.addEventListener('click', e => { if (e.target.closest('#pupBox')) usePup(S, flash); if (e.target.closest('#tPhoto')) photoMode(S, true); });
   // Workout-Box einklappen (Kopfzeile antippen)
   $('#woBox', el).classList.toggle('collapsed', !!profile.woCollapsed);
