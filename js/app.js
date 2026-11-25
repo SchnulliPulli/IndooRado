@@ -128,8 +128,8 @@ async function route() {
     el.innerHTML = '';
     await mod.render(el, params.map(decodeURIComponent), query);
     sessionStorage.removeItem('vvReloaded');
-    if (k === '' || k === 'companion' || k === 'lobby') announce(el);
-    if (k === '' || k === 'companion') onlineInfo(el);
+    if (k === 'lobby') announce(el);
+    if (k === '' || k === 'companion') newsBar(el);
   } catch (e) {
     console.error(e);
     // Nach einem Update können kurz alte und neue Dateien gemischt im Browser liegen: einmal frisch laden
@@ -158,25 +158,59 @@ export function isPhone() {
   return coarse && (short < 520 || (ar < .7 && innerWidth < 600)) || /iPhone|Android.+Mobile/.test(navigator.userAgent);
 }
 export function wantsPhoneView() { const m = profile.phoneView || 'auto'; return m === 'always' || (m === 'auto' && isPhone()); }
-// Startseite: offene Gruppenfahrten und wer gerade fährt, mit Link zur Lobby bzw. zum Mitfahren
-async function onlineInfo(el) {
+// Startseite: Benachrichtigungsleiste zum Wischen (mit Punkten): Ankündigungen vom Admin, offene Lobbys, wer gerade fährt.
+// Nur angemeldet (sonst kein Kontakt zum Server). Wechselt alle 7 s von selbst, pausiert bei Berührung oder Maus darüber.
+async function newsBar(el) {
   const O = await import('./online/client.js'); if (!O.configured()) return;
   if (!O.online.ready) await new Promise(r => { const off = bus.on('online', () => { off(); r(); }); setTimeout(() => { off(); r(); }, 15000); });
-  if (!O.loggedIn() || !O.access().ok || !document.body.contains(el)) return;
-  const PR = await import('./online/presence.js'), { sel, saveSel } = await import('./state.js'), esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-  const box = document.createElement('div'); box.className = 'onlinfo'; box.hidden = true;
-  (el.querySelector('.annbox') || el.querySelector('.pagehead, .comphead'))?.after(box) ?? el.prepend(box);
-  const draw = () => {
-    if (!document.body.contains(box)) { off(); clearInterval(t); return; }
-    const L = PR.lobbies().filter(l => !l.mine), riding = [...PR.P.peers.entries()].filter(([, p]) => p.where === 'ride' && p.route);
-    const min = ms => ms <= 0 ? 'startet jetzt' : ms < 60e3 ? `startet in ${Math.ceil(ms / 1000)} s` : `startet in ${Math.ceil(ms / 60e3)} min`;
-    const items = [...L.slice(0, 3).map(l => `<div class="card onl lobby"><span>👥 <b>${esc(l.title)}</b> von ${esc(l.hostName)} · ${esc(l.routeName)} · ${min(l.startAt - Date.now())} · ${l.members.length} dabei</span><a class="btn sm pri" href="#/lobby">Zur Lobby</a></div>`),
-      ...riding.slice(0, 3).map(([k, p]) => `<div class="card onl"><span>🚴 <b>${esc(p.name)}</b> fährt gerade ${esc(p.routeName || '')}</span><button class="btn sm" data-sid="${esc(k)}" data-route="${esc(p.route)}" data-name="${esc(p.name)}">Mitfahren</button></div>`)];
-    const html = items.join(''); box.hidden = !html; if (box.innerHTML !== html) box.innerHTML = html;
+  if (!O.loggedIn() || O.needsMfa() || !document.body.contains(el)) return;
+  const PR = O.access().ok ? await import('./online/presence.js') : null, { sel, saveSel } = await import('./state.js');
+  const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  let anns = []; try { anns = await (await import('./online/sync.js')).announcements(); } catch (e) { }
+  const seen = () => { try { return JSON.parse(localStorage.getItem('vvAnnSeen') || '[]'); } catch (e) { return []; } };
+  const box = document.createElement('section'); box.className = 'newsbar'; box.hidden = true;
+  box.innerHTML = '<div class="nbtrack"></div><div class="nbnav"><button class="nbarr" data-step="-1" aria-label="Zurück">‹</button><div class="nbdots"></div><button class="nbarr" data-step="1" aria-label="Weiter">›</button></div>';
+  el.querySelector('.pagehead, .comphead')?.after(box) ?? el.prepend(box);
+  const track = box.querySelector('.nbtrack'), dots = box.querySelector('.nbdots');
+  const min = ms => ms <= 0 ? 'startet jetzt' : ms < 60e3 ? `startet in ${Math.ceil(ms / 1000)} s` : `startet in ${Math.ceil(ms / 60e3)} min`;
+  const items = () => {
+    const S = seen(), out = [];
+    for (const a of anns) if (!S.includes(a.id)) out.push({ key: 'a' + a.id, cls: 'nb-ann ' + a.level, html: `<div class="nbtxt"><b>${a.level === 'event' ? '🎉' : a.level === 'warn' ? '⚠️' : '📣'} ${esc(a.title)}</b>${a.body ? `<span>${esc(a.body)}</span>` : ''}</div><button class="btn xs ghost" data-hide="${a.id}" aria-label="Ausblenden">✕</button>` });
+    if (PR) {
+      for (const l of PR.lobbies()) out.push({ key: 'l' + l.id, cls: 'nb-lobby', html: `<div class="nbtxt"><b>👥 ${esc(l.title)}${l.mine ? ' (deine)' : ''}</b><span>${l.race ? 'Rennen' : 'Gruppenfahrt'} von ${esc(l.hostName)} · ${esc(l.routeName)} · ${min(l.startAt - Date.now())} · ${l.members.length} dabei</span></div><a class="btn sm pri" href="#/lobby">Zur Lobby</a>` });
+      for (const [k, p] of PR.P.peers) if (p.where === 'ride' && p.route) out.push({ key: 'r' + k, cls: 'nb-ride', html: `<div class="nbtxt"><b>🚴 ${esc(p.name)} fährt gerade</b><span>${esc(p.routeName || '')}</span></div><button class="btn sm" data-sid="${esc(k)}" data-route="${esc(p.route)}" data-name="${esc(p.name)}">Mitfahren</button>` });
+      const n = PR.P.peers.size; if (n && !out.some(x => x.cls === 'nb-ride')) out.push({ key: 'online', cls: 'nb-ride', html: `<div class="nbtxt"><b>🟢 ${n} ${n === 1 ? 'anderer Spieler' : 'andere Spieler'} online</b><span>Leg eine Gruppenfahrt an, alle sehen sie sofort.</span></div><a class="btn sm" href="#/lobby">Lobby</a>` });
+    }
+    return out;
   };
-  box.onclick = e => { const b = e.target.closest('[data-sid]'); if (!b) return; sel.routeId = b.dataset.route; saveSel(); sessionStorage.setItem('joinRider', JSON.stringify({ sid: b.dataset.sid, name: b.dataset.name })); location.hash = '#/ride'; };
-  await PR.joinPresence().catch(() => { });
-  const off = bus.on('presence', draw), t = setInterval(draw, 5000); draw();
+  let keys = [], idx = 0, hold = 0;
+  const go = (i, smooth = true) => { if (!keys.length) return; idx = (i + keys.length) % keys.length; track.scrollTo({ left: idx * track.clientWidth, behavior: smooth ? 'smooth' : 'auto' }); mark(); };
+  const mark = () => [...dots.children].forEach((d, i) => d.setAttribute('aria-current', String(i === idx)));
+  const draw = () => {
+    if (!document.body.contains(box)) { off?.(); clearInterval(t); return; }
+    const it = items(), nk = it.map(x => x.key);
+    box.hidden = !it.length; if (!it.length) { keys = []; return; }
+    if (nk.join() !== keys.join()) {
+      const cur = keys[idx]; keys = nk;
+      track.innerHTML = it.map(x => `<div class="nbslide ${x.cls}" data-k="${esc(x.key)}">${x.html}</div>`).join('');
+      dots.innerHTML = it.map((x, i) => `<button data-i="${i}" aria-label="Meldung ${i + 1}"></button>`).join('');
+      box.querySelector('.nbnav').hidden = it.length < 2;
+      go(Math.max(0, keys.indexOf(cur)), false);
+    } else it.forEach((x, i) => { const s = track.children[i]; if (s && s.innerHTML !== x.html) s.innerHTML = x.html; });
+  };
+  track.addEventListener('scroll', () => { const i = Math.round(track.scrollLeft / (track.clientWidth || 1)); if (i !== idx) { idx = i; mark(); } }, { passive: true });
+  box.addEventListener('pointerenter', () => hold = Date.now() + 1e9); box.addEventListener('pointerleave', () => hold = Date.now() + 4000);
+  box.addEventListener('touchstart', () => hold = Date.now() + 10000, { passive: true });
+  box.onclick = e => {
+    const st = e.target.closest('[data-step]'); if (st) { go(idx + +st.dataset.step); hold = Date.now() + 10000; return; }
+    const d = e.target.closest('.nbdots [data-i]'); if (d) { go(+d.dataset.i); hold = Date.now() + 10000; return; }
+    const h = e.target.closest('[data-hide]'); if (h) { const S = seen(); S.push(+h.dataset.hide); localStorage.setItem('vvAnnSeen', JSON.stringify(S.slice(-50))); keys = []; draw(); return; }
+    const b = e.target.closest('[data-sid]'); if (b) { sel.routeId = b.dataset.route; saveSel(); sessionStorage.setItem('joinRider', JSON.stringify({ sid: b.dataset.sid, name: b.dataset.name })); location.hash = '#/ride'; }
+  };
+  if (PR) await PR.joinPresence().catch(() => { });
+  let tick = 0;
+  const off = PR ? bus.on('presence', draw) : null, t = setInterval(() => { draw(); if (++tick % 7 === 0 && keys.length > 1 && Date.now() > hold) go(idx + 1); }, 1000);
+  draw();
 }
 async function announce(el) {
   const O = await import('./online/client.js'); if (!O.configured()) return;

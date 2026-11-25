@@ -599,6 +599,14 @@ span.badge{display:inline-flex;padding:5px 10px;font-weight:600}span.badge svg{w
 .kpi{display:flex;flex-direction:column;gap:2px}.kpi b{font-size:34px}
 .anrow{padding:6px 0;border-bottom:1px solid var(--line)}
 .annbox{display:flex;flex-direction:column;gap:8px}
+.newsbar{position:relative;margin-bottom:14px;border-radius:14px;background:var(--panel);border:1px solid var(--line);overflow:hidden}
+.nbtrack{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain}.nbtrack::-webkit-scrollbar{display:none}
+.nbslide{flex:0 0 100%;scroll-snap-align:start;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;min-height:62px;border-left:4px solid #2fe6ff;box-sizing:border-box}
+.nbslide.nb-ann{border-left-color:var(--cad)}.nbslide.nb-ann.event{border-left-color:var(--acc)}.nbslide.nb-ann.warn{border-left-color:var(--warn)}.nbslide.nb-lobby{border-left-color:var(--acc)}
+.nbtxt{display:flex;flex-direction:column;gap:2px;min-width:0}.nbtxt span{color:var(--soft);font-size:13px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.nbnav{display:flex;align-items:center;justify-content:center;gap:6px;padding:0 8px 8px}.nbnav[hidden]{display:none}
+.nbdots{display:flex;gap:6px}.nbdots button{width:8px;height:8px;border-radius:4px;border:0;padding:0;background:var(--line);cursor:pointer;transition:width .2s,background .2s}.nbdots button[aria-current=true]{width:20px;background:var(--acc)}
+.nbarr{border:0;background:none;color:var(--soft);font-size:18px;line-height:1;cursor:pointer;padding:0 6px}.nbarr:hover{color:var(--ink)}
 .onlinfo{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}.onl{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;border-left:4px solid #2fe6ff}.onl.lobby{border-left-color:var(--acc)}
 .ann{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;border-left:4px solid var(--cad)}
 .ann.event{border-left-color:var(--acc)}.ann.warn{border-left-color:var(--warn)}.ann p{margin:4px 0 0}
