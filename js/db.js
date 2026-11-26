@@ -1,7 +1,8 @@
 // Dauerhafte Speicherung im Browser (IndexedDB)
 // Stores: kv (Einstellungen, Profil, Fortschritt), rides, shots (Screenshots), routes, workouts
 import { bus } from './util.js';
-const NAME = 'trittwerk', VER = 1; // interner Name bleibt, damit vorhandene Daten erhalten bleiben
+// interner Name bleibt, damit vorhandene Daten erhalten bleiben; weitere Online-Konten haben eigene Datenbanken (siehe online/client.js)
+const NAME = (() => { try { return localStorage.getItem('vvDb') || 'trittwerk'; } catch (e) { return 'trittwerk'; } })(), VER = 1;
 let dbp = null;
 
 function open() {

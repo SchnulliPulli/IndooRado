@@ -78,10 +78,19 @@ function nav() {
     const O = lb.__O; if (!O?.loggedIn()) return; // abgemeldet: normaler Link zum Konto
     e.preventDefault(); if (!um.hidden) { um.hidden = true; return; }
     const n = (O.online.profile?.display_name || 'Fahrer').replace(/</g, '&lt;'), mail = (O.online.user?.email || '').replace(/</g, '&lt;');
-    um.innerHTML = `<div class="umhead">${avatarSvg(profile, 44)}<div><b>${n}</b><small>${mail}</small></div></div><a href="#/account">👤 Konto und Datenschutz</a><a href="#/avatar">🎨 Avatar gestalten</a>${O.isAdmin() ? '<a href="#/admin">🛠️ Admin-Konsole</a>' : ''}<button data-um-out>↩︎ Abmelden</button>`;
+    // Weitere angemeldete Konten auf diesem Gerät: Antippen wechselt (lädt neu, jedes Konto hat seine eigenen Daten)
+    const others = O.accounts().filter(a => a.uid !== O.online.user?.id), e2 = t => String(t ?? '').replace(/</g, '&lt;');
+    const accHtml = `<div class="umacc">${others.map(a => `<button class="umsw" data-sw="${e2(a.uid)}">${avatarSvg(a.look || {}, 30)}<span><b>${e2(a.name)}</b><small>${e2(a.email)}</small></span><i class="umx" data-forget="${e2(a.uid)}" title="Von diesem Gerät entfernen">✕</i></button>`).join('')}<button data-um-add>➕ Weiteres Konto hinzufügen</button></div>`;
+    um.innerHTML = `<div class="umhead">${avatarSvg(profile, 44)}<div><b>${n}</b><small>${mail}</small></div></div>${accHtml}<a href="#/account">👤 Konto und Datenschutz</a><a href="#/avatar">🎨 Avatar gestalten</a>${O.isAdmin() ? '<a href="#/admin">🛠️ Admin-Konsole</a>' : ''}<button data-um-out>↩︎ Abmelden</button>`;
     const r = lb.getBoundingClientRect(); um.style.top = (r.bottom + 8) + 'px'; um.style.right = Math.max(8, innerWidth - r.right) + 'px'; um.hidden = false;
   });
-  um.addEventListener('click', async e => { if (e.target.closest('[data-um-out]')) { const O = await import('./online/client.js'); await O.signOut(); toast('Abgemeldet'); loginUpd(); if (currentKey === 'account') route(); } um.hidden = true; });
+  um.addEventListener('click', async e => {
+    const fg = e.target.closest('[data-forget]');
+    if (fg) { e.stopPropagation(); const O = await import('./online/client.js'); O.forgetAccount(fg.dataset.forget); fg.closest('.umsw').remove(); toast('Konto von diesem Gerät entfernt (die lokalen Daten bleiben erhalten)'); return; }
+    const sw = e.target.closest('[data-sw]');
+    if (sw) { if ((document.querySelector('#rw') && currentKey === 'ride') || document.querySelector('.resumebar:not([hidden])')) { toast('Bitte erst die Fahrt beenden, dann das Konto wechseln', 3500); um.hidden = true; return; } const O = await import('./online/client.js'); sw.innerHTML = '<span class="spinner sm"></span> Wechsle …'; O.switchAccount(sw.dataset.sw); return; }
+    if (e.target.closest('[data-um-add]')) { const O = await import('./online/client.js'); O.addAccount(); return; }
+    if (e.target.closest('[data-um-out]')) { const O = await import('./online/client.js'); await O.signOut(); toast('Abgemeldet'); loginUpd(); if (currentKey === 'account') route(); } um.hidden = true; });
   document.addEventListener('click', e => { if (!e.target.closest('.usermenu,.loginbtn')) um.hidden = true; });
   addEventListener('hashchange', () => um.hidden = true);
   lb.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && lb.__O?.loggedIn()) { e.preventDefault(); lb.click(); } });

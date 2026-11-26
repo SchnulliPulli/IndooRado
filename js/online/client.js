@@ -46,6 +46,42 @@ async function tabLock(name, timeout, fn) {
 // Jede Anfrage ans Backend zählen: dauert etwas, zeigt die App unten eine kleine Ladeanzeige (blockiert nichts)
 export const net = { busy: 0 };
 const trackedFetch = (...a) => { net.busy++; bus.emit('netbusy', net.busy); return fetch(...a).finally(() => { net.busy--; bus.emit('netbusy', net.busy); }); };
+/* ---------- Mehrere Konten auf einem Gerät ----------
+   Jedes Konto bekommt seine eigene lokale Datenbank (Fahrten, Einstellungen, Fortschritt), damit beim Abgleich nie Daten
+   eines Kontos in ein anderes wandern. Das erste Konto behält die bisherige Datenbank. Wechseln = Sitzung tauschen und neu laden.
+   Gespeichert werden die Sitzungen wie die normale Anmeldung (localStorage bei „Angemeldet bleiben“, sonst nur für diesen Tab). */
+const ACC = 'vv-accounts', DBMAP = 'vvAcctDb';
+const accStore = () => remember() ? localStorage : sessionStorage;
+export function accounts() { try { return JSON.parse(accStore().getItem(ACC) || '[]'); } catch (e) { return []; } }
+const setAccounts = a => { try { accStore().setItem(ACC, JSON.stringify(a.slice(0, 6))); } catch (e) { } };
+export const currentDb = () => localStorage.getItem('vvDb') || 'trittwerk';
+export function dbFor(uid) {
+  let m = {}; try { m = JSON.parse(localStorage.getItem(DBMAP) || '{}'); } catch (e) { }
+  if (!m[uid]) { m[uid] = Object.keys(m).length ? 'trittwerk-' + uid.replace(/[^\w]/g, '').slice(0, 12) : currentDb(); localStorage.setItem(DBMAP, JSON.stringify(m)); }
+  return m[uid];
+}
+// Passt die lokale Datenbank zum angemeldeten Konto? Sonst umstellen und neu laden, bevor irgendein Abgleich startet
+function ensureDb(uid) {
+  if (!uid) return false; const want = dbFor(uid);
+  if (want === currentDb()) return false;
+  localStorage.setItem('vvDb', want); online.switching = true; setTimeout(() => location.reload(), 30); return true;
+}
+export function rememberAccount() {
+  const s = online.session || (online.user ? { user: online.user } : null); if (!s?.user) return;
+  dbFor(s.user.id); // aktuelles Konto behält die Datenbank, in der es gerade läuft
+  const list = accounts(), old = list.find(x => x.uid === s.user.id) || {};
+  setAccounts([{ ...old, uid: s.user.id, email: s.user.email, name: online.profile?.display_name || old.name || s.user.email, look: online.profile?.avatar || old.look || null, session: s }, ...list.filter(x => x.uid !== s.user.id)]);
+}
+export function switchAccount(uid) {
+  rememberAccount();
+  const t = accounts().find(x => x.uid === uid); if (!t?.session?.refresh_token) return;
+  authStore.setItem('vv-auth', JSON.stringify(t.session)); localStorage.setItem('vvDb', dbFor(uid));
+  online.switching = true; location.hash = '#/'; location.reload();
+}
+// Weiteres Konto: aktuelles merken, ohne es abzumelden (Abmelden würde die Sitzung beim Server beenden), dann zur Anmeldung
+export function addAccount() { rememberAccount(); authStore.removeItem('vv-auth'); online.switching = true; location.hash = '#/account'; location.reload(); }
+export function forgetAccount(uid) { setAccounts(accounts().filter(x => x.uid !== uid)); }
+
 // Live-Dienst braucht den Anmelde-Schlüssel für private Kanäle
 export async function realtimeAuth() { const sb = await client(); const { data } = await sb.auth.getSession(); if (data.session) await sb.realtime.setAuth(data.session.access_token); return !!data.session; }
 export async function client() {
@@ -58,13 +94,15 @@ export async function client() {
   online.client.auth.onAuthStateChange((ev, session) => {
     if (ev === 'PASSWORD_RECOVERY') online.recovery = true;
     const was = online.user?.id; online.session = session; online.user = session?.user || null;
+    if (online.user && ensureDb(online.user.id)) return; // anderes Konto: erst auf dessen Datenbank umschalten (Neuladen)
+    if (session && ['SIGNED_IN', 'TOKEN_REFRESHED', 'USER_UPDATED', 'MFA_CHALLENGE_VERIFIED'].includes(ev)) rememberAccount();
     // Gleicher Nutzer (Token erneuert, 2FA in einem anderen Tab bestätigt): nur den 2FA-Status neu lesen, das ist lokal und schnell
     if (ev === 'TOKEN_REFRESHED' || ev === 'MFA_CHALLENGE_VERIFIED' || (ev === 'SIGNED_IN' && was === online.user?.id && online.profile)) {
       setTimeout(async () => { try { online.aal = (await online.client.auth.mfa.getAuthenticatorAssuranceLevel()).data; } catch (e) { } bus.emit('online', ev); }); return;
     }
     setTimeout(() => refresh().catch(() => { }).finally(() => bus.emit('online', ev)), 0);
   });
-  addEventListener('storage', e => { if (e.key === 'vv-auth' && online.client) setTimeout(async () => { try { const { data } = await online.client.auth.getSession(); const was = online.user?.id; online.session = data.session; online.user = data.session?.user || null; if (online.user?.id !== was) await refresh(); else online.aal = (await online.client.auth.mfa.getAuthenticatorAssuranceLevel()).data; bus.emit('online', 'storage'); } catch (er) { } }); });
+  addEventListener('storage', e => { if (e.key === 'vv-auth' && online.client) setTimeout(async () => { try { const { data } = await online.client.auth.getSession(); const was = online.user?.id; online.session = data.session; online.user = data.session?.user || null; if (online.user?.id !== was) { location.reload(); return; } online.aal = (await online.client.auth.mfa.getAuthenticatorAssuranceLevel()).data; bus.emit('online', 'storage'); } catch (er) { } }); });
   return online.client;
 }
 // Beim App-Start: Sitzung wiederherstellen (auch nach OAuth-Rückkehr mit ?code=...)
@@ -78,7 +116,8 @@ export async function initOnline() {
   const { data } = await withTimeout(sb.auth.getSession(), 8000, 'Anmeldung');
   if (expectingReturn() && new URLSearchParams(location.search).has('code')) { localStorage.removeItem('vvOnlineReturn'); history.replaceState(null, '', location.pathname + (location.hash || '#/account')); }
   online.session = data.session; online.user = data.session?.user || null;
-  await refresh(); online.ready = true; bus.emit('online', 'init');
+  if (online.user && ensureDb(online.user.id)) return new Promise(() => { }); // lädt gleich mit der richtigen Datenbank neu
+  await refresh(); online.ready = true; rememberAccount(); bus.emit('online', 'init');
   return online.user;
 }
 export const refreshProfile = () => refresh();
@@ -108,7 +147,14 @@ export async function signIn(email, password) { const { data, error } = await (a
 export async function magicLink(email) { mark(); const { error } = await (await client()).auth.signInWithOtp({ email, options: { emailRedirectTo: back() } }); if (error) throw error; }
 export async function oauth(provider) { mark(); const { error } = await (await client()).auth.signInWithOAuth({ provider, options: { redirectTo: back() } }); if (error) throw error; }
 export async function resetPassword(email) { mark(); const { error } = await (await client()).auth.resetPasswordForEmail(email, { redirectTo: back() }); if (error) throw error; }
-export async function signOut(scope = 'local') { await (await client()).auth.signOut({ scope }); online.profile = null; bus.emit('online', 'out'); }
+export async function signOut(scope = 'local') {
+  const uid = online.user?.id;
+  await (await client()).auth.signOut({ scope }); online.profile = null;
+  if (uid) forgetAccount(uid);
+  // Noch weitere Konten auf diesem Gerät: zum nächsten wechseln
+  const next = accounts()[0]; if (next) return switchAccount(next.uid);
+  bus.emit('online', 'out');
+}
 
 /* ---------- Zwei-Faktor (TOTP, z. B. Google Authenticator, 1Password, Aegis) ---------- */
 // Alle TOTP-Faktoren, auch halb eingerichtete (data.totp enthält nur bestätigte)
