@@ -144,14 +144,33 @@ function renderAuth(el, mode = 'in') {
         <details class="small"><summary>Hinweis zu Datenschutz und Nutzung lesen</summary>${NOTICE}</details>
         <label class="switch"><input type="checkbox" id="aOk"><span></span> <div class="swt">Ich habe den Hinweis gelesen und nutze VeloVerse Online freiwillig und auf eigene Verantwortung</div></label>
         ${keepHtml}
-        <div class="row end"><button class="btn pri" id="aCreate" disabled>Konto anlegen</button></div>`;
+        <div class="row end createrow"><small class="fieldhint" id="createHint"></small><button class="btn pri" id="aCreate" disabled>Konto anlegen</button></div>`;
       wirePw(el);
-      const chk = () => { const p = $('#aPass', el).value, p2 = $('#aPass2', el).value, s = updMeter(el, p, st.mail), m = p2 && p === p2; $('#matchHint', el).textContent = p2 ? (m ? '✓ stimmt überein' : 'stimmt noch nicht überein') : ''; $('#matchHint', el).className = 'fieldhint ' + (p2 ? (m ? 'ok' : 'bad') : ''); $('#aCreate', el).disabled = !(p.length >= 10 && s >= 3 && m && $('#aOk', el).checked); };
+      let busy = false;
+      const chk = () => { const p = $('#aPass', el).value, p2 = $('#aPass2', el).value, s = updMeter(el, p, st.mail), m = p2 && p === p2; $('#matchHint', el).textContent = p2 ? (m ? '✓ stimmt überein' : 'stimmt noch nicht überein') : ''; $('#matchHint', el).className = 'fieldhint ' + (p2 ? (m ? 'ok' : 'bad') : ''); const ok = $('#aOk', el).checked, pwOk = p.length >= 10 && s >= 3;
+        $('#aCreate', el).disabled = !(pwOk && m && ok) || busy;
+        // Zeigen, was noch fehlt (der Knopf geht erst, wenn alles passt, auch der Hinweis bestätigt ist)
+        $('#createHint', el).textContent = busy ? '' : !pwOk ? 'Passwort noch zu schwach' : !m ? 'Passwörter stimmen nicht überein' : !ok ? 'Bitte erst den Hinweis bestätigen' : '';
+        $('#aOk', el).closest('.switch').classList.toggle('need', pwOk && m && !ok); };
       for (const id of ['aPass', 'aPass2']) $('#' + id, el).addEventListener('input', chk); $('#aOk', el).onchange = chk; chk(); $('#aPass', el).focus();
       $('#aBack', el).onclick = () => { st.step = 1; draw(); };
-      $('#aCreate', el).onclick = async () => { keep(); $('#aCreate', el).disabled = true; try { await O.signUp(st.mail, $('#aPass', el).value, st.name); localStorage.setItem('vvLastEmail', st.mail); localStorage.setItem('vvNoticeOk', new Date().toISOString()); st.step = 3; draw(); } catch (e) { err(e); $('#aCreate', el).disabled = false; } };
+      $('#aCreate', el).onclick = async () => {
+        if (!$('#aOk', el).checked || busy) return;
+        keep(); busy = true; const b = $('#aCreate', el); b.disabled = true; b.innerHTML = '<span class="spinner sm"></span> Konto wird angelegt …';
+        for (const id of ['aPass', 'aPass2', 'aOk', 'aBack']) { const x = $('#' + id, el); if (x) x.disabled = true; }
+        const done = () => { localStorage.setItem('vvLastEmail', st.mail); localStorage.setItem('vvNoticeOk', new Date().toISOString()); st.step = 3; draw(); };
+        try {
+          // Der Server wartet, bis die Bestätigungsmail verschickt ist; das kann dauern. Spätestens nach 25 s geht es weiter.
+          await O.withTimeout(O.signUp(st.mail, $('#aPass', el).value, st.name), 25000, 'Registrierung');
+          done();
+        } catch (e) {
+          if (/Zeitüberschreitung/.test(e.message)) { st.slow = true; done(); return; }
+          busy = false; b.textContent = 'Konto anlegen'; for (const id of ['aPass', 'aPass2', 'aOk', 'aBack']) { const x = $('#' + id, el); if (x) x.disabled = false; }
+          err(e); chk();
+        }
+      };
     } else {
-      body.innerHTML = `${steps()}<div class="sentbox"><div class="big">📬</div><h2>Fast geschafft!</h2><p>Wir haben dir an <b>${esc(st.mail)}</b> einen Bestätigungslink geschickt. Öffne ihn auf diesem Gerät, dann bist du angemeldet.</p><p class="small muted">Nichts angekommen? Spam-Ordner prüfen oder in einer Minute erneut senden.</p>
+      body.innerHTML = `${steps()}<div class="sentbox"><div class="big">📬</div><h2>Fast geschafft!</h2><p>Wir haben dir an <b>${esc(st.mail)}</b> einen Bestätigungslink geschickt. Öffne ihn auf diesem Gerät, dann bist du angemeldet.</p>${st.slow ? '<p class="small" style="color:var(--warn)">Der Server hat sehr lange gebraucht. Das Konto ist wahrscheinlich trotzdem angelegt: Schau in dein Postfach. Kommt nichts an, in einer Minute erneut senden.</p>' : ''}<p class="small muted">Nichts angekommen? Spam-Ordner prüfen oder in einer Minute erneut senden.</p>
         <div class="row" style="justify-content:center"><button class="btn" id="aResend" disabled>Erneut senden (60)</button><button class="btn ghost" id="aToLogin">Zur Anmeldung</button></div></div>`;
       cooldown($('#aResend', el), 60, 'Erneut senden');
       $('#aResend', el).onclick = async e => { try { await O.resendSignup(st.mail); toast('Erneut gesendet'); cooldown(e.target, 60, 'Erneut senden'); } catch (er) { err(er); } };

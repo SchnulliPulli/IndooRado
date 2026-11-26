@@ -606,6 +606,9 @@ span.badge{display:inline-flex;padding:5px 10px;font-weight:600}span.badge svg{w
 .invcard .row{margin-top:8px}@keyframes invin{from{transform:translateY(12px);opacity:0}}
 @media(max-width:900px){.invstack{bottom:calc(76px + env(safe-area-inset-bottom))}}
 .invlist{display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow:auto;margin-bottom:10px}.invlist .srow{display:flex;justify-content:space-between;align-items:center}
+.createrow{align-items:center;gap:12px}.switch.need{outline:2px solid var(--warn);outline-offset:4px;border-radius:8px}
+.spinner.sm{width:14px;height:14px;border-width:2px;display:inline-block;vertical-align:-2px;margin:0 6px 0 0}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:saturate(.6)}
 .newsbar{position:relative;margin-bottom:14px;border-radius:16px;border:1px solid var(--line);overflow:hidden;background:var(--panel)}
 .nbtrack{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain}.nbtrack::-webkit-scrollbar{display:none}
 .nbslide{--nbc:#2fe6ff;flex:0 0 100%;scroll-snap-align:start;display:flex;align-items:center;gap:14px;padding:14px 18px;min-height:72px;box-sizing:border-box;background:linear-gradient(100deg,color-mix(in srgb,var(--nbc) 16%,transparent),transparent 55%)}
