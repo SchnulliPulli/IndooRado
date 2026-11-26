@@ -7,6 +7,8 @@ import { ICON, avatarSvg } from './components.js';
 import { loadPlan } from './plans.js';
 import { loadSync, autoSync, sync, isConfigured, providerName, handleCloudRedirect } from './sync.js';
 import { loadStrava, handleRedirect, strava, connected as stravaConnected } from './strava.js';
+// Schutz gegen Clickjacking: VeloVerse läuft nie eingebettet in einer fremden Seite (GitHub Pages kann dafür keinen Header setzen)
+if (window.top !== window.self) { const a = document.createElement('a'); a.href = location.href; a.target = '_top'; a.textContent = 'VeloVerse direkt öffnen'; document.body.replaceChildren(document.createTextNode('VeloVerse kann nicht eingebettet werden. '), a); throw new Error('eingebettet'); }
 
 const PAGES = {
   '': () => import('./pages/start.js'), ride: () => import('./pages/ride.js'), summary: () => import('./pages/summary.js'),

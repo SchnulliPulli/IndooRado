@@ -20,7 +20,9 @@ const OPTS = {
 
 let R = null; // Vorschau-Zustand
 export async function render(el) {
-  const lv = levelOf(progress.xp).lv, eggs = progress.eggs || {};
+  // Admins (mit bestätigtem zweitem Faktor) haben alle Fahrzeuge, Zubehörteile und Stile frei
+  const O = await import('../online/client.js'), admin = O.online.ready && O.loggedIn() && O.isAdmin() && !O.needsMfa();
+  const lv = admin ? 9999 : levelOf(progress.xp).lv, eggs = admin ? new Proxy({}, { get: () => true }) : progress.eggs || {};
   const av = profile.av = { ...AV_DEFAULT, ...(profile.av || {}) };
   const ok = need => typeof need === 'number' ? lv >= need : !!eggs[need.slice(4)];
   const lockTxt = need => typeof need === 'number' ? `ab Level ${need}` : need === 'egg:roof' ? 'Im Himalaya über 5100 m fahren' : 'geheim';
@@ -29,7 +31,7 @@ export async function render(el) {
   const chips = k => `<div class="chips-row" data-opt="${k}">${OPTS[k].map(([v, l, need]) => `<button class="chipbtn ${av[k] === v ? 'on' : ''}" data-v="${v}" ${ok(need) ? '' : 'disabled'} title="${ok(need) ? '' : lockTxt(need)}">${ok(need) ? '' : '🔒 '}${l}</button>`).join('')}</div>`;
   const sw = (k, l) => `<label class="switch"><input type="checkbox" data-b="${k}" ${av[k] ? 'checked' : ''}><span></span> ${l}</label>`;
   el.innerHTML = `
-  <section class="pagehead"><h1>Avatar</h1><span class="row"><button class="btn sm ghost" id="avRandom">🎲 Zufall</button><button class="btn sm ghost" id="avReset">Zurücksetzen</button></span></section>
+  <section class="pagehead"><h1>Avatar${admin ? ' <span class="prtag">🛠️ Admin: alles freigeschaltet</span>' : ''}</h1><span class="row"><button class="btn sm ghost" id="avRandom">🎲 Zufall</button><button class="btn sm ghost" id="avReset">Zurücksetzen</button></span></section>
   <section class="avlayout">
     <div class="card avstage"><canvas id="avC"></canvas><div class="avhint small muted">Ziehen zum Drehen · Mausrad oder zwei Finger zum Zoomen</div>
       <div class="row avviews"><button class="btn xs" data-cam="front">Vorne</button><button class="btn xs" data-cam="side">Seite</button><button class="btn xs" data-cam="back">Hinten</button><button class="btn xs" data-cam="face">Kopf</button><label class="switch sm"><input type="checkbox" id="avSpin" checked><span></span> Treten</label></div></div>

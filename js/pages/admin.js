@@ -79,13 +79,15 @@ export async function render(el) {
       if (typed !== u.display_name.trim()) return toast('Name stimmt nicht überein, nichts gelöscht', 4000);
       del.disabled = true; del.textContent = 'Wird gelöscht …';
       try {
+        // Erst markieren: nur dann darf ein Admin die Dateien dieses Kontos überhaupt sehen und löschen (1 Stunde)
+        { const { error } = await sb.rpc('admin_mark_delete', { p_user: id }); if (error) throw error; }
         await wipeFiles(id);
         const { error } = await sb.rpc('admin_delete_user', { p_user: id });
         if (error) throw error;
         users = users.filter(x => x.id !== id); list(); kpis(); toast(esc(u.display_name) + ' gelöscht');
       } catch (err) {
         del.disabled = false; del.textContent = 'Konto löschen';
-        toast(/admin_delete_user|function/i.test(err.message) ? 'Die Funktion fehlt in der Datenbank: supabase/schema.sql im SQL-Editor erneut ausführen.' : err.message, 7000);
+        toast(/admin_delete_user|admin_mark_delete|function/i.test(err.message) ? 'Die Funktion fehlt in der Datenbank: supabase/schema.sql im SQL-Editor erneut ausführen.' : err.message, 7000);
       }
       return;
     }
