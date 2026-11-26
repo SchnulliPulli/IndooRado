@@ -903,7 +903,7 @@ export class World {
   resetPickups() { this.pickups?.forEach(p => p.visible = true); }
   cycleView() { this.view = (this.view + 1) % 5; this.camInit = false; return this.view; }
   // Kurzer Kameraschwenk (z. B. am Zieltor), danach zurück zur gewählten Ansicht
-  cinematic(sec = 3, view = 2) { this.cine = { until: performance.now() + sec * 1000, view }; this.camInit = false; }
+  cinematic(sec = 3, view = 2) { if (document.documentElement.classList.contains('calm')) return; this.cine = { until: performance.now() + sec * 1000, view }; this.camInit = false; }
 
   // Position auf der Strecke mit Seitenversatz
   place(obj, d, lat) {

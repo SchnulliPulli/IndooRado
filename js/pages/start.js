@@ -5,7 +5,8 @@ import { deviceCards, levelBar, rideRow, statTiles, ICON } from '../components.j
 import { listRoutes, quickStats, THEMES } from '../routes.js';
 import { listWorkouts, stats as wStats, drawWorkout, getWorkout } from '../workouts.js';
 import { db } from '../db.js';
-import { totals, fitness } from '../analysis.js';
+import { totals, fitness, estimateFtp } from '../analysis.js';
+import { saveProfile } from '../state.js';
 import { missionState, streakBonus } from '../game.js';
 import { planProgress } from '../plans.js';
 import { daily, dailyState, dailyStreak } from '../modes.js';
@@ -89,7 +90,11 @@ export async function render(el) {
   <section class="hero">
     <div><h1>Hallo ${esc(profile.name)}</h1><p class="muted">FTP ${profile.ftp} W · ${String(profile.kg).replace('.', ',')} kg · ${(profile.ftp / profile.kg).toFixed(2).replace('.', ',')} W/kg</p></div>
     <div class="hero-lv">${levelBar()}</div>
+    <div class="quick"><button class="btn pri big" data-quick title="Sofort losfahren: zuletzt gewählte Strecke und Einstellungen">⚡ Schnellstart</button><span class="small muted">${esc((routes.find(r => r.id === sel.routeId) || routes[0])?.name || '')}${sel.workoutId ? ' · mit Workout' : ' · freie Fahrt'}</span></div>
   </section>
+  ${(() => { const e = estimateFtp(rides); if (!e || Math.abs(e.ftp - profile.ftp) < Math.max(8, profile.ftp * .04) || profile.ftpHintOff === e.ftp) return ''; const up = e.ftp > profile.ftp;
+    return `<section class="card ftphint ${up ? 'up' : 'down'}" role="status"><div><b>${up ? '📈 Du bist stärker geworden!' : '📉 Deine FTP ist vielleicht zu hoch'}</b><div class="small muted">Geschätzte FTP <b>${e.ftp} W</b> statt ${profile.ftp} W · ${e.from} (${new Date(e.date).toLocaleDateString('de-DE')})${e.sure ? '' : ' · ohne 20-min-Wert etwas ungenauer'}. Die FTP bestimmt deine Trainingszonen und Workout-Watt.</div></div>
+      <div class="row"><button class="btn sm pri" data-ftpset="${e.ftp}">Auf ${e.ftp} W setzen</button><button class="btn sm" data-ftpno="${e.ftp}">Nein danke</button></div></section>`; })()}
   ${todayCard(rides)}
   ${(() => { const c = daily(), st = dailyState(), n = dailyStreak(); return `<section class="card dailycard ${st?.ok ? 'done' : ''}"><div class="row between"><div><div class="small muted">🗓️ Tagesherausforderung · für alle gleich, morgen neu${n ? ' · 🔥 ' + n + ' Tage in Folge' : ''}</div><h2 style="margin:2px 0">${esc(c.text)}</h2><p class="small muted" style="margin:0">${st?.ok ? '✅ Geschafft in ' + fmtDur(st.time) + '. Schneller geht immer!' : st ? 'Versucht: ' + fmtDur(st.time) + '. Noch ein Anlauf?' : '+150 XP beim ersten Erfolg des Tages'}</p></div><button class="btn ${st?.ok ? '' : 'pri'}" data-daily>${st?.ok ? 'Nochmal' : 'Annehmen'}</button></div></section>`; })()}
   <div id="featR">${featuredRoute(routes.find(r => r.id === sel.routeId) || routes[0])}</div>
@@ -139,6 +144,9 @@ export async function render(el) {
   </section>`;
   off.push(deviceCards($('#devs', el)));
   el.onclick = (e => {
+    if (e.target.closest('[data-quick]')) { sessionStorage.setItem('quickStart', '1'); location.hash = '#/ride'; return; }
+    const fs = e.target.closest('[data-ftpset]'); if (fs) { profile.ftp = +fs.dataset.ftpset; saveProfile(); bus.emit('toast', 'FTP auf ' + profile.ftp + ' W gesetzt'); render(el); return; }
+    const fn = e.target.closest('[data-ftpno]'); if (fn) { profile.ftpHintOff = +fn.dataset.ftpno; saveProfile(); render(el); return; }
     if (e.target.closest('[data-race]')) { sessionStorage.setItem('raceNext', '1'); location.hash = '#/ride'; return; }
     if (e.target.closest('[data-daily]')) { sel.routeId = daily().routeId; saveSel(); sessionStorage.setItem('dailyNext', '1'); location.hash = '#/ride'; return; }
     if (e.target.closest('[data-tt]')) { sessionStorage.setItem('ttNext', '1'); location.hash = '#/ride'; return; }

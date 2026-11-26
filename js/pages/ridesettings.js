@@ -4,6 +4,7 @@ import { $, esc, toast } from '../util.js';
 import { profile, sel, saveProfile, saveSel } from '../state.js';
 import { STYLES, ACCENTS, PRESET_NAMES } from '../hudlayout.js';
 import { sound, music, SOUNDS, MUSIC } from '../sound.js';
+import { say, voices, voiceAvailable, VOICE_TOPICS } from '../voice.js';
 import { kv } from '../db.js';
 
 // Bausteine: Schalter, Auswahl, Schieberegler. o = 'p' (Profil) oder 's' (Fahrt-Auswahl)
@@ -12,6 +13,7 @@ const SW = (o, k, label, hint = '', d = true) => `<label class="switch"><input t
 const SEL = (o, k, label, opts, d) => `<label class="f">${label}<select class="inp" data-o="${o}" data-k="${k}">${opts.map(([v, l]) => `<option value="${v}" ${String(get(o, k, d)) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`;
 const RNG = (o, k, label, min, max, step, d, fmt) => `<label class="f">${label}: <b data-v="${k}">${fmt(get(o, k, d))}</b><input type="range" data-o="${o}" data-k="${k}" data-fmt="${k}" min="${min}" max="${max}" step="${step}" value="${get(o, k, d)}"></label>`;
 const FMT = {
+  voiceRate: v => `${Math.round(v * 100)} %`,
   musicBpm: v => `${v} BPM`,
   hudOpacity: v => Math.round(v * 100) + ' %', npcStrength: v => (v > 0 ? '+' : '') + (+v).toFixed(1).replace('.', ',') + ' W/kg', gearDiff: v => v + ' %', simDiff: v => v + ' %',
   volMaster: v => Math.round(v * 100) + ' %', volAmb: v => Math.round(v * 100) + ' %', volFx: v => Math.round(v * 100) + ' %', drinkEvery: v => v + ' min', shotEvery: v => v + ' min',
@@ -47,6 +49,17 @@ export async function render(el, params = []) {
       <div class="row"><button class="btn sm" id="rsMusTest">Musik probehören</button><label class="btn sm">Eigene Musik hinzufügen<input type="file" id="rsMusFiles" accept="audio/*" multiple hidden></label></div>
       <div class="small" id="rsMusList"></div>
     </div>
+  </section>
+  <section class="card form"><h2>Sprachansagen</h2>
+    ${voiceAvailable ? `
+    ${SW('p', 'voiceOn', 'Sprachansagen an', 'Eine Stimme sagt Intervalle, Anstiege, Bestleistungen und Zwischenstände an – praktisch, wenn du nicht auf den Bildschirm schauen willst. Läuft über die Sprachausgabe deines Geräts.', false)}
+    <div class="grid2">
+      ${SEL('p', 'voiceKm', 'Zwischenstand ansagen', [['0', 'nie'], ['1', 'jeden Kilometer'], ['5', 'alle 5 km'], ['10', 'alle 10 km']], '5')}
+      ${RNG('p', 'voiceRate', 'Sprechtempo', .7, 1.5, .05, profile.voiceRate ?? 1.05, FMT.voiceRate)}
+      <label class="f">Stimme<select class="inp" id="rsVoice"><option value="">Standard (Deutsch)</option></select></label>
+    </div>
+    <div class="vtopics">${Object.entries(VOICE_TOPICS).map(([k, l]) => `<label class="chk"><input type="checkbox" data-vt="${k}" ${(profile.voiceWhat?.[k] ?? true) ? 'checked' : ''}> ${l}</label>`).join('')}</div>
+    <div class="row"><button class="btn sm" id="rsVoiceTest">Probe anhören</button></div>` : '<p class="muted">Dieser Browser hat keine Sprachausgabe.</p>'}
   </section>
   <section class="card form"><h2>Einzelne Geräusche</h2>
     <p class="small muted">Jeder Regler wirkt zusätzlich zur Gesamtlautstärke und zum Regler „Umgebung“ bzw. „Effekte“. 0 schaltet das Geräusch ganz ab. ▶ spielt es zur Probe.</p>
@@ -131,7 +144,7 @@ export async function render(el, params = []) {
     const t = e.target, o = t.dataset.o, k = t.dataset.k; if (!o || !k) return;
     if (t.type === 'checkbox') store(o, k, t.checked);
     else if (t.type === 'range') store(o, k, +t.value);
-    else { const n = +t.value; store(o, k, t.value !== '' && !isNaN(n) && !['hudStyle', 'quality', 'time', 'weather', 'mode', 'npcCount', 'music', 'musicFollow', 'musicTrack', 'musicTempo'].includes(k) ? n : (k === 'npcCount' && t.value !== 'auto' ? n : t.value)); }
+    else { const n = +t.value; store(o, k, t.value !== '' && !isNaN(n) && !['hudStyle', 'quality', 'time', 'weather', 'mode', 'npcCount', 'music', 'musicFollow', 'musicTrack', 'musicTempo', 'voiceName'].includes(k) ? n : (k === 'npcCount' && t.value !== 'auto' ? n : t.value)); }
     toast('Gespeichert', 900);
   };
   el.oninput = e => { const t = e.target; if (t.type === 'range' && t.dataset.k) { const k = t.dataset.k; $(`[data-v="${k}"]`, el).textContent = FMT[k](+t.value); store(t.dataset.o, k, +t.value); } };
@@ -143,6 +156,12 @@ export async function render(el, params = []) {
   Q('#rsPreL').onchange = e => { e.stopPropagation(); preset(e.target.value, 'large'); };
   Q('#rsFit').onchange = e => { e.stopPropagation(); profile.hudLayout ||= {}; for (const k of ['small', 'large']) { const L = profile.hudLayout[k] ||= { w: {}, extras: [] }; L.fit = e.target.checked; } saveProfile(); toast('Gespeichert', 900); };
   Q('#rsReset').onclick = () => { profile.hudLayout = {}; saveProfile(); toast('Anordnung zurückgesetzt'); };
+  // Sprachansagen: Stimme wählen, Themen an/aus, Probe
+  const vs = Q('#rsVoice'), fillV = () => { if (!vs.options) return; const cur = profile.voiceName || ''; vs.innerHTML = '<option value="">Standard (Deutsch)</option>' + voices().map(v => `<option value="${esc(v.name)}" ${v.name === cur ? 'selected' : ''}>${esc(v.name)} (${esc(v.lang)})</option>`).join(''); };
+  fillV(); if (voiceAvailable) speechSynthesis.addEventListener?.('voiceschanged', fillV);
+  if (vs.options) vs.onchange = e => { e.stopPropagation(); profile.voiceName = vs.value; saveProfile(); toast('Gespeichert', 900); };
+  for (const c of el.querySelectorAll('[data-vt]')) c.onchange = e => { e.stopPropagation(); profile.voiceWhat = { ...(profile.voiceWhat || {}), [c.dataset.vt]: c.checked }; saveProfile(); toast('Gespeichert', 900); };
+  Q('#rsVoiceTest').onclick = () => { const was = profile.voiceOn; profile.voiceOn = true; say('Nächstes Intervall: 250 W für 3:00. Kilometer 5, Schnitt 210 W und 31,5 km/h', 'test'); profile.voiceOn = was; };
   Q('#rsSnd').onclick = () => { sound.unlock(); sound.fanfare(); };
   // Einzelregler
   const prevInput = el.oninput; el.oninput = e => { prevInput?.(e); const k = e.target.dataset.snd; if (!k) return; (profile.snd ||= {})[k] = +e.target.value; $(`[data-sv="${k}"]`, el).textContent = Math.round(e.target.value * 100) + ' %'; saveProfile(); };

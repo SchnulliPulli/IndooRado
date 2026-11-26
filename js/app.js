@@ -324,6 +324,9 @@ async function init() {
   import('./onboard.js').then(m => m.onboarding()).catch(e => console.error(e));
   import('./eggs.js').then(m => m.initEggs()).catch(e => console.error(e));
   reconnectKnown().catch(() => { });
+  // Barrierefreiheit: Sprunglink zum Inhalt (ohne den Hash-Router zu stören), Tastenkürzel-Übersicht mit ?
+  const sk = document.getElementById('skipLink'); if (sk) sk.onclick = e => { e.preventDefault(); document.getElementById('view')?.focus(); };
+  import('./shortcuts.js').then(m => m.initShortcuts());
   import('./sensors.js').then(m => m.reconnectSensors()).catch(() => { });
   // NAS-Abgleich: neuerer Stand vom NAS wird übernommen, danach Seite neu aufbauen
   // Erst den Online-Login abwarten: angemeldet läuft der Abgleich über das Konto (bindOnline), sonst wie bisher über NAS/Cloud

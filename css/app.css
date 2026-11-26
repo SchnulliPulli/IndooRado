@@ -846,3 +846,35 @@ body:not(.is-admin) .admintab:not(.on){display:none}
 .impmenu[hidden]{display:none}.impitem{display:flex;flex-direction:column;gap:1px;text-align:left;padding:9px 10px;border-radius:9px;border:0;background:none;color:var(--ink);font:inherit;cursor:pointer}.impitem:hover{background:var(--panel2)}.impitem small{color:var(--soft);font-size:12px}
 .impmenu p{margin:4px 10px 6px}
 .histsearch{margin:-4px 0 14px}.histsearch .inp{width:100%}
+/* Sprachansagen: Themen-Auswahl */
+.vtopics { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 14px; margin: 10px 0; }
+.chk { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+.chk input { width: 18px; height: 18px; accent-color: var(--accent, #2f9bff); }
+.hero .quick { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ftphint { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-left: 4px solid #3ecf8e; }
+.ftphint.down { border-left-color: #f5a524; }
+/* ---------- Barrierefreiheit ---------- */
+.skip { position: fixed; left: 8px; top: -60px; z-index: 9999; background: var(--acc, #ff6a3d); color: #fff; padding: 10px 16px; border-radius: 10px; font-weight: 700; text-decoration: none; transition: top .15s; }
+.skip:focus { top: 8px; }
+.view:focus { outline: none; }
+:focus-visible { outline: 3px solid var(--acc, #ff6a3d); outline-offset: 2px; }
+kbd { display: inline-block; min-width: 1.6em; padding: 1px 6px; border-radius: 6px; border: 1px solid color-mix(in srgb, currentColor 35%, transparent); border-bottom-width: 2px; font: 600 .85em/1.4 ui-monospace, monospace; text-align: center; }
+table.keys { width: 100%; border-collapse: collapse; margin: 4px 0 12px; }
+table.keys td { padding: 5px 4px; border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent); }
+table.keys td:first-child { white-space: nowrap; width: 42%; }
+.dlg h3 { margin: 10px 0 4px; font-size: 1rem; }
+html.hc { --soft: #e3e8ee; }
+html.hc[data-theme="light"] { --soft: #1f242a; }
+/* Schriftgröße: ganze Oberfläche skalieren (außer der 3D-Fahrt, dort gibt es eigene Größen) */
+body:not([data-page="ride"]) { zoom: var(--fs, 1); }
+html.hc body { font-weight: 500; }
+html.hc .card, html.hc .btn, html.hc .inp { border: 2px solid currentColor !important; }
+html.hc .muted, html.hc .small.muted { opacity: 1 !important; color: var(--soft) !important; }
+html.hc :focus-visible { outline: 4px solid #ffd400; outline-offset: 3px; }
+html.calm *, html.calm *::before, html.calm *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+/* Interaktive Einführung */
+.tour { position: fixed; inset: 0; z-index: 9000; cursor: pointer; }
+.tour-hole { position: fixed; border-radius: 14px; box-shadow: 0 0 0 9999px rgba(5, 8, 12, .68), 0 0 0 3px var(--acc, #ff6a3d), 0 0 24px 4px var(--acc, #ff6a3d); transition: all .3s ease; pointer-events: none; }
+.tour-tip { position: fixed; background: var(--card, #1b2129); color: var(--text, #fff); border-radius: 14px; padding: 14px 16px; box-shadow: 0 10px 40px rgba(0,0,0,.5); cursor: default; transition: top .3s, left .3s, bottom .3s; }
+.tour-tip p { margin: 6px 0 12px; line-height: 1.45; }
+.tour-tip .tour-t { font-size: 1.1rem; }

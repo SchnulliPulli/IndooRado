@@ -21,6 +21,7 @@ import { loggedIn, online } from '../online/client.js';
 import { mpInit, mpTick, mpOnMsg, mpRideOn, mpHtml } from '../multiplayer.js';
 import { makeBuddy, buddyStep, buddyDraft } from '../buddy.js';
 import { sound, music } from '../sound.js';
+import { say, hush } from '../voice.js';
 import { tipFor, cadRange } from '../coach.js';
 import { saveProfile } from '../state.js';
 import { rng, toggleFullscreen, smooth } from '../util.js';
@@ -81,7 +82,7 @@ export async function render(el) {
     <div class="msgstack" id="msgStack" data-drag="msg">
       <div class="mpch" id="mpCh" hidden></div>
       <div class="climb" id="climbBox" hidden><div class="climb-name" id="clName"></div><div class="climb-row num"><span id="clLeft"></span><span id="clGrade"></span><span id="clTime"></span></div><div class="bar"><i id="clBar"></i></div></div>
-      <div class="banner" id="banner"></div>
+      <div class="banner" id="banner" role="status" aria-live="polite"></div>
       <div class="xpfloat" id="xpFloat"></div>
     </div>
     <div class="xlayer"></div>
@@ -109,6 +110,8 @@ export async function render(el) {
       <button class="tbtn" id="tLayout" title="Anzeige anordnen">${ICON.layout}<span>Anordnen</span></button>
       <button class="tbtn" id="tFull" title="Vollbild">${ICON.full}<span>Vollbild</span></button>
       <button class="tbtn" id="tBuddy" title="Trainingsbuddy, der dich pusht"><b class="dots">🤝</b><span id="tBuddyL">Buddy</span></button>
+      <button class="tbtn" id="tTour" title="Kurze Einführung in die Anzeigen"><b class="dots">🎓</b><span>Einführung</span></button>
+      <button class="tbtn" id="tKeys" title="Tastenkürzel (Taste ?)"><b class="dots">⌨️</b><span>Tastenkürzel</span></button>
       <button class="tbtn" id="tMusic" title="Nächstes Musikstück (Taste T)"><b class="dots">🎵</b><span>Nächstes Stück</span></button>
       <button class="tbtn" id="tDemo" title="Demo-Geräte (simulierte Rolle, Puls und Kadenz)"><b class="dots">🧪</b><span id="tDemoL">Demo an</span></button>
     </div>
@@ -195,6 +198,7 @@ async function start(el) {
   if (S.npcOn) spawnField();
   await plusInit(S); trafficSetup(S, flash); bellsSetup(S);
   if (sessionStorage.getItem('dailyNext')) { sessionStorage.removeItem('dailyNext'); S.daily = daily(); $('#startCard', el).innerHTML = `<b>🗓️ Tagesherausforderung</b><span>${esc(S.daily.text)}. Tritt los, die Uhr startet mit dem ersten Tritt.</span>`; }
+  if (sessionStorage.getItem('quickStart')) { sessionStorage.removeItem('quickStart'); S.quick = true; setTimeout(() => { if (S?.alive && S.state === 'ready') begin(); }, 800); }
   if (sessionStorage.getItem('ttNext')) { sessionStorage.removeItem('ttNext'); ttSetup(S); $('#startCard', el).innerHTML = `<b>⏱️ Zeitfahren: ${fmtKm(S.tt.dist)} km</b><span>Allein gegen die Uhr, ohne Windschatten.${S.tt.best ? ' Bestzeit ' + fmtT(S.tt.best.time) + '.' : ''} Tritt los!</span>`; }
   // Rennen gegen Bots (von der Startseite oder Streckenseite gewählt)
   if (sessionStorage.getItem('raceNext')) {
@@ -279,7 +283,7 @@ function syncRemote() {
   const pos = p => { const g = gapOf(R, p.d || 0, S.dist), a = Math.abs(g); return a < 30 ? 'direkt bei dir' : (a < 1000 ? Math.round(a) + ' m' : (a / 1000).toFixed(1).replace('.', ',') + ' km') + (g > 0 ? ' vor dir' : ' hinter dir'); };
   // Kurz weg und wieder da (Verbindung, gedrosselter Hintergrund-Tab): leise melden statt erneut „beigetreten“ mit Ton
   const gone = S.peerGone ||= new Map();
-  for (const [id, p] of peers) if (!was.has(id)) { if (performance.now() - (gone.get(id) || -1e9) < 120e3) flash(`🌐 ${p.name} ist wieder da`, 1500); else { flash(`🌐 ${p.name} ist deiner Fahrt beigetreten · ${pos(p)}`, 3500); sound.pass(); } }
+  for (const [id, p] of peers) if (!was.has(id)) { if (performance.now() - (gone.get(id) || -1e9) < 120e3) flash(`🌐 ${p.name} ist wieder da`, 1500); else { flash(`🌐 ${p.name} ist deiner Fahrt beigetreten · ${pos(p)}`, 3500); sound.pass(); say(p.name + ' fährt jetzt mit', 'mp'); } }
   for (const [id, name] of was) if (!now.has(id)) { gone.set(id, performance.now()); flash(`👋 ${name} hat die Strecke verlassen`, 2500); }
   S.peerNames = now;
 }
@@ -309,6 +313,9 @@ function bindUi() {
   $('#tRideOn', el).onclick = giveRideOn;
   const nextTrack = () => { if (!music.playing) { flash('🎵 Musik ist aus (Fahrt-Einstellungen › Ton)', 2200); return; } music.skip(); setTimeout(() => flash('🎵 ' + (music.trackName || 'Nächstes Stück'), 2000), 60); };
   $('#tMusic', el).onclick = nextTrack;
+  $('#tTour', el).onclick = () => setTimeout(() => import('../tour.js').then(m => m.startTour(el)), 200);
+  if (!profile.tourDone && !profile.tourAuto) { profile.tourAuto = 1; setTimeout(() => S?.alive && !S.quick && import('../tour.js').then(m => m.startTour(el)), 2500); }
+  $('#tKeys', el).onclick = () => import('../shortcuts.js').then(m => m.showShortcuts());
   // Mehr-Menü: klappt über der Knopfleiste auf, schließt nach Auswahl oder Tippen daneben
   const pop = $('#tbPop', el), more = $('#tMore', el), popSet = o => { pop.hidden = !o; more.setAttribute('aria-expanded', String(o)); more.classList.toggle('on', o); };
   more.onclick = e => { e.stopPropagation(); popSet(pop.hidden); };
@@ -429,7 +436,7 @@ function toggleNpcs() {
   updNpcBtn(); flash(S.npcOn ? 'Mitfahrer an' : 'Mitfahrer aus');
 }
 // Ride On: Daumen hoch zwischen Fahrern (gibt etwas XP)
-function gotRideOn(name) { S.rideOnsGot++; flash('👍 Ride On von ' + name, 1800); xpPop('+2 XP Ride On'); sound.pass(); }
+function gotRideOn(name) { S.rideOnsGot++; flash('👍 Ride On von ' + name, 1800); say('Ride On von ' + name, 'mp'); xpPop('+2 XP Ride On'); sound.pass(); }
 function giveRideOn() {
   if (!S.npcOn || !S.field.length) { flash('Kein Fahrer in der Nähe', 1000); return; }
   // Echte Mitspieler bis 300 m haben Vorrang: der Ride On kommt bei ihnen wirklich an
@@ -457,7 +464,7 @@ const TIMES = ['morning', 'day', 'evening', 'night'];
 // Aussehen des Trainingsbuddys
 const BUDDY_LOOK = { jersey: '#7b4fd6', bikeColor: '#f2f4f6', helmet: '#ffffff', skin: '#e3b18c', av: { pattern: 'stripes', jersey2: '#ffd23f', helmetStyle: 'aero', glasses: 'sport', bike: 'road' } };
 // Hilfen für das Multiplayer-Modul
-const MPH = { flash: (t, ms) => flash(t, ms), xpPop: t => xpPop(t), sound: { pass: () => sound.pass(), fanfare: () => sound.fanfare() } };
+const MPH = { flash: (t, ms) => flash(t, ms), say: (t, k) => say(t, k), xpPop: t => xpPop(t), sound: { pass: () => sound.pass(), fanfare: () => sound.fanfare() } };
 // Live-Status auf der Startkarte beim Mitfahren (zeigt, ob Verbindung steht und Daten fließen)
 function liveStatus() {
   if (performance.now() - (S.lsT || 0) < 1000) return; S.lsT = performance.now();
@@ -752,8 +759,8 @@ function step(dt, first) {
   if (profile.drinkTips !== false && S.t > S.nextDrink) { S.nextDrink += (profile.drinkEvery || 15) * 60; flash('💧 Kurz trinken', 2000); }
   if (S.wo) S.wT += dt;
   if (S.dist >= R.total) {
-    if (R.loop) { S.dist -= R.total; S.lap++; flash('Runde ' + (S.lap + 1) + ' · letzte Runde ' + fmtT(S.t - S.lapT0), 2500); S.lapT0 = S.t; lapReset(S); S.climbs.forEach(c => c.state = 'pending'); S.sprints.forEach(c => c.state = 'pending'); }
-    else { S.dist = R.total; if (!S.finished) { S.finished = true; S.state = 'paused'; flash('Ziel erreicht!', 3000); sound.fanfare(); shot('Ziel'); setTimeout(() => endRide(true), 2500); } }
+    if (R.loop) { S.dist -= R.total; S.lap++; flash('Runde ' + (S.lap + 1) + ' · letzte Runde ' + fmtT(S.t - S.lapT0), 2500); say(`Runde ${S.lap + 1}. Letzte Runde in ${fmtT(S.t - S.lapT0)}`, 'lap'); S.lapT0 = S.t; lapReset(S); S.climbs.forEach(c => c.state = 'pending'); S.sprints.forEach(c => c.state = 'pending'); }
+    else { S.dist = R.total; if (!S.finished) { S.finished = true; S.state = 'paused'; flash('Ziel erreicht!', 3000); say(`Ziel erreicht! ${fmtKm(S.odo)} km in ${fmtT(S.t)}`, 'lap', { urgent: true }); sound.fanfare(); shot('Ziel'); setTimeout(() => endRide(true), 2500); } }
   }
   const e = R.eleAt(S.dist); if (S.lastE != null && e > S.lastE) S.asc += e - S.lastE; S.lastE = e;
   segTick(S.climbs, S.climbLog, prev, 'climb');
@@ -764,7 +771,8 @@ function step(dt, first) {
     if (S.lastSeg >= 0 && S.gateFor === S.lastSeg) { S.gates++; cine(2.6, 5); xpPop('+5 XP Intervall'); S.gateHide = S.t + 3; sound.gate(); }
     else if (S.lastSeg >= 0) sound.beep(true);
     S.lastSeg = wi.i; S.lastBeep = -1; const g = wi.g;
-    flash(g.text ? g.text : g.a == null ? 'Frei fahren' : `${Math.round((g.a + g.b) / 2 * profile.ftp * (1 + S.wOff / 100))} W für ${fmtT(g.dur)}`, 2200);
+    const wmsg = g.text ? g.text : g.a == null ? 'Frei fahren' : `${Math.round((g.a + g.b) / 2 * profile.ftp * (1 + S.wOff / 100))} W für ${fmtT(g.dur)}`;
+    flash(wmsg, 2200); say((wi.next ? '' : 'Letztes Intervall: ') + wmsg + (wi.next && S.wT > 5 && !g.text ? `. Danach ${wi.next.a == null ? 'frei fahren' : Math.round((wi.next.a + wi.next.b) / 2 * profile.ftp * (1 + S.wOff / 100)) + ' W'}` : ''), 'workout', { urgent: true });
   }
   // Countdown 3-2-1 vor dem Intervallwechsel
   if (wi && !wi.done && wi.g.dur >= 20 && wi.next) { const s = Math.ceil(wi.left); if (s <= 3 && s >= 1 && s !== S.lastBeep) { S.lastBeep = s; if (profile.countdown !== false) sound.beep(false); } }
@@ -775,6 +783,11 @@ function step(dt, first) {
   while (S.acc >= 1) {
     S.acc -= 1;
     const totD = S.odo;
+    const vk = +profile.voiceKm || 0;
+    if (vk && profile.voiceOn && Math.floor(totD / (vk * 1000)) > (S.vkLast ?? 0)) {
+      S.vkLast = Math.floor(totD / (vk * 1000)); const ps = S.samples.filter(x => x.p != null), ap = ps.length ? ps.reduce((a, x) => a + x.p, 0) / ps.length : 0;
+      say(`Kilometer ${S.vkLast * vk}. Zeit ${fmtT(S.t)}, Schnitt ${Math.round(ap)} W und ${(totD / Math.max(1, S.t) * 3.6).toFixed(1).replace('.', ',')} km/h${live.heart ? ', Puls ' + live.heart : ''}`, 'km');
+    }
     S.samples.push({ ts: Math.round(S.wall), p: Math.round(pw), hr: live.heart, cad: cad != null ? Math.round(cad) : null, v: +S.v.toFixed(2), d: +totD.toFixed(1), e: +e.toFixed(1), la: +R.latAt(S.dist).toFixed(6), lo: +R.lonAt(S.dist).toFixed(6), g: S.mode === 'gear' ? S.gear : null, tg: target != null ? Math.round(target) : null, wt: S.wo ? Math.round(S.wT) : null, gr: +grade.toFixed(1), rd: Math.round(S.dist) });
     const N = S.np; N.buf.push(pw); N.bs += pw; if (N.buf.length > 30) N.bs -= N.buf.shift(); if (N.buf.length === 30) { N.s4 += (N.bs / 30) ** 4; N.n++; }
     if (profile.autoShots) {
@@ -800,7 +813,7 @@ function gateTick(wi, dt) {
 }
 function segTick(list, log, prev, kind) {
   for (const c of list) {
-    if (c.state === 'pending' && prev < c.from + 1 && S.dist >= c.from) { c.state = 'active'; c.t0 = S.t; flash((kind === 'climb' ? 'Anstieg: ' : '') + c.name, 2200); if (kind === 'sprint' && profile.sprintCam !== false) S.world.cinematic(3, 5); }
+    if (c.state === 'pending' && prev < c.from + 1 && S.dist >= c.from) { c.state = 'active'; c.t0 = S.t; flash((kind === 'climb' ? 'Anstieg: ' : '') + c.name, 2200); say(kind === 'climb' ? `Anstieg ${c.name}: ${(c.len / 1000).toFixed(1).replace('.', ',')} km mit ${Math.round(c.avg * 10) / 10} %` : c.name.replace(/^Sprint/, 'Sprint') + ', los!', 'climb'); if (kind === 'sprint' && profile.sprintCam !== false) S.world.cinematic(3, 5); }
     if (c.state === 'active' && S.dist >= c.to) {
       c.state = 'done'; const time = S.t - c.t0, key = S.route.id + ':' + c.id, bestMap = kind === 'climb' ? progress.climbBest : (progress.sprintBest || {}), best = bestMap[key];
       const pr = !best || time < best.time;
@@ -810,6 +823,7 @@ function segTick(list, log, prev, kind) {
       const place = S.npcOn ? ` · Platz ${ahead + 1}` : '';
       flash(`${kind === 'climb' ? 'Gipfel' : 'Sprint'} ${c.name.replace(/^Sprint /, '')}: ${fmtT(time)}${place}${pr ? ' · Bestzeit!' : best ? ' · Bestzeit ' + fmtT(best.time) : ''}`, 3500);
       xpPop(kind === 'climb' ? '+25 XP Gipfel' : '+20 XP Sprint'); sound.fanfare();
+      say(`${kind === 'climb' ? 'Gipfel erreicht' : 'Sprint geschafft'} in ${fmtT(time)}${place ? ', Platz ' + (ahead + 1) : ''}${pr ? '. Neue Bestzeit!' : ''}`, 'climb');
       setTimeout(() => shot((kind === 'climb' ? 'Gipfel ' : '') + c.name), 400);
     }
   }
@@ -1053,7 +1067,7 @@ document.addEventListener('visibilitychange', () => { if (S?.alive && document.v
 
 export function leave() {
   if (!S) return;
-  S.alive = false; setTimeout(() => bus.emit('rideEnded'), 1500); S.live?.leave(); window.__presence?.setStatus({ where: 'menu', route: null, routeName: null }); sound.silence(); music.stop(); putLive({ state: 'ended', t: Math.round(S.t), odo: Math.round(S.odo), route: S.route.name }); clearInterval(S.timer); cancelAnimationFrame(S.raf); S.ro?.disconnect();
+  S.alive = false; setTimeout(() => bus.emit('rideEnded'), 1500); S.live?.leave(); window.__presence?.setStatus({ where: 'menu', route: null, routeName: null }); sound.silence(); music.stop(); hush(); putLive({ state: 'ended', t: Math.round(S.t), odo: Math.round(S.odo), route: S.route.name }); clearInterval(S.timer); cancelAnimationFrame(S.raf); S.ro?.disconnect();
   document.removeEventListener('keydown', S.key); S.offs.forEach(f => f());
   try { S.world.dispose(); } catch (e) { }
   // Speicher freigeben: Streckendaten, Caches der Karte, Testverweis
@@ -1071,7 +1085,7 @@ export const isRiding = () => !!S && !S.parked && S.state !== 'ready' && S.sampl
 export function park() {
   if (!S || S.parked) return;
   S.parked = true; S.state = 'paused'; S.v = 0;
-  cancelAnimationFrame(S.raf); sound.silence(); music.stop(); closeMap();
+  cancelAnimationFrame(S.raf); sound.silence(); music.stop(); hush(); closeMap();
   S.wrap = $('#rw', S.el); document.getElementById('parkHold')?.remove();
   const hold = document.createElement('div'); hold.id = 'parkHold'; hold.hidden = true; hold.appendChild(S.wrap); document.body.appendChild(hold);
   if (status.trainer === 'on' || demo.on) setPower(Math.min(100, profile.ftp * .4));

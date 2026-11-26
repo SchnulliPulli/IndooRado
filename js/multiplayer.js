@@ -65,7 +65,7 @@ function end(S, H, won, msg) {
 // Nachrichten anderer Mitspieler
 export function mpOnMsg(S, H, m) {
   const M = S.mp; if (!M) return;
-  if (m.t === 'rideon') { M.roGot++; S.rideOnsGot = (S.rideOnsGot || 0) + 1; H.flash('👍 Echter Ride On von ' + m.name + '!', 2600); award(S, H, XP.rideOnGot, 'Ride On'); H.sound?.pass?.(); return; }
+  if (m.t === 'rideon') { M.roGot++; S.rideOnsGot = (S.rideOnsGot || 0) + 1; H.flash('👍 Echter Ride On von ' + m.name + '!', 2600); H.say?.('Ride On von ' + m.name, 'mp'); award(S, H, XP.rideOnGot, 'Ride On'); H.sound?.pass?.(); return; }
   // Herausforderung: die Gegenseite schickt direkt meine Rolle (jagen, verteidigen oder Sprint)
   if (m.t === 'ch' && !M.ch && m.kind && S.field.some(n => n.remote && n.id === m.from)) start(S, H, m.kind, m.from, m.name, m.id);
 }

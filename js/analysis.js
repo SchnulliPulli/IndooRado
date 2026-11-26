@@ -165,3 +165,15 @@ export function rankOf(value, rides, dur) {
   if (!value) return null;
   return 1 + rides.filter(r => (r.sum.curve?.[dur] || 0) > value).length;
 }
+
+// FTP-Schätzung aus den Bestwerten der letzten 90 Tage (ohne Test): 95 % der besten 20 min, 90 % der besten 10 min,
+// 75 % der besten 5 min – der höchste Wert zählt. Demo-Fahrten zählen nicht. Gibt null zurück, wenn zu wenig Daten da sind.
+export function estimateFtp(rides, days = 90) {
+  const b = bestCurve(rides.filter(r => !r.demo), days), c = [];
+  if (b[1200]) c.push({ w: b[1200].w * .95, from: '95 % deiner besten 20 min', date: b[1200].date });
+  if (b[600]) c.push({ w: b[600].w * .9, from: '90 % deiner besten 10 min', date: b[600].date });
+  if (b[300]) c.push({ w: b[300].w * .75, from: '75 % deiner besten 5 min', date: b[300].date });
+  if (!c.length) return null;
+  const best = c.sort((x, y) => y.w - x.w)[0];
+  return { ftp: Math.round(best.w / 5) * 5, from: best.from, date: best.date, sure: !!b[1200] };
+}

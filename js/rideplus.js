@@ -1,3 +1,4 @@
+import { say } from './voice.js';
 // Fahrt-Extras: Watt-Ring, Zonen-Leuchtrand, Bestwert-Einblendungen, Anstiegsprofil, Power-ups, Bot-Rennen, Lenken
 import { $, clamp, zoneColor, fmtT, esc, dialog } from './util.js';
 import { profile, progress } from './state.js';
@@ -137,7 +138,7 @@ export function plusStep(S, dt, prev, first, flash) {
 function popBest(S, title, val) {
   const p = $('#prPop', S.el); if (!p) return;
   p.innerHTML = `<span>${title}</span><b class="num">${val}</b>`; p.classList.remove('show'); void p.offsetWidth; p.classList.add('show');
-  clearTimeout(S.popT); S.popT = setTimeout(() => p.classList.remove('show'), 3200); sound.levelUp();
+  clearTimeout(S.popT); S.popT = setTimeout(() => p.classList.remove('show'), 3200); sound.levelUp(); say(title + ': ' + val, 'record');
 }
 export function lapReset(S) { if (S.pups) { S.pups.forEach(p => p.got = false); S.world.resetPickups?.(); } }
 

@@ -189,7 +189,10 @@ export function applyAppTheme() {
   const t = profile.appTheme || 'dark', acc = profile.appAccent || '#ff6a3d';
   const eff = t === 'system' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : t;
   document.documentElement.dataset.theme = eff; document.documentElement.style.setProperty('--acc', acc); document.documentElement.style.setProperty('--acc2', `color-mix(in srgb, ${acc} 78%, ${eff === 'light' ? '#000' : '#fff'})`);
-  try { localStorage.setItem('vvTheme', JSON.stringify({ theme: eff, acc })); } catch (e) { }
+  // Barrierefreiheit: Schriftgröße, hoher Kontrast, weniger Bewegung
+  const de = document.documentElement; de.style.setProperty('--fs', profile.fontScale || 1);
+  de.classList.toggle('hc', !!profile.highContrast); de.classList.toggle('calm', profile.reduceMotion === true || (profile.reduceMotion !== false && matchMedia('(prefers-reduced-motion: reduce)').matches));
+  try { localStorage.setItem('vvTheme', JSON.stringify({ theme: eff, acc, fs: profile.fontScale || 1, hc: !!profile.highContrast })); } catch (e) { }
 }
 // sec: 'profile' (Fahrer, Trainer, Avatar), 'app' (Darstellung, Grafik, Daten), 'connect' (Strava, Cloud)
 export async function render(el, params = []) {
@@ -225,6 +228,11 @@ export async function render(el, params = []) {
       <p class="small muted">Gilt für Menüs und Seiten. Die Anzeige während der Fahrt hat einen eigenen Stil unter <a href="#/ridesettings">Fahransicht</a>.</p>
       <label class="f">Ansicht der Startseite<select class="inp" id="phoneView">${[['auto', 'Automatisch: auf Handys kompakt'], ['always', 'Immer kompakte Handy-Ansicht'], ['never', 'Immer volle Ansicht']].map(([v, l]) => `<option value="${v}" ${(profile.phoneView || 'auto') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <p class="small muted">Die kompakte Ansicht zeigt nächste Fahrt, Woche, Missionen und eine laufende Fahrt, gut lesbar auf dem Handy. Dieses Gerät wird gerade als ${(await import('../app.js')).isPhone() ? '<b>Handy</b>' : '<b>Tablet oder Computer</b>'} erkannt.</p>
+      <h2 style="margin-top:18px">Barrierefreiheit</h2>
+      <label class="f">Schriftgröße<select class="inp" id="fontScale">${[['0.9', 'Klein (90 %)'], ['1', 'Normal'], ['1.15', 'Groß (115 %)'], ['1.3', 'Sehr groß (130 %)']].map(([v, l]) => `<option value="${v}" ${+v === +(profile.fontScale || 1) ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label class="switch"><input type="checkbox" id="highContrast" ${profile.highContrast ? 'checked' : ''}><span></span> <div class="swt">Hoher Kontrast<small class="muted">Kräftigere Schrift, deutlichere Ränder und Fokusrahmen</small></div></label>
+      <label class="f">Bewegung und Animationen<select class="inp" id="reduceMotion">${[['auto', 'Wie im Gerät eingestellt'], ['on', 'Reduzieren (keine Wackler, weniger Kamerafahrten)'], ['off', 'Alle Animationen']].map(([v, l]) => `<option value="${v}" ${(profile.reduceMotion === true ? 'on' : profile.reduceMotion === false ? 'off' : 'auto') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <p class="small muted">Alle Knöpfe sind per Tastatur erreichbar (Tab, Enter). Mit <kbd>?</kbd> siehst du alle Tastenkürzel. Sprachansagen für die Fahrt findest du unter <a href="#/sound">Ton</a>.</p>
       <h2 style="margin-top:18px">Grafik</h2>
       <label class="f">Qualität der 3D-Welt<select class="inp" id="quality">${[['auto', 'Automatisch (' + ({ high: 'hoch', medium: 'mittel' }[autoQuality()]) + ')'], ['high', 'Hoch: Schatten, weite Sicht'], ['medium', 'Mittel: für Tablets'], ['low', 'Niedrig: für ältere Geräte']].map(([v, l]) => `<option value="${v}" ${profile.quality === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <p class="small muted">Ruckelt die Fahrt, senkt die App die Auflösung automatisch. Auf schwachen Geräten hilft zusätzlich „Mittel“ oder „Niedrig“.</p>
@@ -265,6 +273,9 @@ export async function render(el, params = []) {
   on('#quality', 'onchange', e => { profile.quality = e.target.value; saveProfile(); toast('Gilt ab der nächsten Fahrt', 1500); });
   on('#phoneView', 'onchange', e => { profile.phoneView = e.target.value; saveProfile(); toast('Gespeichert', 900); });
   on('#appTheme', 'onchange', e => { profile.appTheme = e.target.value; saveProfile(); applyAppTheme(); });
+  on('#fontScale', 'onchange', e => { profile.fontScale = +e.target.value; saveProfile(); applyAppTheme(); });
+  on('#highContrast', 'onchange', e => { profile.highContrast = e.target.checked; saveProfile(); applyAppTheme(); });
+  on('#reduceMotion', 'onchange', e => { profile.reduceMotion = { on: true, off: false }[e.target.value]; if (e.target.value === 'auto') delete profile.reduceMotion; saveProfile(); applyAppTheme(); });
   on('#appAcc', 'onclick', e => { const b = e.target.closest('[data-c]'); if (!b) return; profile.appAccent = b.dataset.c; saveProfile(); applyAppTheme(); for (const x of el.querySelectorAll('#appAcc [data-c]')) x.setAttribute('aria-pressed', String(x === b)); });
   el.querySelectorAll('.swatches[data-k]').forEach(sw => {
     sw.onclick = e => { const b = e.target.closest('[data-c]'); if (!b) return; profile[sw.dataset.k] = b.dataset.c; saveProfile(); for (const x of sw.querySelectorAll('[data-c]')) x.setAttribute('aria-pressed', String(x === b)); };

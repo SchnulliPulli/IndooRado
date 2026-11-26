@@ -40,7 +40,19 @@ export function dialog({ title, html, buttons }) {
     wrap.className = 'modal on';
     wrap.innerHTML = `<div class="card dlg" role="dialog" aria-modal="true"><h2>${esc(title)}</h2><div class="dlg-body">${html || ''}</div><div class="row end">${buttons.map((b, i) => `<button class="btn ${b.cls || ''}" data-i="${i}">${esc(b.label)}</button>`).join('')}</div></div>`;
     document.body.appendChild(wrap);
-    const close = v => { wrap.remove(); res(v); };
+    const prevFocus = document.activeElement, dlg = wrap.querySelector('.dlg'), h = dlg.querySelector('h2');
+    h.id = 'dlg' + Math.random().toString(36).slice(2, 8); dlg.setAttribute('aria-labelledby', h.id);
+    const close = v => { wrap.remove(); document.removeEventListener('keydown', onKey, true); try { prevFocus?.focus?.(); } catch (e) { } res(v); };
+    // Barrierefrei: Esc schließt, Tab bleibt im Dialog
+    const onKey = e => {
+      if (!wrap.isConnected || [...document.querySelectorAll('.modal')].at(-1) !== wrap) return;
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(null); return; }
+      if (e.key !== 'Tab') return;
+      const f = [...dlg.querySelectorAll('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])')].filter(x => !x.disabled && x.offsetParent !== null);
+      if (!f.length) return; const i = f.indexOf(document.activeElement);
+      if (e.shiftKey && i <= 0) { e.preventDefault(); f.at(-1).focus(); } else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
+    };
+    document.addEventListener('keydown', onKey, true);
     wrap.addEventListener('click', e => {
       const b = e.target.closest('[data-i]');
       if (b) close(buttons[+b.dataset.i].value);
