@@ -918,3 +918,14 @@ html.calm *, html.calm *::before, html.calm *::after { animation-duration: .01ms
 .kitli .ki { font-size: 18px; } .kitops { display: flex; gap: 2px; }
 .kitedit { margin-top: 12px; padding: 12px; border-radius: 12px; background: color-mix(in srgb, currentColor 5%, transparent); }
 @media (max-width: 860px) { .kit { grid-template-columns: 1fr; } .kitpal { position: static; max-height: none; } #kitMap { height: 260px; } }
+/* Events und Teams */
+.evcard .evhead { display: flex; gap: 14px; } .evcard .evic { font-size: 32px; } .evcard h2 { margin: 2px 0 4px; }
+.evcard.live { outline: 2px solid #3ecf8e; box-shadow: 0 0 24px rgba(62, 207, 142, .25); }
+.cllist { list-style: none; padding: 0; margin: 8px 0; display: flex; flex-direction: column; gap: 6px; }
+.cllist li { display: grid; grid-template-columns: 28px auto 1fr auto auto auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 12px; background: color-mix(in srgb, currentColor 4%, transparent); }
+.clmine .cllist li { grid-template-columns: 28px 1fr auto auto; }
+.cllist li.me { background: color-mix(in srgb, var(--acc) 16%, transparent); }
+.clrank { font-weight: 800; opacity: .6; text-align: right; } .clname { min-width: 0; }
+.cltag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-weight: 800; font-size: 12px; color: #fff; text-shadow: 0 1px 2px #0006; letter-spacing: .5px; }
+@media (max-width: 640px) { .cllist li { grid-template-columns: 24px auto 1fr auto; } .cllist li > .num.small { display: none; } .cllist li > .btn, .cllist li > .prtag { grid-column: 2 / -1; justify-self: start; } }
+.adchart { width: 100%; height: 160px; display: block; margin: 8px 0; }

@@ -18,6 +18,7 @@ const PAGES = {
   avatar: () => import('./pages/avatar.js'),
   legal: () => import('./pages/legal.js'),
   live: () => import('./pages/live.js'),
+  events: () => import('./pages/community.js').then(m => ({ ...m, render: el => m.render(el, ['events']) })), clubs: () => import('./pages/community.js').then(m => ({ ...m, render: el => m.render(el, ['clubs']) })),
   lobby: () => import('./pages/online.js'), players: () => import('./pages/online.js').then(m => ({ ...m, render: el => m.render(el, ['players']) })), account: () => import('./pages/account.js'), admin: () => import('./pages/admin.js'),
   sound: () => import('./pages/ridesettings.js').then(m => ({ ...m, render: el => m.render(el, ['sound']) })),
   appsettings: () => import('./pages/profile.js').then(m => ({ ...m, render: el => m.render(el, ['app']) })),
@@ -30,7 +31,7 @@ const NAV = [
   { k: 'routes', l: 'Strecken', i: 'route', also: ['builder'] },
   { k: 'history', l: 'Aktivitäten', s: 'Fahrten', i: 'history', tabs: [['history', 'Verlauf'], ['progress', 'Fortschritt'], ['season', 'Saison']], also: ['summary'] },
   { k: 'devices', l: 'Geräte', i: 'devices' },
-  { k: 'lobby', l: 'Online', i: 'online', tabs: [['lobby', 'Lobby'], ['players', 'Wer ist online'], ['account', 'Konto'], ['admin', 'Admin']] },
+  { k: 'lobby', l: 'Online', i: 'online', tabs: [['lobby', 'Lobby'], ['players', 'Wer ist online'], ['events', 'Events'], ['clubs', 'Teams'], ['account', 'Konto'], ['admin', 'Admin']] },
   { k: 'profile', l: 'Einstellungen', s: 'Optionen', i: 'profile', tabs: [['profile', 'Profil'], ['avatar', 'Avatar'], ['ridesettings', 'Fahransicht'], ['sound', 'Ton'], ['appsettings', 'App'], ['connect', 'Verbindungen'], ['help', 'Anleitung'], ['legal', 'Rechtliches']] },
 ];
 const groupOf = k => NAV.find(g => g.k === k || g.tabs?.some(t => t[0] === k) || g.also?.includes(k)) || null;
@@ -181,7 +182,7 @@ async function newsBar(el) {
   const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const seen = () => { try { return JSON.parse(localStorage.getItem('vvAnnSeen') || '[]'); } catch (e) { return []; } };
   let anns = []; try { anns = JSON.parse(localStorage.getItem('vvAnnCache') || '[]'); } catch (e) { }
-  let PR = null, live = false;
+  let PR = null, live = false, evs = [];
   const box = document.createElement('section'); box.className = 'newsbar'; box.hidden = true;
   box.innerHTML = '<div class="nbtrack"></div><button class="nbarr l" data-step="-1" aria-label="Zurück">‹</button><button class="nbarr r" data-step="1" aria-label="Weiter">›</button><div class="nbdots"></div>';
   el.querySelector('.pagehead, .comphead')?.after(box) ?? el.prepend(box);
@@ -192,6 +193,9 @@ async function newsBar(el) {
   const items = () => {
     const S = seen(), out = [];
     for (const a of anns) if (!S.includes(a.id)) { const [ic, k] = LV[a.level] || LV.info; out.push({ key: 'a' + a.id, ...slide('nb-ann nb-lv-' + (LV[a.level] ? a.level : 'info'), ic, k, esc(a.title), esc(a.body), `<button class="nbx" data-hide="${a.id}" aria-label="Ausblenden">✕</button>`) }); }
+    // Geplante Events der nächsten 24 Stunden (angemeldete zuerst)
+    for (const e of evs) { const ms = new Date(e.starts_at) - Date.now(); if (ms > 864e5 || ms < -e.duration_min * 60e3) continue; const now = ms < 10 * 60e3;
+      out.push({ key: 'e' + e.id, ...slide('nb-event', '📅', `Event${e.me ? ' · du bist angemeldet' : ''} · ${now ? 'läuft jetzt' : min(ms).replace('startet ', '')}`, esc(e.title), `👥 ${e.riders} angemeldet`, `<a class="btn sm ${now ? 'pri' : ''}" href="#/events">${now ? 'Beitreten' : 'Ansehen'}</a>`) }); }
     if (PR && live) {
       for (const l of PR.lobbies()) out.push({ key: 'l' + l.id, ...slide('nb-lobby', '👥', `${l.race ? 'Rennen' : 'Gruppenfahrt'} · ${min(l.startAt - Date.now())}`, esc(l.title) + (l.mine ? ' <em>(deine)</em>' : ''), `${esc(l.routeName)} · von ${esc(l.hostName)} · ${l.members.length} dabei`, '<a class="btn sm pri" href="#/lobby">Zur Lobby</a>') });
       for (const [k, p] of PR.P.peers) if (p.where === 'ride' && p.route) out.push({ key: 'r' + k, ...slide('nb-ride', avatarSvg(p.look || {}, 40), 'Fährt gerade', esc(p.name), esc(p.routeName || ''), `<button class="btn sm" data-sid="${esc(k)}" data-route="${esc(p.route)}" data-name="${esc(p.name)}">Mitfahren</button>`) });
@@ -231,7 +235,8 @@ async function newsBar(el) {
   if (!O.online.ready) await new Promise(r => { const o = bus.on('online', () => { o(); r(); }); setTimeout(() => { o(); r(); }, 15000); });
   if (!document.body.contains(box)) return;
   if (!O.loggedIn() || O.needsMfa()) { anns = []; draw(); return; }
-  if (O.access().ok) { PR = await import('./online/presence.js'); live = true; off = bus.on('presence', draw); PR.joinPresence().catch(() => { }); draw(); }
+  if (O.access().ok) { const loadEv = () => O.client().then(sb => sb.rpc('event_list')).then(({ data }) => { evs = (data || []).sort((a, b) => b.me - a.me); draw(); }).catch(() => { }); loadEv(); const et = setInterval(() => document.body.contains(box) ? loadEv() : clearInterval(et), 120e3);
+    PR = await import('./online/presence.js'); live = true; off = bus.on('presence', draw); PR.joinPresence().catch(() => { }); draw(); }
   import('./online/sync.js').then(m => m.announcements()).then(a => { anns = a || []; try { localStorage.setItem('vvAnnCache', JSON.stringify(anns.map(x => ({ id: x.id, level: x.level, title: x.title, body: x.body })))); } catch (e) { } draw(); }).catch(() => { });
 }
 // Einladung eines anderen Spielers: Karte unten rechts auf jeder Seite, mit Beitreten bzw. Mitfahren

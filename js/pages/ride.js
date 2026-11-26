@@ -203,6 +203,7 @@ async function start(el) {
   if (S.npcOn) spawnField();
   await plusInit(S); trafficSetup(S, flash); bellsSetup(S);
   if (sessionStorage.getItem('dailyNext')) { sessionStorage.removeItem('dailyNext'); S.daily = daily(); $('#startCard', el).innerHTML = `<b>🗓️ Tagesherausforderung</b><span>${esc(S.daily.text)}. Tritt los, die Uhr startet mit dem ersten Tritt.</span>`; }
+  { let ev = null; try { ev = JSON.parse(sessionStorage.getItem('eventRide') || 'null'); } catch (e) { } sessionStorage.removeItem('eventRide'); if (ev) $('#startCard', el).innerHTML = `<b>📅 Event: ${esc(ev.title)}</b><span>Alle Teilnehmer fahren auf dieser Strecke und sehen sich gegenseitig. Tritt los, wenn es losgeht!</span>`; }
   if (sessionStorage.getItem('quickStart')) { sessionStorage.removeItem('quickStart'); S.quick = true; setTimeout(() => { if (S?.alive && S.state === 'ready') begin(); }, 800); }
   if (sessionStorage.getItem('ttNext')) { sessionStorage.removeItem('ttNext'); ttSetup(S); $('#startCard', el).innerHTML = `<b>⏱️ Zeitfahren: ${fmtKm(S.tt.dist)} km</b><span>Allein gegen die Uhr, ohne Windschatten.${S.tt.best ? ' Bestzeit ' + fmtT(S.tt.best.time) + '.' : ''} Tritt los!</span>`; }
   // Rennen gegen Bots (von der Startseite oder Streckenseite gewählt)

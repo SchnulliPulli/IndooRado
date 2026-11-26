@@ -22,7 +22,26 @@ export async function render(el) {
       <div class="grid2 tight"><label class="f">Art<select class="inp" id="anL"><option value="info">Info</option><option value="event">Event</option><option value="warn">Wartung / Warnung</option></select></label><label class="f">Sichtbar bis<input class="inp" id="anU" type="date"></label></div>
       <div class="row"><button class="btn pri" id="anGo">Veröffentlichen</button></div></div>
     <div class="card"><h2>Ankündigungen</h2><div id="anList" class="small"></div></div>
-  </section>`;
+  </section>
+  <section class="card"><div class="row between"><h2>Aktivität (30 Tage)</h2><span class="small muted" id="adOnline"></span></div><canvas id="adChart" class="adchart"></canvas><div class="small muted" id="adTop"></div></section>
+  <section class="grid2">
+    <div class="card form"><h2>📅 Event planen</h2>
+      <label class="f">Titel<input class="inp" id="evT" maxlength="80" placeholder="z. B. Sonntagsrunde"></label>
+      <div class="grid2 tight"><label class="f">Art<select class="inp" id="evK"><option value="group">👥 Gruppenfahrt</option><option value="race">🏁 Rennen</option><option value="workout">🏋️ Gemeinsames Workout</option><option value="fun">🎉 Spaßfahrt</option></select></label>
+        <label class="f">Strecke<select class="inp" id="evR"></select></label></div>
+      <div class="grid2 tight"><label class="f">Start<input class="inp" id="evS" type="datetime-local"></label><label class="f">Dauer (min)<input class="inp" id="evD" type="number" min="10" max="480" value="60"></label></div>
+      <label class="f">Workout (optional)<select class="inp" id="evW"><option value="">– freie Fahrt –</option></select></label>
+      <label class="f">Beschreibung<textarea class="inp" id="evB" rows="2" maxlength="600"></textarea></label>
+      <div class="row"><button class="btn pri" id="evGo">Event anlegen</button></div></div>
+    <div class="card"><h2>Geplante Events</h2><div id="evAdm" class="small"></div></div>
+  </section>
+  <section class="grid2">
+    <div class="card"><h2>🛡️ Teams</h2><div id="clAdm" class="small"></div></div>
+    <div class="card form"><h2>🏆 Bestenliste prüfen</h2><p class="small muted">Unplausible Zeiten (z. B. manipulierte Fahrten) aus der Bestenliste entfernen.</p><label class="f">Strecke<select class="inp" id="lbR"></select></label><div id="lbAdm" class="small"></div></div>
+  </section>
+  <section class="card"><h2>Massenaktionen und Export</h2><div class="row">
+    <button class="btn sm" data-bulk="approve_pending">✅ Alle Wartenden freischalten</button><button class="btn sm" data-bulk="extend_trials">⏳ Testphasen aller Wartenden +7 Tage</button><button class="btn sm" data-bulk="purge_old_events">🧹 Events älter als 30 Tage löschen</button><button class="btn sm ghost" id="adCsv">⬇ Nutzerliste als CSV</button></div>
+    <p class="small muted">Die Liste enthält Name, Rolle, Status, Level und Daten – keine E-Mail-Adressen (die liegen nur bei Supabase Auth).</p></section>`;
   let users = [];
   const kpis = async () => {
     const { data, error } = await sb.rpc('admin_stats'); if (error) return toast(error.message, 5000);
@@ -101,6 +120,55 @@ export async function render(el) {
     if (error) return toast(error.message, 5000); toast('Veröffentlicht'); $('#anT', el).value = ''; $('#anB', el).value = ''; anns();
   };
   $('#anList', el).onclick = async e => { const b = e.target.closest('[data-and]'); if (!b) return; await sb.from('announcements').delete().eq('id', b.dataset.and); anns(); };
-  $('#adRefresh', el).onclick = () => { kpis(); loadUsers(); anns(); };
-  kpis(); loadUsers(); anns();
+  $('#adRefresh', el).onclick = () => { kpis(); loadUsers(); anns(); activity(); evAdm(); clAdm(); lbAdm(); };
+  // ---------- Aktivität, Events, Teams, Bestenliste, Massenaktionen ----------
+  const miss = e => /function|relation|does not exist|schema cache/i.test(e?.message || '') ? 'Fehlt in der Datenbank: supabase/schema.sql erneut ausführen.' : e?.message;
+  const [{ listRoutes }, { listWorkouts }] = await Promise.all([import('../routes.js'), import('../workouts.js')]);
+  const [routes, wos] = await Promise.all([listRoutes(), listWorkouts()]), shared = routes.filter(r => r.builtin);
+  $('#evR', el).innerHTML = shared.map(r => `<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');
+  $('#lbR', el).innerHTML = '<option value="">– Strecke wählen –</option>' + shared.map(r => `<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');
+  $('#evW', el).innerHTML += wos.filter(w => w.builtin).map(w => `<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('');
+  { const d = new Date(Date.now() + 864e5); d.setMinutes(0, 0, 0); d.setHours(18); $('#evS', el).value = new Date(d - d.getTimezoneOffset() * 60e3).toISOString().slice(0, 16); }
+  const activity = async () => {
+    const [{ data, error }, s2] = await Promise.all([sb.rpc('admin_activity', { p_days: 30 }), sb.rpc('admin_stats2')]);
+    if (error) { $('#adTop', el).textContent = miss(error); return; }
+    const cv = $('#adChart', el), dpr = Math.min(2, devicePixelRatio || 1); cv.width = cv.clientWidth * dpr; cv.height = cv.clientHeight * dpr;
+    const c = cv.getContext('2d'), W = cv.width, H = cv.height, mx = Math.max(1, ...data.map(d => d.rides)), bw = W / data.length;
+    c.font = `${11 * dpr}px system-ui`; c.fillStyle = getComputedStyle(el).color;
+    data.forEach((d, i) => { const h = d.rides / mx * (H - 30 * dpr); c.fillStyle = '#ff6a3d'; c.fillRect(i * bw + 2 * dpr, H - 16 * dpr - h, bw - 4 * dpr, h); if (d.new_users) { c.fillStyle = '#3ecf8e'; c.beginPath(); c.arc(i * bw + bw / 2, H - 22 * dpr - h, 4 * dpr, 0, 7); c.fill(); } if (i % 5 === 0) { c.fillStyle = '#8894a0'; c.fillText(new Date(d.day).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }), i * bw, H - 3 * dpr); } });
+    const x = s2.data || {}; $('#adTop', el).innerHTML = `🟧 Fahrten je Tag · 🟢 neue Nutzer · ${x.hours7 ?? 0} h gefahren (7 Tage) · ${x.events ?? 0} Events geplant (${x.signups ?? 0} Anmeldungen) · ${x.clubs ?? 0} Teams mit ${x.members ?? 0} Mitgliedern${x.topRoutes?.length ? '<br>Beliebteste Strecken (30 Tage): ' + x.topRoutes.map(t => `${esc(t.name)} (${t.n})`).join(', ') : ''}`;
+    try { const PR = await import('../online/presence.js'); await PR.joinPresence(); const ps = [...PR.P.peers.values()]; $('#adOnline', el).textContent = `🟢 ${ps.length} gerade online${ps.length ? ': ' + ps.slice(0, 6).map(p => p.name + (p.where === 'ride' ? ' 🚴' : '')).join(', ') : ''}`; } catch (e) { }
+  };
+  const evAdm = async () => {
+    const { data, error } = await sb.from('events').select('*').order('starts_at', { ascending: true }).limit(50); if (error) { $('#evAdm', el).textContent = miss(error); return; }
+    $('#evAdm', el).innerHTML = data.length ? data.map(e => `<div class="row between anrow"><span><b>${esc(e.title)}</b> <span class="muted">${new Date(e.starts_at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })} · ${esc(routes.find(r => r.id === e.route_id)?.name || e.route_id)}</span></span><button class="btn xs ghost danger" data-evdel="${e.id}">Löschen</button></div>`).join('') : '<p class="muted">Keine Events.</p>';
+  };
+  const clAdm = async () => {
+    const { data, error } = await sb.rpc('club_overview'); if (error) { $('#clAdm', el).textContent = miss(error); return; }
+    $('#clAdm', el).innerHTML = data.length ? data.map(c => `<div class="row between anrow"><span><span class="cltag" style="background:${esc(c.color)}">${esc(c.tag)}</span> <b>${esc(c.name)}</b> <span class="muted">${c.members} Mitglieder · ${c.km7} km/Woche</span></span><button class="btn xs ghost danger" data-cldel="${c.id}">Auflösen</button></div>`).join('') : '<p class="muted">Keine Teams.</p>';
+  };
+  const lbAdm = async () => {
+    const r = $('#lbR', el).value; if (!r) { $('#lbAdm', el).innerHTML = ''; return; }
+    const { data, error } = await sb.rpc('admin_leaderboard', { p_route: r }); if (error) { $('#lbAdm', el).textContent = miss(error); return; }
+    const tm = s => `${Math.floor(s / 3600) ? Math.floor(s / 3600) + ':' : ''}${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+    $('#lbAdm', el).innerHTML = data.length ? data.map((x, i) => `<div class="row between anrow"><span>${i + 1}. <b>${esc(x.display_name)}</b> <span class="num">${tm(x.duration_s)}</span> <span class="muted">${x.avg_w ? x.avg_w + ' W · ' : ''}${fmtDate(x.started_at)}</span></span><button class="btn xs ghost danger" data-lbdel="${esc(x.user_id)}|${esc(x.ride_id)}">Entfernen</button></div>`).join('') : '<p class="muted">Keine Zeiten.</p>';
+  };
+  $('#lbR', el).onchange = lbAdm;
+  $('#evGo', el).onclick = async () => {
+    const t = $('#evT', el).value.trim(), st = $('#evS', el).value; if (t.length < 3 || !st) return toast('Titel (mind. 3 Zeichen) und Start angeben');
+    const { error } = await sb.from('events').insert({ title: t, kind: $('#evK', el).value, route_id: $('#evR', el).value, workout_id: $('#evW', el).value || null, starts_at: new Date(st).toISOString(), duration_min: +$('#evD', el).value || 60, description: $('#evB', el).value.trim() });
+    if (error) return toast(miss(error), 5000); toast('📅 Event angelegt'); $('#evT', el).value = ''; $('#evB', el).value = ''; evAdm();
+  };
+  el.addEventListener('click', async e => {
+    const ev = e.target.closest('[data-evdel]'); if (ev) { const { error } = await sb.from('events').delete().eq('id', ev.dataset.evdel); if (error) return toast(miss(error)); evAdm(); return; }
+    const cl = e.target.closest('[data-cldel]'); if (cl) { if (!(await dialog({ title: 'Team auflösen?', html: '<p class="muted">Alle Mitglieder verlieren ihr Team. Fahrten bleiben erhalten.</p>', buttons: [{ label: 'Abbrechen', value: 0 }, { label: 'Auflösen', value: 1, cls: 'pri' }] }))) return; const { error } = await sb.from('clubs').delete().eq('id', cl.dataset.cldel); if (error) return toast(miss(error)); clAdm(); return; }
+    const lb = e.target.closest('[data-lbdel]'); if (lb) { const [u, r] = lb.dataset.lbdel.split('|'); const { error } = await sb.rpc('admin_remove_ride', { p_user: u, p_ride: r }); if (error) return toast(miss(error)); toast('Aus der Bestenliste entfernt'); lbAdm(); return; }
+    const bk = e.target.closest('[data-bulk]'); if (bk) { const { data, error } = await sb.rpc('admin_bulk', { p_action: bk.dataset.bulk }); if (error) return toast(miss(error)); toast(`Erledigt: ${data} Einträge`); loadUsers(); kpis(); evAdm(); return; }
+    if (e.target.closest('#adCsv')) {
+      const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`, st = u => stat(u)[0];
+      const csv = ['Name;Rolle;Status;Level;Angelegt;Zuletzt online;Öffentlich', ...users.map(u => [u.display_name, u.role, st(u), u.level, u.created_at, u.last_seen || '', u.public_profile ? 'ja' : 'nein'].map(q).join(';'))].join('\n');
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv' })); a.download = `veloverse-nutzer-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }
+  });
+  kpis(); loadUsers(); anns(); activity(); evAdm(); clAdm();
 }
