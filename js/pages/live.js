@@ -11,7 +11,7 @@ export async function render(el) {
   if (!sync.cfg && !sync.online) await loadSync().catch(() => { });
   el.innerHTML = `<section class="pagehead"><h1>Live-Fahrt</h1><span class="small muted" id="lvUpd"></span></section>
     <div id="lvBody"><div class="pageload"><div class="spinner"></div><div class="small muted">Laufende Fahrt wird gesucht …</div></div></div>`;
-  if (!syncReady()) { $('#lvBody', el).innerHTML = '<section class="card"><p class="muted">Die Live-Ansicht braucht ein Indoorado-Konto oder einen verbundenen Cloud-Speicher, damit die Fahrt vom anderen Gerät hier ankommt.</p><a class="btn" href="#/account">Zum Konto</a></section>'; return; }
+  if (!syncReady()) { $('#lvBody', el).innerHTML = '<section class="card"><p class="muted">Die Live-Ansicht braucht ein IndooRado-Konto oder einen verbundenen Cloud-Speicher, damit die Fahrt vom anderen Gerät hier ankommt.</p><a class="btn" href="#/account">Zum Konto</a></section>'; return; }
   const tick = async () => {
     if (!document.body.contains(el) || !$('#lvBody', el)) return leave();
     let L = null; try { L = await getLive(); } catch (e) { }

@@ -9,7 +9,7 @@ export async function render(el) {
   const wos = await listWorkouts(), cats = [...new Set(wos.map(w => w.cat))];
   el.innerHTML = `
   <section class="pagehead"><h1>Workouts</h1><span class="row"><a class="btn" href="#/editor">+ Neues Workout</a><label class="btn pri" title="Workout-Dateien (.zwo, .erg, .mrc, .json) und Plan-Dateien (.json, .zip, .txt)">Workouts oder Pläne importieren<input type="file" id="wFile" accept=".zwo,.erg,.mrc,.json,.zip,.xml,.txt" multiple hidden></label></span></section>
-  <p class="muted">Import: .zwo-Workouts, .erg und .mrc, Indoorado-Dateien (.json) und ZIP-Archive mit solchen Dateien. Ziele werden aus deiner FTP von ${profile.ftp} W berechnet. Dateien auch per Drag & Drop auf diese Seite ziehen. Alles bleibt im Browser gespeichert. <a href="#/help">Anleitung</a></p>
+  <p class="muted">Import: .zwo-Workouts, .erg und .mrc, IndooRado-Dateien (.json) und ZIP-Archive mit solchen Dateien. Ziele werden aus deiner FTP von ${profile.ftp} W berechnet. Dateien auch per Drag & Drop auf diese Seite ziehen. Alles bleibt im Browser gespeichert. <a href="#/help">Anleitung</a></p>
   <div class="chips-row" id="cats"><button class="chipb on" data-c="">Alle</button>${cats.map(c => `<button class="chipb" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div>
   <div class="wgrid" id="wList">${wos.map(w => { const s = stats(w); return `
     <article class="wcard ${w.id === sel.workoutId ? 'on' : ''}" data-cat="${esc(w.cat)}" data-id="${esc(w.id)}">

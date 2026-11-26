@@ -7,7 +7,7 @@ export function stravaTitle(ride) {
   if (ride.plan || ride.planId) parts.push(`${ride.plan?.name || 'Trainingsplan'} W${ride.planWeek || '?'}`);
   if (ride.workoutName) parts.push(ride.workoutName);
   parts.push(ride.routeName + (ride.laps ? ` (${ride.laps + 1} Runden)` : ''));
-  return 'Indoorado: ' + parts.join(' · ');
+  return 'IndooRado: ' + parts.join(' · ');
 }
 export function stravaText(ride) {
   const s = ride.sum, L = [];
@@ -18,7 +18,7 @@ export function stravaText(ride) {
   if (tops.length) L.push(tops.join(' · '));
   if (ride.overtakes) L.push(`${ride.overtakes} Fahrer überholt`);
   if (ride.newBadges?.length) L.push('🏆 ' + ride.newBadges.map(b => BADGES.find(x => x.id === b)?.name).filter(Boolean).join(', '));
-  L.push('Indoor gefahren mit Indoorado');
+  L.push('Indoor gefahren mit IndooRado');
   return L.join('\n');
 }
 
@@ -112,7 +112,7 @@ export function shareText(ride) {
   const pr = (ride.prs || []).filter(k => [60, 300, 1200].includes(+k)); if (pr.length) L.push('🏆 Neue Bestwerte: ' + pr.map(k => (k < 60 ? k + ' s' : k / 60 + ' min') + ' ' + s.curve?.[k] + ' W').join(', '));
   const cl = (ride.climbs || []).find(c => c.pr); if (cl) L.push(`⛰ Bestzeit am ${cl.name}`);
   if (ride.mp?.riders?.length) L.push('🌐 Zusammen mit ' + ride.mp.riders.slice(0, 3).join(', '));
-  L.push('', '#Indoorado #IndoorCycling #Radtraining #Rollentraining');
+  L.push('', '#IndooRado #IndoorCycling #Radtraining #Rollentraining');
   return L.join('\n');
 }
 // Bild für soziale Medien: 'story' 1080×1920 (Instagram/WhatsApp-Status/TikTok), 'square' 1080×1080 (Feed), sonst das Querformat
@@ -160,7 +160,7 @@ export async function socialImage(ride, ftp, bgBlob, fmt = 'story') {
     for (let i = st; i < E.length; i += st) { const x0 = M + D[i - st] / Dm * pw, x1 = M + D[i] / Dm * pw, y1 = py0 + ph - (E[i] - lo) / (hi - lo) * ph; x.fillStyle = zoneColor((ride.samples[i].p || 0) / ftp); x.globalAlpha = .9; x.fillRect(x0, y1, Math.max(1, x1 - x0 + .6), py0 + ph - y1); }
     x.globalAlpha = 1;
   }
-  x.fillStyle = 'rgba(255,255,255,.65)'; x.font = '500 26px Barlow, Arial'; x.fillText('Indoor gefahren mit Indoorado', M, H - M + 6);
+  x.fillStyle = 'rgba(255,255,255,.65)'; x.font = '500 26px Barlow, Arial'; x.fillText('Indoor gefahren mit IndooRado', M, H - M + 6);
   return new Promise(res => c.toBlob(res, 'image/jpeg', .92));
 }
 function wrap(x, t, max) { const w = String(t).split(' '), out = []; let cur = ''; for (const s of w) { const n = cur ? cur + ' ' + s : s; if (x.measureText(n).width > max && cur) { out.push(cur); cur = s; } else cur = n; } if (cur) out.push(cur); return out; }

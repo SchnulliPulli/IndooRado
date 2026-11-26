@@ -14,7 +14,7 @@ const LOCAL_ONLY = { has: k => LOCAL_ONLY_SET.has(k) || String(k).startsWith('va
 const TOMBS = ['deletedRides', 'deletedWorkouts', 'deletedRoutes', 'deletedPlans'];
 export const sync = { online: false, cfg: null, busy: false, last: null, error: null, dirsOk: false, needLogin: false, rev: null, devices: {}, device: null, info: '' };
 
-/* ---------- Indoorado Online als Speicherort ----------
+/* ---------- IndooRado Online als Speicherort ----------
    Solange man online angemeldet ist, läuft der Abgleich über den privaten Supabase-Ordner des Kontos;
    NAS, WebDAV, OneDrive, Google Drive und Dropbox pausieren. Gleiches Verfahren, eigene Versionsnummer. */
 let ON = null; // { sb, uid }
@@ -73,7 +73,7 @@ async function recodeAll(encryptNow, onStep) {
   }
   return files.length;
 }
-export async function vaultEnable(pass, onStep) { if (!ON) throw new Error('Nur mit Indoorado-Konto'); return exclusive(async () => { await enableVault(SBK, pass); return recodeAll(true, onStep); }); }
+export async function vaultEnable(pass, onStep) { if (!ON) throw new Error('Nur mit IndooRado-Konto'); return exclusive(async () => { await enableVault(SBK, pass); return recodeAll(true, onStep); }); }
 export async function vaultUnlock(pass) { await loadVault(SBK); await unlockVault(pass); sync.error = null; bus.emit('sync'); }
 export async function vaultDisable(onStep) { if (!ON) return; return exclusive(async () => { await loadVault(SBK); if (vault.status !== 'on') throw new Error('Zum Ausschalten muss der Tresor auf diesem Gerät entsperrt sein'); const n = await recodeAll(false, onStep); await disableVaultMeta(SBK); return n; }); }
 
@@ -118,7 +118,7 @@ export async function saveSyncCfg(cfg) {
 const configured = () => !!ON || !!(sync.cfg && (isOAuth(sync.cfg.mode) ? sync.cfg.refresh || sync.cfg.access : sync.cfg.mode === 'dsm' ? sync.cfg.host && sync.cfg.folder : sync.cfg.url));
 export const isConfigured = configured;
 // Anzeigename des Speichers: Synology, WebDAV, OneDrive, Google Drive, Dropbox
-export const providerName = (m = ON ? 'online' : sync.cfg?.mode) => m === 'online' ? 'Indoorado Online' : PROVIDERS[m]?.name || (m === 'webdav' ? 'WebDAV' : m === 'dsm' ? 'Synology' : 'Cloud');
+export const providerName = (m = ON ? 'online' : sync.cfg?.mode) => m === 'online' ? 'IndooRado Online' : PROVIDERS[m]?.name || (m === 'webdav' ? 'WebDAV' : m === 'dsm' ? 'Synology' : 'Cloud');
 // Rückkehr von der Anmeldung bei OneDrive, Google oder Dropbox
 export async function handleCloudRedirect() {
   const cfg = await finishOAuth(); if (!cfg) return null;
@@ -158,7 +158,7 @@ export async function dsmLogin({ host, folder, user, pass, otp, remember, auto }
   const prev = sync.cfg || {};
   host = location.protocol === 'https:' ? normalizeHost(host) : host.trim().replace(/\/+$/, ''); // lokal (http) zum Testen unverändert
   sync.cfg = { mode: 'dsm', host, folder: '/' + folder.trim().replace(/^\/+|\/+$/g, ''), user: user.trim(), auto: !!auto, remember: !!remember, did: prev.host === host ? prev.did : null, sid: null };
-  const p = { api: 'SYNO.API.Auth', version: '6', method: 'login', account: user.trim(), passwd: pass, session: 'FileStation', format: 'sid', enable_device_token: 'yes', device_name: 'Indoorado' };
+  const p = { api: 'SYNO.API.Auth', version: '6', method: 'login', account: user.trim(), passwd: pass, session: 'FileStation', format: 'sid', enable_device_token: 'yes', device_name: 'IndooRado' };
   if (otp) p.otp_code = otp.trim();
   if (sync.cfg.did) p.device_id = sync.cfg.did;
   try {
@@ -252,7 +252,7 @@ async function stateObj(rev) {
   for (const k of await db.keys('kv')) if (!LOCAL_ONLY.has(k)) { out.kv[k] = await db.get('kv', k); out.kvT[k] = kvT[k] || 0; }
   return out;
 }
-async function readState() { const b = await B().get('state.json'); if (!b) return null; const st = JSON.parse(await b.text()); if (st.app !== 'trittwerk') throw new Error('state.json gehört nicht zu Indoorado'); return st; }
+async function readState() { const b = await B().get('state.json'); if (!b) return null; const st = JSON.parse(await b.text()); if (st.app !== 'trittwerk') throw new Error('state.json gehört nicht zu IndooRado'); return st; }
 
 // Stand vom NAS einarbeiten. how: 'remote' = NAS gewinnt überall (erstes Verbinden, „Vom NAS laden“), 'merge' = je Einstellung gewinnt die neuere Seite
 async function applyRemote(st, how) {

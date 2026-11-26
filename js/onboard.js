@@ -8,7 +8,7 @@ import { PLANS, startPlan, plan } from './plans.js';
 
 const SW = (id, on, label) => `<label class="switch"><input type="checkbox" data-k="${id}" ${on ? 'checked' : ''}><span></span> ${label}</label>`;
 const steps = [
-  { t: 'Willkommen bei Indoorado', h: () => `
+  { t: 'Willkommen bei IndooRado', h: () => `
     <p>Indoor-Radtraining direkt im Browser: eine 3D-Welt mit Mitfahrern, Workouts und Trainingsplänen, Steuerung deines Smart-Trainers, Level und Missionen.</p>
     <ul class="tips">
       <li><b>Fahren</b>: Strecke wählen, treten, die Fahrt startet von selbst. Virtuelle Gänge, Steigung, ERG oder Puls-Ziel.</li>
@@ -91,7 +91,7 @@ export async function onboarding(force = false) {
     off?.();
     if (w.dataset.plan && plan.active?.id !== w.dataset.plan) startPlan(w.dataset.plan);
     await kv.set('onboarded', true); w.remove(); open = false;
-    toast('Viel Spaß mit Indoorado!'); window.dispatchEvent(new HashChangeEvent('hashchange'));
+    toast('Viel Spaß mit IndooRado!'); window.dispatchEvent(new HashChangeEvent('hashchange'));
   };
   show();
 }

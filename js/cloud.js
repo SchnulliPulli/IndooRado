@@ -6,12 +6,12 @@ export const PROVIDERS = {
   onedrive: {
     name: 'OneDrive', auth: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize', token: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
     scope: 'Files.ReadWrite.AppFolder User.Read offline_access', extra: { response_mode: 'query' },
-    where: 'OneDrive → Apps → Indoorado',
+    where: 'OneDrive → Apps → IndooRado',
   },
   gdrive: {
     name: 'Google Drive', auth: 'https://accounts.google.com/o/oauth2/v2/auth', token: 'https://oauth2.googleapis.com/token',
     scope: 'https://www.googleapis.com/auth/drive.file', extra: { access_type: 'offline', prompt: 'consent' }, secret: true,
-    where: 'Google Drive → Meine Ablage → Indoorado',
+    where: 'Google Drive → Meine Ablage → IndooRado',
   },
   dropbox: {
     name: 'Dropbox', auth: 'https://www.dropbox.com/oauth2/authorize', token: 'https://api.dropboxapi.com/oauth2/token',
@@ -139,7 +139,7 @@ function dropbox(cfg, onSave) {
   };
 }
 
-/* ---------- Google Drive (sichtbarer Ordner „Indoorado“, nur von der App angelegte Dateien; ein alter Ordner „VeloVerse“ wird weiterverwendet) ---------- */
+/* ---------- Google Drive (sichtbarer Ordner „IndooRado“, nur von der App angelegte Dateien; ein alter Ordner „VeloVerse“ wird weiterverwendet) ---------- */
 const GD = 'https://www.googleapis.com/drive/v3/files', GU = 'https://www.googleapis.com/upload/drive/v3/files', FOLDER = 'application/vnd.google-apps.folder';
 const gq = s => "'" + String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
 function gdrive(cfg, onSave) {
@@ -149,7 +149,7 @@ function gdrive(cfg, onSave) {
   const rootId = async () => {
     if (ids.has('/')) return ids.get('/');
     let id = cfg.rootId;
-    if (!id) { const f = [...await find(`name=${gq('Indoorado')} and mimeType=${gq(FOLDER)} and 'root' in parents and trashed=false`), ...await find(`name=${gq('VeloVerse')} and mimeType=${gq(FOLDER)} and 'root' in parents and trashed=false`)]; id = f[0]?.id || await mkFolder('Indoorado', 'root'); cfg.rootId = id; await onSave?.(cfg); }
+    if (!id) { const f = [...await find(`name=${gq('IndooRado')} and mimeType=${gq(FOLDER)} and 'root' in parents and trashed=false`), ...await find(`name=${gq('Indoorado')} and mimeType=${gq(FOLDER)} and 'root' in parents and trashed=false`), ...await find(`name=${gq('VeloVerse')} and mimeType=${gq(FOLDER)} and 'root' in parents and trashed=false`)]; id = f[0]?.id || await mkFolder('IndooRado', 'root'); cfg.rootId = id; await onSave?.(cfg); }
     ids.set('/', id); return id;
   };
   const dirId = async (dir, create) => {

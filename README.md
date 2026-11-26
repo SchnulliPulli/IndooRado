@@ -1,10 +1,10 @@
-# Indoorado
+# IndooRado
 
 **Online: [indoorado.de](https://indoorado.de)**
 
 Indoor-Radtraining im Browser: Smart-Trainer per Bluetooth verbinden und durch eine 3D-Welt fahren, mit Workouts, Trainingsplänen, Fortschritt und auf Wunsch gemeinsam mit anderen.
 
-Indoorado ist eine rein statische Web-App (HTML, CSS, JavaScript-Module). Es gibt keinen eigenen Server und keinen Build-Schritt. Ohne Anmeldung bleibt alles im Browser, es gibt dann keine Verbindung ins Internet.
+IndooRado ist eine rein statische Web-App (HTML, CSS, JavaScript-Module). Es gibt keinen eigenen Server und keinen Build-Schritt. Ohne Anmeldung bleibt alles im Browser, es gibt dann keine Verbindung ins Internet.
 
 > **Experimentell.** Das Projekt ist ein privates Hobbyprojekt in Entwicklung. Nutzung auf eigene Verantwortung.
 
@@ -71,4 +71,4 @@ Lokal: `python3 -m http.server 8765` im Projektordner, dann `node tests/smoke.mj
 ## Hinweise
 
 - Fahrten, Einstellungen und Fortschritt hängen an der Adresse, unter der die App läuft. Unter einer anderen Adresse liegen andere Daten.
-- Erwähnte Marken (z. B. Strava, Garmin, Wahoo) gehören ihren jeweiligen Inhabern. Indoorado steht in keiner Verbindung zu diesen Unternehmen.
+- Erwähnte Marken (z. B. Strava, Garmin, Wahoo) gehören ihren jeweiligen Inhabern. IndooRado steht in keiner Verbindung zu diesen Unternehmen.

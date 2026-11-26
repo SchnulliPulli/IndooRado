@@ -1,4 +1,4 @@
-// Import und Export von Workouts und Plänen: .zwo, .erg, .mrc, .json (Indoorado) und .zip mit solchen Dateien
+// Import und Export von Workouts und Plänen: .zwo, .erg, .mrc, .json (IndooRado) und .zip mit solchen Dateien
 import { parseZwo, parseErg } from './workouts.js';
 
 // ZIP lesen (ohne Bibliothek): zentrales Verzeichnis, gespeicherte oder "deflate"-komprimierte Einträge
@@ -69,7 +69,7 @@ export function toZwo(w) {
     const tag = i === 0 && g.b > g.a ? 'Warmup' : i === w.segs.length - 1 && g.b < g.a ? 'Cooldown' : 'Ramp';
     return `<${tag} Duration="${g.dur}" PowerLow="${r(g.a)}" PowerHigh="${r(g.b)}"${cad}>${txt}</${tag}>`;
   });
-  return `<workout_file>\n  <author>Indoorado</author>\n  <name>${x(w.name)}</name>\n  <description>${x(w.desc || '')}</description>\n  <sportType>bike</sportType>\n  <workout>\n    ${segs.join('\n    ')}\n  </workout>\n</workout_file>\n`;
+  return `<workout_file>\n  <author>IndooRado</author>\n  <name>${x(w.name)}</name>\n  <description>${x(w.desc || '')}</description>\n  <sportType>bike</sportType>\n  <workout>\n    ${segs.join('\n    ')}\n  </workout>\n</workout_file>\n`;
 }
 export const planToJson = p => JSON.stringify({ indoorado: 'plan', version: 1, name: p.name, perWeek: p.perWeek, weeksLayout: p.weeks?.map(w => w.length), wos: p.all.map(w => ({ name: w.name, desc: w.desc, segs: w.segs })) }, null, 1);
 export const workoutToJson = w => JSON.stringify({ indoorado: 'workout', version: 1, name: w.name, cat: w.cat, desc: w.desc, segs: w.segs }, null, 1);

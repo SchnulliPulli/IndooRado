@@ -1,6 +1,6 @@
 {
-  "name": "Indoorado",
-  "short_name": "Indoorado",
+  "name": "IndooRado",
+  "short_name": "IndooRado",
   "description": "Indoor-Radtraining im Browser",
   "start_url": "./index.html",
   "display": "fullscreen",

@@ -1,4 +1,4 @@
-// Admin-Panel für Indoorado Online: Kennzahlen, Nutzer (Rolle, Sperre, Daten löschen), Ankündigungen.
+// Admin-Panel für IndooRado Online: Kennzahlen, Nutzer (Rolle, Sperre, Daten löschen), Ankündigungen.
 // Die Datenbank prüft selbst: nur Rolle "admin" mit bestätigter 2FA (aal2) darf hier lesen und schreiben.
 import { $, esc, toast, dialog, fmtDate } from '../util.js';
 import * as O from '../online/client.js';

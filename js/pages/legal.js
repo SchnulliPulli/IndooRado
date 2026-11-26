@@ -21,15 +21,15 @@ function impressum() {
   <h3>Angaben gemäß § 5 DDG</h3><p>${addr()}</p>
   <h3>Kontakt</h3><p>E-Mail: ${mail()}${L.phone ? '<br>Telefon: ' + esc(L.phone) : ''}</p>
   <h3>Verantwortlich für den Inhalt</h3><p>${esc(L.name)}, Anschrift wie oben.</p>
-  <h3>Art des Angebots</h3><p>Indoorado ist ein privates, nicht kommerzielles Hobbyprojekt: eine Web-App für Indoor-Radtraining. Es gibt keine kostenpflichtigen Leistungen, keine Werbung und kein Tracking.</p>
+  <h3>Art des Angebots</h3><p>IndooRado ist ein privates, nicht kommerzielles Hobbyprojekt: eine Web-App für Indoor-Radtraining. Es gibt keine kostenpflichtigen Leistungen, keine Werbung und kein Tracking.</p>
   <h3>Verbraucherstreitbeilegung</h3><p>Ich bin weder bereit noch verpflichtet, an Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen.</p>
   <h3>Haftung für Inhalte und Links</h3><p>Die Inhalte wurden mit Sorgfalt erstellt. Für Richtigkeit, Vollständigkeit und Aktualität kann ich keine Gewähr übernehmen. Für Inhalte verlinkter externer Seiten sind ausschließlich deren Betreiber verantwortlich; bei Bekanntwerden von Rechtsverletzungen entferne ich entsprechende Links umgehend.</p>
-  <h3>Urheberrecht</h3><p>Der Programmcode und die Inhalte dieser Seite unterliegen dem Urheberrecht, soweit nicht anders angegeben (siehe „Lizenzen“). Erwähnte Marken (z. B. Strava, Garmin, Wahoo) gehören ihren jeweiligen Inhabern; Indoorado steht in keiner Verbindung zu diesen Unternehmen.</p>`;
+  <h3>Urheberrecht</h3><p>Der Programmcode und die Inhalte dieser Seite unterliegen dem Urheberrecht, soweit nicht anders angegeben (siehe „Lizenzen“). Erwähnte Marken (z. B. Strava, Garmin, Wahoo) gehören ihren jeweiligen Inhabern; IndooRado steht in keiner Verbindung zu diesen Unternehmen.</p>`;
 }
 
 function datenschutz() {
   return `<h2>Datenschutzerklärung</h2>
-  <p>Diese Erklärung beschreibt, welche personenbezogenen Daten bei der Nutzung von Indoorado verarbeitet werden. Kurz gesagt: <b>Ohne Anmeldung bleibt alles in deinem Browser.</b> Erst wenn du dich bei Indoorado Online anmeldest oder selbst einen Dienst (z. B. Strava oder einen Cloud-Speicher) verbindest, gehen Daten an diese Dienste.</p>
+  <p>Diese Erklärung beschreibt, welche personenbezogenen Daten bei der Nutzung von IndooRado verarbeitet werden. Kurz gesagt: <b>Ohne Anmeldung bleibt alles in deinem Browser.</b> Erst wenn du dich bei IndooRado Online anmeldest oder selbst einen Dienst (z. B. Strava oder einen Cloud-Speicher) verbindest, gehen Daten an diese Dienste.</p>
 
   <h3>1. Verantwortlicher</h3><p>${addr()}<br>E-Mail: ${mail()}</p>
 
@@ -41,8 +41,8 @@ function datenschutz() {
   <p>Profil, Einstellungen, Fahrten (inkl. Leistung, Herzfrequenz, Trittfrequenz, virtueller Strecke), Fotos, Fortschritt, Pläne und Workouts speichert die App <b>lokal in deinem Browser</b> (IndexedDB, localStorage). Diese Daten verlassen dein Gerät nicht, solange du keinen der unten genannten Dienste nutzt. Die lokale Speicherung ist für die von dir gewünschte Funktion unbedingt erforderlich (§ 25 Abs. 2 Nr. 2 TDDDG). Du kannst die Daten jederzeit in der App (Optionen › App › Daten) oder über die Browser-Einstellungen löschen.</p>
   <p><b>Bluetooth-Geräte</b> (Trainer, Pulsgurt, Sensoren) verbindet der Browser direkt mit der App; dabei werden keine Daten an mich oder Dritte übertragen.</p>
 
-  <h3>4. Indoorado Online (nur mit Konto)</h3>
-  <p>Wenn du ein Konto anlegst, nutzt Indoorado den Dienst <b>Supabase</b> (Supabase Inc.) für Anmeldung, Datenbank, Dateispeicher und Live-Funktionen. Serverregion: ${esc(L.supabaseRegion)}. Mit Supabase besteht ein Vertrag zur Auftragsverarbeitung (Art. 28 DSGVO); soweit Daten in Drittländer gelangen können, gelten Standardvertragsklauseln. Verarbeitet werden:</p>
+  <h3>4. IndooRado Online (nur mit Konto)</h3>
+  <p>Wenn du ein Konto anlegst, nutzt IndooRado den Dienst <b>Supabase</b> (Supabase Inc.) für Anmeldung, Datenbank, Dateispeicher und Live-Funktionen. Serverregion: ${esc(L.supabaseRegion)}. Mit Supabase besteht ein Vertrag zur Auftragsverarbeitung (Art. 28 DSGVO); soweit Daten in Drittländer gelangen können, gelten Standardvertragsklauseln. Verarbeitet werden:</p>
   <ul>
     <li><b>Konto:</b> E-Mail-Adresse, Passwort (nur als Hash), optional Zwei-Faktor-Geheimnis, Anmeldezeitpunkte sowie technische Protokolldaten (IP-Adresse, Browser). Zweck: Anmeldung und Schutz des Kontos.</li>
     <li><b>Profil:</b> Anzeigename, Avatar, Level, Sichtbarkeit, letzte Aktivität, Freischaltungsstatus. Anzeigename, Avatar und Level sehen andere angemeldete Nutzer. Deine E-Mail-Adresse sieht niemand außer dir.</li>
@@ -72,7 +72,7 @@ function datenschutz() {
   <h3>8. Deine Rechte</h3>
   <p>Du hast das Recht auf Auskunft (Art. 15 DSGVO), Berichtigung (Art. 16), Löschung (Art. 17), Einschränkung der Verarbeitung (Art. 18), Datenübertragbarkeit (Art. 20; die App bietet dafür Export und Sicherungsdatei) und Widerspruch gegen Verarbeitungen auf Grundlage berechtigter Interessen (Art. 21). Erteilte Einwilligungen kannst du jederzeit mit Wirkung für die Zukunft widerrufen (Art. 7 Abs. 3). Du hast außerdem das Recht, dich bei einer Datenschutz-Aufsichtsbehörde zu beschweren, z. B. bei: ${esc(L.authority)}.</p>
 
-  <h3>9. Mindestalter</h3><p>Indoorado Online richtet sich an Personen ab 16 Jahren. Jüngere dürfen ein Konto nur mit Zustimmung der Erziehungsberechtigten anlegen.</p>
+  <h3>9. Mindestalter</h3><p>IndooRado Online richtet sich an Personen ab 16 Jahren. Jüngere dürfen ein Konto nur mit Zustimmung der Erziehungsberechtigten anlegen.</p>
 
   <h3>10. Sicherheit</h3><p>Verbindungen sind verschlüsselt (HTTPS/TLS). Zugriffsregeln in der Datenbank stellen sicher, dass jede Person nur ihre eigenen Daten lesen kann. Zwei-Faktor-Anmeldung und die Tresor-Verschlüsselung sind verfügbar und empfohlen. Eine absolute Sicherheit kann bei Internetdiensten niemand garantieren.</p>
 
@@ -82,8 +82,8 @@ function datenschutz() {
 function nutzung() {
   return `<h2>Nutzungshinweise und Haftung</h2>
   <ul>
-    <li><b>Experimentelles Hobbyprojekt:</b> Indoorado wird privat und unentgeltlich entwickelt. Funktionen können sich ändern, fehlerhaft sein oder eingestellt werden. Es besteht kein Anspruch auf Verfügbarkeit oder Datensicherung; erstelle regelmäßig eine Sicherung (Optionen › App › Daten).</li>
-    <li><b>Training auf eigene Verantwortung:</b> Indoorado ersetzt keine ärztliche oder trainingswissenschaftliche Beratung. Kläre vor intensivem Training deine Belastbarkeit ab, achte auf Warnzeichen und höre bei Beschwerden sofort auf. Leistungs-, Puls- und Kalorienangaben sind Schätzungen.</li>
+    <li><b>Experimentelles Hobbyprojekt:</b> IndooRado wird privat und unentgeltlich entwickelt. Funktionen können sich ändern, fehlerhaft sein oder eingestellt werden. Es besteht kein Anspruch auf Verfügbarkeit oder Datensicherung; erstelle regelmäßig eine Sicherung (Optionen › App › Daten).</li>
+    <li><b>Training auf eigene Verantwortung:</b> IndooRado ersetzt keine ärztliche oder trainingswissenschaftliche Beratung. Kläre vor intensivem Training deine Belastbarkeit ab, achte auf Warnzeichen und höre bei Beschwerden sofort auf. Leistungs-, Puls- und Kalorienangaben sind Schätzungen.</li>
     <li><b>Geräte:</b> Die Ansteuerung von Smart-Trainern erfolgt über offene Bluetooth-Standards. Halte die Sicherheitshinweise des Herstellers ein und stelle sicher, dass Rad und Trainer fest stehen.</li>
     <li><b>Online-Funktionen:</b> Der Zugang kann nach einer Testphase von einer Freischaltung abhängen und bei Missbrauch gesperrt werden. Wähle einen Anzeigenamen, der keine Rechte Dritter verletzt und nicht beleidigend ist. Belästigung anderer Nutzer, das Fälschen von Bestenlisten oder Angriffe auf den Dienst sind untersagt.</li>
     <li><b>Haftung:</b> Ich hafte unbeschränkt für Vorsatz und grobe Fahrlässigkeit sowie bei Verletzung von Leben, Körper oder Gesundheit. Im Übrigen ist die Haftung, soweit gesetzlich zulässig, ausgeschlossen, insbesondere für Datenverlust und für Schäden durch die Nutzung von Trainingsgeräten.</li>
@@ -99,5 +99,5 @@ function lizenzen() {
     <li><b>Barlow</b> und <b>Barlow Condensed</b> (Schriften), © Jeremy Tribby, SIL Open Font License 1.1; lokal eingebunden.</li>
     <li><b>Höhendaten</b> für „echtes Gelände“: „Terrain Tiles“ (Mapzen/Linux Foundation, AWS Open Data) mit Daten u. a. von SRTM, GMTED, ETOPO1 und weiteren Quellen gemäß deren Lizenzen.</li>
   </ul>
-  <p>Alle Strecken, Workouts, Grafiken und Texte von Indoorado sind eigene Inhalte, soweit nicht anders angegeben.</p>`;
+  <p>Alle Strecken, Workouts, Grafiken und Texte von IndooRado sind eigene Inhalte, soweit nicht anders angegeben.</p>`;
 }
