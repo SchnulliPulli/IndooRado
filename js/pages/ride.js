@@ -79,6 +79,7 @@ export async function render(el) {
       <div class="hbox small" id="pacerBox" hidden><b class="num" id="hPacer">0 m</b><span id="pacerL">zum Schrittmacher</span></div>
     </div>
     <div class="msgstack" id="msgStack" data-drag="msg">
+      <div class="mpch" id="mpCh" hidden></div>
       <div class="climb" id="climbBox" hidden><div class="climb-name" id="clName"></div><div class="climb-row num"><span id="clLeft"></span><span id="clGrade"></span><span id="clTime"></span></div><div class="bar"><i id="clBar"></i></div></div>
       <div class="banner" id="banner"></div>
       <div class="xpfloat" id="xpFloat"></div>
@@ -126,7 +127,6 @@ export async function render(el) {
         <div class="row small" id="bmQuick"></div>
       </div>
     </div>
-    <div class="mpch" id="mpCh" hidden></div>
     <button class="liveled" id="liveLed" hidden title="Live-Verbindung"><i></i><span id="liveLedN"></span></button>
     <div class="startcard" id="startCard"><b>Bereit</b><span>Tritt in die Pedale, die Fahrt startet automatisch.</span></div>
   </div>`;

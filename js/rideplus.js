@@ -65,7 +65,7 @@ export async function plusInit(S) {
   // Power-up-Anzeige
   const pb = document.createElement('button'); pb.className = 'pupbox'; pb.id = 'pupBox'; pb.hidden = true; pb.title = 'Power-up einsetzen (U)'; rw.appendChild(pb);
   // Bestwert-Einblendung
-  const pop = document.createElement('div'); pop.className = 'prpop'; pop.id = 'prPop'; rw.appendChild(pop);
+  const pop = document.createElement('div'); pop.className = 'prpop'; pop.id = 'prPop'; (rw.querySelector('#msgStack') || rw).appendChild(pop); // im Meldungsstapel: überdeckt nichts
   const sl = document.createElement('div'); sl.className = 'speedlines'; sl.hidden = profile.fx === false; rw.appendChild(sl); S.world.fx = profile.fx !== false;
   // Mini-Profil im Anstiegskasten
   const cp = document.createElement('canvas'); cp.id = 'clProf'; cp.className = 'clprof'; $('#climbBox', el).appendChild(cp);

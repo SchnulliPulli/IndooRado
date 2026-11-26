@@ -30,12 +30,13 @@ const PRESETS = {
 };
 export const PRESET_NAMES = Object.fromEntries(Object.entries(PRESETS).map(([k, v]) => [k, v.n]));
 
-const cls = () => (innerWidth <= 820 || innerHeight <= 560) ? 'small' : 'large';
+// Drei Anordnungen: großer Bildschirm, Handy hochkant (small) und Handy/kleines Tablet quer (land)
+const cls = () => (innerWidth <= 820 || innerHeight <= 560) ? (innerWidth > innerHeight * 1.2 ? 'land' : 'small') : 'large';
 function lay() {
   const all = profile.hudLayout ||= {}; let L = all[cls()];
   if (L?.preset && PRESETS[L.preset]) { const P = PRESETS[L.preset]; L = all[cls()] = { w: JSON.parse(JSON.stringify(P.w)), extras: (P.extras || []).map((x, i) => ({ ...x, id: Date.now().toString(36) + i })), fit: L.fit }; saveProfile(); }
   // Neues Gerät oder neuer Browser ohne gespeicherte Anordnung: automatisch anordnen und an die Fenstergröße anpassen
-  if (!L || !L.w) { const old = L || {}; L = all[cls()] = { w: {}, extras: [], fit: cls() === 'large' }; for (const k in old) if (old[k]?.x != null) L.w[k] = old[k]; }
+  if (!L || !L.w) { const old = L || {}; L = all[cls()] = { w: {}, extras: [], fit: cls() !== 'small' }; for (const k in old) if (old[k]?.x != null) L.w[k] = old[k]; }
   L.extras ||= []; return L;
 }
 // "An Fenstergröße anpassen": Werte-Widgets wachsen und schrumpfen mit dem Fenster (Bezug 1600 × 900 bzw. 900 × 560 auf kleinen Bildschirmen).
@@ -43,7 +44,7 @@ function lay() {
 export const fitOn = () => !!lay().fit;
 export function fitFactor() {
   if (!fitOn()) return 1;
-  const [bw, bh] = cls() === 'small' ? [900, 560] : [1600, 900];
+  const [bw, bh] = cls() === 'small' ? [900, 560] : cls() === 'land' ? [960, 440] : [1600, 900];
   return Math.round(clampN(Math.min(innerWidth / bw, innerHeight / bh), .55, 1.8) * 100) / 100;
 }
 const kindOf = el => el.dataset.kind || (WIDGETS.find(w => w[0] === el.dataset.drag)?.[2]) || 'zoom';
@@ -309,7 +310,7 @@ function panel(root, bar, onDone) {
   const op = Math.round((profile.hudOpacity ?? -1) * 100), tab = P.t || 'w';
   const ICO = { top: '📊', wo: '🏋️', riders: '🚴', right: '⛰️', mini: '🗺️', elev: '📈', msg: '💬', ring: '⭕' };
   bar.innerHTML = `
-    <div class="edhead" title="Ziehen zum Verschieben"><span class="edgrip">⠿</span><b>Anzeige anordnen</b><span class="edscr muted small">${cls() === 'small' ? 'kleiner Bildschirm' : 'großer Bildschirm'}</span><span class="row"><button class="btn xs ghost" id="edMin" title="Einklappen">${P.c ? '▸' : '▾'}</button><button class="btn xs pri" id="edDone">Fertig</button></span></div>
+    <div class="edhead" title="Ziehen zum Verschieben"><span class="edgrip">⠿</span><b>Anzeige anordnen</b><span class="edscr muted small">${{ small: 'Handy hochkant', land: 'Handy quer', large: 'großer Bildschirm' }[cls()]}</span><span class="row"><button class="btn xs ghost" id="edMin" title="Einklappen">${P.c ? '▸' : '▾'}</button><button class="btn xs pri" id="edDone">Fertig</button></span></div>
     <div class="edbody">
       <div class="seg sm edtabs" id="edTabs">${[['w', 'Widgets'], ['a', 'Aussehen'], ['h', 'Hilfe']].map(([k, l]) => `<button data-t="${k}" aria-pressed="${tab === k}">${l}</button>`).join('')}</div>
       <section class="edsec" data-tab="w" ${tab === 'w' ? '' : 'hidden'}>
@@ -335,7 +336,7 @@ function panel(root, bar, onDone) {
           <li><b>Größe:</b> an einer Kante oder Ecke ziehen, mit zwei Fingern auf dem Widget oder mit dem Mausrad.</li>
           <li><b>Antippen:</b> zeigt − / + zum Zoomen und ⟲ für die ursprüngliche Größe.</li>
           <li><b>Dieses Fenster:</b> an der Kopfzeile verschieben oder mit ▾ einklappen.</li>
-          <li>Die Anordnung gilt für ${cls() === 'small' ? 'kleine' : 'große'} Bildschirme. Auf Geräten mit anderem Seitenverhältnis ordnen sich die Widgets automatisch.</li>
+          <li>Die Anordnung gilt für ${{ small: 'Handys hochkant', land: 'Handys quer', large: 'große Bildschirme' }[cls()]}. Auf Geräten mit anderem Seitenverhältnis ordnen sich die Widgets automatisch.</li>
         </ul>
       </section>
       <div class="row edfoot"><button class="btn sm" id="edFitNow" title="Alle Widgets so verkleinern bzw. verschieben, dass nichts aus dem Fenster ragt">Alles ins Fenster holen</button><button class="btn sm ghost danger" id="edReset">Zurücksetzen</button></div>
