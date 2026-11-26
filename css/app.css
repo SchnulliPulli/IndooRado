@@ -901,3 +901,20 @@ html.calm *, html.calm *::before, html.calm *::after { animation-duration: .01ms
 .ghlist { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; max-height: 40vh; overflow: auto; }
 .ghrow { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 12px; background: color-mix(in srgb, currentColor 5%, transparent); }
 .rrow.fg { opacity: .9; font-style: italic; }
+/* Strecken-Baukasten */
+.kit { display: grid; grid-template-columns: minmax(260px, 360px) 1fr; gap: 16px; align-items: start; }
+.kitpal { position: sticky; top: 70px; max-height: calc(100vh - 90px); overflow: auto; }
+.kitblocks { display: flex; flex-wrap: wrap; gap: 6px; }
+.kb { display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border-radius: 10px; border: 1px solid color-mix(in srgb, currentColor 16%, transparent); background: color-mix(in srgb, currentColor 5%, transparent); color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
+.kb:hover { border-color: var(--acc); } .kb span { font-size: 16px; }
+.kitmain { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.kitprev canvas { display: block; width: 100%; } #kitMap { height: 340px; background: color-mix(in srgb, #3f8a3a 22%, transparent); border-radius: 12px; } #kitProf { height: 90px; margin-top: 8px; }
+.kitstats { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; }
+.kitseq { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 4px; counter-reset: kb; }
+.kitseq li { display: flex; align-items: center; gap: 6px; border-radius: 10px; padding: 2px 4px; counter-increment: kb; }
+.kitseq li::before { content: counter(kb); width: 22px; text-align: right; font-size: 12px; opacity: .5; }
+.kitseq li.on { background: color-mix(in srgb, var(--acc) 18%, transparent); }
+.kitli { flex: 1; display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; align-items: center; background: none; border: 0; color: inherit; font: inherit; text-align: left; padding: 6px; cursor: pointer; }
+.kitli .ki { font-size: 18px; } .kitops { display: flex; gap: 2px; }
+.kitedit { margin-top: 12px; padding: 12px; border-radius: 12px; background: color-mix(in srgb, currentColor 5%, transparent); }
+@media (max-width: 860px) { .kit { grid-template-columns: 1fr; } .kitpal { position: static; max-height: none; } #kitMap { height: 260px; } }

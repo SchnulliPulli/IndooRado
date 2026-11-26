@@ -13,7 +13,7 @@ if (window.top !== window.self) { const a = document.createElement('a'); a.href 
 const PAGES = {
   '': () => import('./pages/start.js'), ride: () => import('./pages/ride.js'), summary: () => import('./pages/summary.js'),
   workouts: () => import('./pages/workouts.js'), plans: () => import('./pages/plans.js'), routes: () => import('./pages/routes.js'), history: () => import('./pages/history.js'),
-  progress: () => import('./pages/progress.js'), season: () => import('./pages/season.js'), profile: () => import('./pages/profile.js'), devices: () => import('./pages/devices.js'), help: () => import('./pages/help.js'), editor: () => import('./pages/editor.js'), planner: () => import('./pages/planner.js'), ridesettings: () => import('./pages/ridesettings.js'), companion: () => import('./pages/companion.js'),
+  progress: () => import('./pages/progress.js'), season: () => import('./pages/season.js'), builder: () => import('./pages/builder.js'), profile: () => import('./pages/profile.js'), devices: () => import('./pages/devices.js'), help: () => import('./pages/help.js'), editor: () => import('./pages/editor.js'), planner: () => import('./pages/planner.js'), ridesettings: () => import('./pages/ridesettings.js'), companion: () => import('./pages/companion.js'),
   // Einstellungen: gleiche Module, anderer Ausschnitt
   avatar: () => import('./pages/avatar.js'),
   legal: () => import('./pages/legal.js'),
@@ -27,7 +27,7 @@ const PAGES = {
 const NAV = [
   { k: '', l: 'Start', i: 'home', also: ['companion', 'live'] },
   { k: 'workouts', l: 'Training', i: 'workout', tabs: [['workouts', 'Workouts'], ['plans', 'Trainingspläne']], also: ['editor', 'planner'] },
-  { k: 'routes', l: 'Strecken', i: 'route' },
+  { k: 'routes', l: 'Strecken', i: 'route', also: ['builder'] },
   { k: 'history', l: 'Aktivitäten', s: 'Fahrten', i: 'history', tabs: [['history', 'Verlauf'], ['progress', 'Fortschritt'], ['season', 'Saison']], also: ['summary'] },
   { k: 'devices', l: 'Geräte', i: 'devices' },
   { k: 'lobby', l: 'Online', i: 'online', tabs: [['lobby', 'Lobby'], ['players', 'Wer ist online'], ['account', 'Konto'], ['admin', 'Admin']] },

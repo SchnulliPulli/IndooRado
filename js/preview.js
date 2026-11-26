@@ -8,7 +8,7 @@ function idb() {
 const op = (mode, fn) => idb().then(db => new Promise((res, rej) => { const t = db.transaction('p', mode), q = fn(t.objectStore('p')); t.oncomplete = () => res(q?.result); t.onerror = () => rej(t.error); }));
 const mem = new Map();
 // Schlüssel ändert sich, wenn sich das Aussehen der Strecke ändert (Landschaft, echtes Gelände)
-export const prevKey = r => `${r.id}|${r.theme || ''}|${r.realTerrain ? 1 : 0}|${VER}`;
+export const prevKey = r => `${r.id}|${r.theme || ''}|${r.realTerrain ? 1 : 0}|${VER}${r.kit ? '|' + r.created : ''}`;
 export async function cachedPreview(r) {
   const k = prevKey(r); if (mem.has(k)) return mem.get(k);
   try { const v = await op('readonly', s => s.get(k)); if (v) mem.set(k, v); return v || null; } catch (e) { return null; }
