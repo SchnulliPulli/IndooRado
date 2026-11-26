@@ -10,7 +10,7 @@ import { statTiles, levelBar, ICON } from '../components.js';
 import { drawWorkout } from '../workouts.js';
 import { sound } from '../sound.js';
 import { sync, syncReady, fetchShots, loadSync, isConfigured, providerName } from '../sync.js';
-import { stravaTitle, stravaText, overviewImage, bestShot, factsImage } from '../share.js';
+import { stravaTitle, stravaText, overviewImage, bestShot, factsImage, socialImage, shareText } from '../share.js';
 import { strava, connected as stravaConnected, uploadRide, activityUrl } from '../strava.js';
 
 let urls = [];
@@ -67,7 +67,7 @@ export async function render(el, [id], query) {
       <div class="actmap"><canvas id="map"></canvas></div>
     </div>
     <div class="row actbtns">
-      <button class="btn sm pri" id="eStrava" title="FIT-Datei speichern und Strava-Upload öffnen">Zu Strava</button><button class="btn sm" id="eShare">Bild teilen</button><button class="btn sm" id="eFit">FIT</button><button class="btn sm" id="eTcx">TCX</button>${hasTrack(ride) ? '<button class="btn sm" id="eGpx" title="Gefahrene virtuelle Strecke als GPX">GPX</button>' : ''}<button class="btn sm ghost" id="eRen">Umbenennen</button><button class="btn sm ghost danger" id="eDel">Löschen</button>
+      <button class="btn sm pri" id="eStrava" title="FIT-Datei speichern und Strava-Upload öffnen">Zu Strava</button><button class="btn sm" id="eShare">📤 Teilen</button><button class="btn sm" id="eFit">FIT</button><button class="btn sm" id="eTcx">TCX</button>${hasTrack(ride) ? '<button class="btn sm" id="eGpx" title="Gefahrene virtuelle Strecke als GPX">GPX</button>' : ''}<button class="btn sm ghost" id="eRen">Umbenennen</button><button class="btn sm ghost danger" id="eDel">Löschen</button>
     </div>
   </section>
   ${ride.test ? `<section class="card testbox"><h2>${esc(ride.test.type)}: neue FTP ${ride.test.ftp} W</h2><p class="muted">${esc(ride.test.basis)}. Aktuell eingetragen: ${profile.ftp} W.</p>${ride.test.ftp !== profile.ftp ? '<button class="btn pri" id="ftpApply">FTP übernehmen</button>' : '<p>Bereits übernommen.</p>'}</section>` : ''}
@@ -149,11 +149,7 @@ export async function render(el, [id], query) {
       <p class="small muted">Beschreibung:</p><textarea class="inp" rows="5" readonly data-selectall>${esc(text)}</textarea>`, buttons: [{ label: 'Strava öffnen', value: true, cls: 'pri' }] });
     window.open('https://www.strava.com/upload/select', '_blank', 'noopener');
   };
-  $('#eShare', el).onclick = async () => {
-    const img = await overviewImage(ride, ride.ftpUsed || profile.ftp), file = new File([img], fileBase(ride) + '.jpg', { type: 'image/jpeg' });
-    if (navigator.canShare?.({ files: [file] })) { try { await navigator.share({ files: [file], title: ride.title, text: stravaText(ride) }); return; } catch (e) { if (e.name === 'AbortError') return; } }
-    download(file.name, img); toast('Bild gespeichert');
-  };
+  $('#eShare', el).onclick = () => shareDialog(ride, shots);
   const gpx = () => { if (hasTrack(ride)) download(fileBase(ride) + '.gpx', toGpx(ride), 'application/gpx+xml'); };
   if ($('#eGpx', el)) $('#eGpx', el).onclick = gpx;
   $('#eTcx', el).onclick = () => download(fileBase(ride) + '.tcx', toTcx(ride), 'application/vnd.garmin.tcx+xml');
@@ -198,3 +194,40 @@ function zoneBars(arr, Z, tot, name) {
   return `<div class="zones">${Z.map((z, i) => { const v = arr[i] || 0, pct = tot ? v / tot * 100 : 0; return `<div class="zrow"><span class="zl">${esc(name(z, i))}</span><div class="zb"><i style="width:${pct.toFixed(1)}%;background:${z.c}"></i></div><span class="zv num">${fmtT(v)} · ${Math.round(pct)} %</span></div>`; }).join('')}</div>`;
 }
 export function leave() { urls.forEach(u => URL.revokeObjectURL(u)); urls = []; }
+
+/* ---------- Teilen in sozialen Medien ---------- */
+// Formate: Story (9:16), Quadrat (1:1), Querformat (16:9); Hintergrund wählbar aus den Fotos der Fahrt
+async function shareDialog(ride, shots) {
+  const ftp = ride.ftpUsed || profile.ftp, text = shareText(ride), base = fileBase(ride);
+  const bgs = [null, ...shots.map(x => x.blob)];
+  const st = { fmt: 'story', bg: shots.length ? bgs.indexOf(bestShot(shots).blob) : 0, blob: null, url: null };
+  const w = document.createElement('div'); w.className = 'modal on';
+  w.innerHTML = `<div class="card dlg sharedlg"><div class="row between"><h2>Fahrt teilen</h2><button class="btn sm ghost" data-x>✕</button></div>
+    <div class="seg sm" id="shFmt">${[['story', 'Story 9:16'], ['square', 'Quadrat 1:1'], ['wide', 'Quer 16:9']].map(([k, l]) => `<button data-f="${k}" aria-pressed="${k === st.fmt}">${l}</button>`).join('')}</div>
+    <div class="shprev" id="shPrev"><div class="spinner"></div></div>
+    ${shots.length ? `<div class="small muted">Hintergrund</div><div class="shbgs" id="shBg">${bgs.map((b, i) => `<button data-b="${i}" aria-pressed="${i === st.bg}">${b ? `<img src="${URL.createObjectURL(b)}" alt="">` : '<span>Ohne Foto</span>'}</button>`).join('')}</div>` : ''}
+    <label class="f small">Text<textarea class="inp" id="shText" rows="4">${esc(text)}</textarea></label>
+    <div class="row shbtns"><button class="btn pri" id="shGo">📤 Teilen …</button><button class="btn" id="shDl">⬇ Bild speichern</button><button class="btn ghost" id="shCopy">📋 Text kopieren</button></div>
+    <p class="small muted" id="shHint">Tipp: Am Handy öffnet „Teilen“ direkt Instagram, WhatsApp, Signal &amp; Co. Am PC Bild speichern und den kopierten Text einfügen.</p></div>`;
+  document.body.appendChild(w);
+  const draw = async () => {
+    const prev = w.querySelector('#shPrev'); prev.className = 'shprev ' + st.fmt; prev.innerHTML = '<div class="spinner"></div>';
+    const b = await socialImage(ride, ftp, bgs[st.bg], st.fmt); st.blob = b; if (st.url) URL.revokeObjectURL(st.url); st.url = URL.createObjectURL(b);
+    prev.innerHTML = `<img src="${st.url}" alt="Vorschau">`;
+  };
+  const file = () => new File([st.blob], `${base}-${st.fmt}.jpg`, { type: 'image/jpeg' });
+  const copy = async () => { try { await navigator.clipboard.writeText(w.querySelector('#shText').value); return true; } catch (e) { return false; } };
+  w.onclick = async e => {
+    if (e.target === w || e.target.closest('[data-x]')) { w.remove(); if (st.url) URL.revokeObjectURL(st.url); return; }
+    const f = e.target.closest('[data-f]'); if (f) { st.fmt = f.dataset.f; w.querySelectorAll('[data-f]').forEach(x => x.setAttribute('aria-pressed', String(x === f))); draw(); return; }
+    const bb = e.target.closest('[data-b]'); if (bb) { st.bg = +bb.dataset.b; w.querySelectorAll('[data-b]').forEach(x => x.setAttribute('aria-pressed', String(x === bb))); draw(); return; }
+    if (e.target.closest('#shDl')) { if (st.blob) download(file().name, st.blob); return; }
+    if (e.target.closest('#shCopy')) { toast((await copy()) ? 'Text kopiert' : 'Kopieren nicht möglich, bitte markieren'); return; }
+    if (e.target.closest('#shGo')) {
+      if (!st.blob) return; const fl = file(), txt = w.querySelector('#shText').value;
+      if (navigator.canShare?.({ files: [fl] })) { try { await navigator.share({ files: [fl], title: ride.title, text: txt }); return; } catch (er) { if (er.name === 'AbortError') return; } }
+      download(fl.name, st.blob); const ok = await copy(); toast('Bild gespeichert' + (ok ? ' und Text kopiert' : '') + ': jetzt im Netzwerk deiner Wahl hochladen', 5000);
+    }
+  };
+  draw();
+}

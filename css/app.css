@@ -614,6 +614,12 @@ span.badge{display:inline-flex;padding:5px 10px;font-weight:600}span.badge svg{w
 .umsw span{display:flex;flex-direction:column;min-width:0;flex:1}.umsw small{color:var(--soft);font-size:11px;overflow:hidden;text-overflow:ellipsis}
 .umx{font-style:normal;color:var(--soft);padding:2px 6px;border-radius:6px}.umx:hover{color:var(--ink);background:var(--panel3)}
 .shot.facts{min-height:90px;display:flex;flex-direction:column;justify-content:center}.shot.facts .pageload{min-height:80px;padding:0}
+.sharedlg{width:min(560px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow:auto;display:flex;flex-direction:column;gap:10px}
+.shprev{display:flex;align-items:center;justify-content:center;background:var(--panel2);border-radius:14px;overflow:hidden;min-height:200px}
+.shprev img{display:block;max-width:100%;max-height:52vh;object-fit:contain;border-radius:10px}
+.shbgs{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}.shbgs button{flex:0 0 auto;width:74px;height:50px;border-radius:8px;overflow:hidden;border:2px solid transparent;padding:0;background:var(--panel2);color:var(--soft);font-size:11px;cursor:pointer}
+.shbgs button[aria-pressed=true]{border-color:var(--acc)}.shbgs img{width:100%;height:100%;object-fit:cover}
+.shbtns{flex-wrap:wrap}
 .newsbar{position:relative;margin-bottom:14px;border-radius:16px;border:1px solid var(--line);overflow:hidden;background:var(--panel)}
 .nbtrack{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain}.nbtrack::-webkit-scrollbar{display:none}
 .nbslide{--nbc:#2fe6ff;flex:0 0 100%;scroll-snap-align:start;display:flex;align-items:center;gap:14px;padding:14px 18px;min-height:72px;box-sizing:border-box;background:linear-gradient(100deg,color-mix(in srgb,var(--nbc) 16%,transparent),transparent 55%)}

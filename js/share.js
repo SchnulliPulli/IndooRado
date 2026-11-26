@@ -105,6 +105,65 @@ export async function factsImage(ride, ftp, bgBlob, opt = {}) {
   }
   return new Promise(res => c.toBlob(res, 'image/jpeg', .9));
 }
+// Text zum Teilen in sozialen Netzwerken: kurz, mit Emojis und Hashtags
+export function shareText(ride) {
+  const s = ride.sum, L = [`🚴 ${fmtKm(s.dist)} km · ⏱ ${fmtDur(s.dur)} · ⛰ ${s.asc} Hm · ⚡ Ø ${s.avgP} W`];
+  if (ride.workoutName) L.push(`🏋️ ${ride.workoutName}${ride.workoutDone ? ' ✅' : ''}`);
+  const pr = (ride.prs || []).filter(k => [60, 300, 1200].includes(+k)); if (pr.length) L.push('🏆 Neue Bestwerte: ' + pr.map(k => (k < 60 ? k + ' s' : k / 60 + ' min') + ' ' + s.curve?.[k] + ' W').join(', '));
+  const cl = (ride.climbs || []).find(c => c.pr); if (cl) L.push(`⛰ Bestzeit am ${cl.name}`);
+  if (ride.mp?.riders?.length) L.push('🌐 Zusammen mit ' + ride.mp.riders.slice(0, 3).join(', '));
+  L.push('', '#VeloVerse #IndoorCycling #Radtraining #Rollentraining');
+  return L.join('\n');
+}
+// Bild für soziale Medien: 'story' 1080×1920 (Instagram/WhatsApp-Status/TikTok), 'square' 1080×1080 (Feed), sonst das Querformat
+export async function socialImage(ride, ftp, bgBlob, fmt = 'story') {
+  if (fmt === 'wide') return factsImage(ride, ftp, bgBlob);
+  try { await document.fonts?.ready; } catch (e) { }
+  const W = 1080, H = fmt === 'story' ? 1920 : 1080, c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d'), s = ride.sum, story = fmt === 'story';
+  let img = null; if (bgBlob) try { img = await createImageBitmap(bgBlob); } catch (e) { }
+  if (img) { const k = Math.max(W / img.width, H / img.height); x.drawImage(img, (W - img.width * k) / 2, (H - img.height * k) / 2, img.width * k, img.height * k); }
+  else { const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#1b2633'); g.addColorStop(1, '#3a1f28'); x.fillStyle = g; x.fillRect(0, 0, W, H); }
+  let g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, 'rgba(8,10,14,.55)'); g.addColorStop(story ? .3 : .25, 'rgba(8,10,14,.35)'); g.addColorStop(story ? .55 : .5, 'rgba(8,10,14,.82)'); g.addColorStop(1, 'rgba(8,10,14,.96)'); x.fillStyle = g; x.fillRect(0, 0, W, H);
+  const M = 72;
+  // Kopf
+  x.fillStyle = '#ff6a3d'; x.font = '800 34px Barlow, Arial'; x.fillText('VELOVERSE', M, M + 30);
+  x.fillStyle = 'rgba(255,255,255,.8)'; x.font = '500 28px Barlow, Arial'; x.textAlign = 'right'; x.fillText(new Date(ride.date).toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' }), W - M, M + 30); x.textAlign = 'left';
+  // Titel (bis zwei Zeilen)
+  const ty = story ? 700 : 420; x.fillStyle = '#fff'; x.font = `700 ${story ? 84 : 66}px "Barlow Condensed", Barlow, Arial`;
+  const lines = wrap(x, ride.routeName || ride.title, W - 2 * M).slice(0, 2); lines.forEach((l, i) => x.fillText(l, M, ty + i * (story ? 88 : 70)));
+  let y = ty + lines.length * (story ? 88 : 70) - 10;
+  if (ride.workoutName) { x.fillStyle = '#ffb08f'; x.font = '600 34px Barlow, Arial'; x.fillText(trim(x, '🏋️ ' + ride.workoutName + (ride.workoutDone ? ' ✅' : ''), W - 2 * M), M, y + 46); y += 50; }
+  // Große Werte 2×2
+  const big = [[fmtKm(s.dist), 'KM'], [fmtDur(s.dur), 'FAHRZEIT'], [s.avgP + ' W', 'Ø LEISTUNG'], [s.asc + ' m', 'HÖHENMETER']];
+  y += story ? 60 : 30; const bw = (W - 2 * M) / 2, bh = story ? 170 : 128;
+  big.forEach(([v, l], i) => { const bx = M + (i % 2) * bw, by = y + Math.floor(i / 2) * bh; x.fillStyle = '#fff'; x.font = `700 ${story ? 104 : 80}px "Barlow Condensed", Barlow, Arial`; x.fillText(v, bx, by + (story ? 96 : 74)); x.fillStyle = '#ff9c7a'; x.font = '700 26px Barlow, Arial'; x.fillText(l, bx, by + (story ? 134 : 106)); });
+  y += 2 * bh + (story ? 20 : 4);
+  // Kleine Werte und Höhepunkte (nur Story hat Platz dafür)
+  if (story) {
+    const small = [[s.np + ' W', 'NP'], [s.avgHr ? s.avgHr + ' bpm' : '–', 'Ø Puls'], [((s.avgV || 0) * 3.6).toFixed(1).replace('.', ',') + ' km/h', 'Ø Tempo']];
+    const sw = (W - 2 * M - 2 * 20) / 3;
+    small.forEach(([v, l], i) => { const bx = M + i * (sw + 20); x.fillStyle = 'rgba(255,255,255,.1)'; rr(x, bx, y, sw, 120, 22); x.fill(); x.fillStyle = '#fff'; x.font = '700 46px "Barlow Condensed", Barlow, Arial'; x.fillText(v, bx + 24, y + 62); x.fillStyle = '#aab6c0'; x.font = '500 24px Barlow, Arial'; x.fillText(l, bx + 24, y + 98); });
+    y += 170;
+    const facts = [];
+    for (const k of (ride.prs || []).filter(k => [5, 60, 300, 1200].includes(+k)).slice(0, 2)) facts.push(`🏆 Bestwert ${k < 60 ? k + ' s' : k / 60 + ' min'}: ${s.curve?.[k]} W`);
+    for (const cl of (ride.climbs || []).slice(0, 2)) facts.push(`⛰ ${cl.name}: ${Math.floor(cl.time / 60)}:${String(Math.round(cl.time % 60)).padStart(2, '0')}${cl.pr ? ' · Bestzeit' : ''}`);
+    if (ride.mp?.riders?.length) facts.push('🌐 Mit ' + ride.mp.riders.slice(0, 2).join(', '));
+    if (ride.overtakes) facts.push(`💨 ${ride.overtakes} überholt`);
+    if (ride.race) facts.push(`🏁 Platz ${ride.race.place} von ${ride.race.of}`);
+    x.font = '600 36px Barlow, Arial'; x.fillStyle = '#fff';
+    facts.slice(0, 4).forEach((f, i) => x.fillText(trim(x, f, W - 2 * M), M, y + i * 56));
+  }
+  // Höhenprofil unten, nach Leistung eingefärbt
+  const E = ride.samples.map(q => q.e), D = ride.samples.map(q => q.d), ph = story ? 170 : 130, py0 = H - M - ph - 40, pw = W - 2 * M;
+  if (E.length > 1) {
+    let lo = Math.min(...E), hi = Math.max(...E); if (hi - lo < 30) hi = lo + 30; const Dm = D[D.length - 1] || 1, st = Math.max(1, Math.floor(E.length / 500));
+    for (let i = st; i < E.length; i += st) { const x0 = M + D[i - st] / Dm * pw, x1 = M + D[i] / Dm * pw, y1 = py0 + ph - (E[i] - lo) / (hi - lo) * ph; x.fillStyle = zoneColor((ride.samples[i].p || 0) / ftp); x.globalAlpha = .9; x.fillRect(x0, y1, Math.max(1, x1 - x0 + .6), py0 + ph - y1); }
+    x.globalAlpha = 1;
+  }
+  x.fillStyle = 'rgba(255,255,255,.65)'; x.font = '500 26px Barlow, Arial'; x.fillText('Indoor gefahren mit VeloVerse', M, H - M + 6);
+  return new Promise(res => c.toBlob(res, 'image/jpeg', .92));
+}
+function wrap(x, t, max) { const w = String(t).split(' '), out = []; let cur = ''; for (const s of w) { const n = cur ? cur + ' ' + s : s; if (x.measureText(n).width > max && cur) { out.push(cur); cur = s; } else cur = n; } if (cur) out.push(cur); return out; }
 function rr(x, a, b, w, h, r) { x.beginPath(); x.moveTo(a + r, b); x.arcTo(a + w, b, a + w, b + h, r); x.arcTo(a + w, b + h, a, b + h, r); x.arcTo(a, b + h, a, b, r); x.arcTo(a, b, a + w, b, r); x.closePath(); }
 function trim(x, t, max) { if (x.measureText(t).width <= max) return t; while (t.length > 3 && x.measureText(t + '…').width > max) t = t.slice(0, -1); return t + '…'; }
 
