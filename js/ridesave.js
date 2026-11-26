@@ -37,6 +37,7 @@ export async function saveRide(S) {
   if (S.wo?.planId && S.wT >= woLen * .9) planInfo = markDone(S.wo.id, { rideId: id });
 
   const ride = {
+    demoDevices: !!S.demoUsed || undefined, // mit Demo-Geräten gefahren (nur gespeichert, wenn in den App-Einstellungen erlaubt)
     id, date: start, start, title: S.route.name + (S.wo ? ' · ' + S.wo.name : ''), routeId: S.route.id, routeName: S.route.name, loop: S.route.loop,
     workoutId: S.wo?.id || null, workoutName: S.wo?.name || null, workout: S.wo ? { name: S.wo.name, segs: S.wo.segs } : null, workoutDone,
     planId: S.wo?.planId || null, planWeek: S.wo?.week || null,

@@ -680,7 +680,7 @@ function step(dt, first) {
   if (S.state === 'riding' && profile.autoPause && pw < 5 && (cad || 0) < 5 && S.v < .3) { S.idle += dt; if (S.idle > 3) { S.state = 'auto'; flash('Automatische Pause'); endHint(true); } } else S.idle = 0;
   if (S.state === 'auto' && (pw > 10 || (cad || 0) > 20)) { S.state = 'riding'; flash('Weiter'); endHint(false); }
   const running = S.state === 'riding';
-  if (running && demo.on && !S.demoUsed) { S.demoUsed = true; flash('Demo-Modus: diese Fahrt wird nicht gespeichert', 3500); }
+  if (running && demo.on && !S.demoUsed) { S.demoUsed = true; flash(profile.saveDemo ? 'Demo-Geräte: die Fahrt wird trotzdem gespeichert (App-Einstellungen)' : 'Demo-Modus: diese Fahrt wird nicht gespeichert', 3500); }
   // Ziel bestimmen
   let target = null, wi = null;
   if (S.wo && S.state !== 'ready') {
@@ -1018,7 +1018,7 @@ async function endRide(auto = false) {
   auto = auto === true; // als Klick-Handler kommt hier ein Event an
   const prevState = S.state; if (S.state === 'riding') S.state = 'paused';
   // Fahrten mit Demo-Geräten werden nicht gespeichert (kein XP, keine Rekorde, kein Strava)
-  if (S.demoUsed) {
+  if (S.demoUsed && !profile.saveDemo) {
     const v = await dialog({ title: auto ? 'Ziel erreicht' : 'Demo-Fahrt beenden?', html: `<p>${S.samples.length ? fmtKm(S.samples.at(-1).d) + ' km in ' + fmtT(S.t) + '. ' : ''}</p><p class="muted small">Diese Fahrt lief mit Demo-Geräten und wird nicht gespeichert. Sie zählt nicht für Level, Missionen, Rekorde oder Strava.</p>`, buttons: [{ label: 'Weiterfahren', value: 'back', cls: 'ghost' }, { label: 'Zum Menü (Fahrt bleibt)', value: 'menu', cls: 'ghost' }, { label: 'Beenden', value: 'quit', cls: 'pri' }] });
     if (v === 'menu') { if (S) S.state = 'paused'; location.hash = '#/'; return; }
     if (v === 'quit') { leave(); location.hash = '#/'; return; }
