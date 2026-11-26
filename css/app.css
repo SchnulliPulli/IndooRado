@@ -370,6 +370,7 @@ span.badge{display:inline-flex;padding:5px 10px;font-weight:600}span.badge svg{w
 /* Meldungen als Stapel unter der Kopfzeile, nichts liegt mehr mittig über allem */
 .msgstack{position:absolute;left:50%;top:140px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px;z-index:8;pointer-events:none;width:min(420px,calc(100% - 24px))}
 .msgstack .climb{position:static;transform:none;min-width:0;width:100%}
+.msgstack>*,.xpfloat span{pointer-events:auto;cursor:pointer}.mpch,.startcard{cursor:pointer}
 .msgstack .banner{position:static;transform:none;font-size:24px;padding:8px 18px;max-width:100%}
 .msgstack .banner:not(.show){padding:0;height:0;overflow:hidden}
 .msgstack .xpfloat{position:static;transform:none;min-height:0}

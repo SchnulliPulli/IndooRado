@@ -213,7 +213,7 @@ async function start(el) {
     if (!S?.alive) return;
     const PRm = window.__presence; PRm?.setStatus({ where: 'ride', route: route.id, routeName: route.name });
     // Position immer senden (auch in Pause oder vor dem ersten Tritt), sonst verschwindet man für die anderen
-    S.live = joinRoute(route.id, () => { const go = S.state === 'riding'; return { d: Math.round(S.dist * 10) / 10, v: go ? +S.v.toFixed(2) : 0, p: go ? Math.round(S.p3.at(-1) || 0) : 0, wkg: go ? +((S.p3.at(-1) || 0) / profile.kg).toFixed(1) : 0, cad: go && live.fresh ? Math.round(live.cadence ?? (live.power > 15 ? 85 : 0)) : 0, pause: !go, odo: Math.round(S.odo), env: { time: S.env.time, weather: S.env.weather }, look: PRm ? PRm.onlineLook() : { jersey: profile.jersey, bikeColor: profile.bikeColor, helmet: profile.helmet, skin: profile.skin, av: profile.av } }; });
+    S.live = joinRoute(route.id, () => { const go = S.state === 'riding'; return { d: Math.round(S.dist * 10) / 10, v: S.state === 'paused' ? 0 : +S.v.toFixed(2), p: go ? Math.round(S.p3.at(-1) || 0) : 0, wkg: go ? +((S.p3.at(-1) || 0) / profile.kg).toFixed(1) : 0, cad: go && live.fresh && live.power >= 10 ? Math.round(live.cadence ?? 85) : 0, pause: S.state === 'paused' || (!go && S.v < .3), odo: Math.round(S.odo), env: { time: S.env.time, weather: S.env.weather }, look: PRm ? PRm.onlineLook() : { jersey: profile.jersey, bikeColor: profile.bikeColor, helmet: profile.helmet, skin: profile.skin, av: profile.av } }; });
     S.live.onChange = syncRemote; mpInit(S);
     S.live.onMp = m => mpOnMsg(S, MPH, m);
     S.live.onStatus = st => { if (st === 'on') flash('🌐 Live verbunden', 1500); else if (st === 'error' && !S.liveErrShown) { S.liveErrShown = true; flash('🌐 Live-Verbindung unterbrochen, neuer Versuch …', 2500); } };
@@ -327,6 +327,16 @@ function bindUi() {
   const updDemo = () => { $('#tDemoL', el).textContent = demo.on ? 'Demo aus' : 'Demo an'; $('#tDemo', el).classList.toggle('on', demo.on); };
   updDemo();
   $('#tDemo', el).onclick = () => { setDemo(!demo.on); updDemo(); flash(demo.on ? '🧪 Demo-Geräte an: diese Fahrt wird nicht gespeichert' : '🧪 Demo-Geräte aus', 2500); };
+  // Meldungen und Einblendungen mit einmaligem Antippen schließen (nicht im Anordnen-Modus)
+  el.addEventListener('click', e => {
+    if ($('#rw', el)?.classList.contains('hudedit')) return;
+    const t = e.target;
+    if (t.closest('#banner')) { $('#banner', el).classList.remove('show'); clearTimeout(bannerT); return; }
+    if (t.closest('#climbBox')) { S.climbDismissed = S.climbs.find(c => c.state === 'active') || S.sprints.find(c => c.state === 'active'); $('#climbBox', el).hidden = true; return; }
+    if (t.closest('#xpFloat span')) { t.closest('#xpFloat span').remove(); return; }
+    if (t.closest('#mpCh')) { $('#mpCh', el).hidden = true; S.mpHideUntil = performance.now() + 60e3; return; }
+    if (t.closest('#startCard')) { $('#startCard', el).hidden = true; return; }
+  });
   $('#tLayout', el).onclick = () => { closeMap(); $('#envPanel', el).hidden = true; editMode($('#rw', el), true, () => layout()); };
   $('#rw', el).addEventListener('hudresize', () => { S.miniCache = null; hud(); });
   $('#tMenu', el).onclick = () => { if (!S.samples.length) { leave(); location.hash = '#/'; return; } location.hash = '#/'; };
@@ -624,7 +634,7 @@ function tick() {
   if (S.state === 'riding') envCycle();
   followEnv();
   liveStatus();
-  if (S.mp) { mpTick(S, MPH, .1); if ((S.mpN = (S.mpN || 0) + 1) % 5 === 0) { const b = $('#mpCh', S.el), h = mpHtml(S); b.hidden = !h; if (h && b.innerHTML !== h) b.innerHTML = h; } }
+  if (S.mp) { mpTick(S, MPH, .1); if ((S.mpN = (S.mpN || 0) + 1) % 5 === 0) { const b = $('#mpCh', S.el), h = performance.now() < (S.mpHideUntil || 0) ? '' : mpHtml(S); b.hidden = !h; if (h && b.innerHTML !== h) b.innerHTML = h; } }
   if (S.joinRider && S.joinGiveUp && performance.now() > S.joinGiveUp) { S.joinGiveUp = 0; flash(S.live?.status === 'on' ? '🌐 ' + S.joinRider.name + ' ist gerade nicht live auf der Strecke (Fahrt beendet?). Sobald die Fahrt weitergeht, springst du hinterher.' : '🌐 Noch keine Live-Verbindung, es wird weiter versucht …', 4000); }
   if (S.group?.isHost && performance.now() > (S.envBeat ??= performance.now() + 30e3)) { S.envBeat = performance.now() + 30e3; S.live?.sendEnv(S.group.id, S.env); }
   // Alle ~45 s: Mitfahrer außer Sicht (und neu eingesetzte) bekommen neue Namen
@@ -830,7 +840,7 @@ function hud() {
   if (S.wo) woHud(el, f);
   // Anstieg oder Sprint
   const c = S.climbs.find(c => c.state === 'active') || S.sprints.find(c => c.state === 'active');
-  $('#climbBox', el).hidden = !c;
+  $('#climbBox', el).hidden = !c || S.climbDismissed === c; // per Antippen ausgeblendet: bis zum nächsten Anstieg
   if (c) {
     const isSprint = !c.gain, left = c.to - S.dist, frac = clamp((S.dist - c.from) / c.len, 0, 1), best = (isSprint ? progress.sprintBest || {} : progress.climbBest)[R.id + ':' + c.id];
     $('#climbBox', el).classList.toggle('sprint', isSprint);

@@ -42,11 +42,16 @@ function cleanMeta(m) {
   return { name: txt(m.name, 30) || 'Fahrer', where: m.where === 'ride' ? 'ride' : 'menu', route: txt(m.route, 40), routeName: txt(m.routeName, 40), joined: txt(m.joined, 24), host: lob,
     look: { jersey: COLOR.test(look.jersey) ? look.jersey : '#ff6a3d', helmet: COLOR.test(look.helmet) ? look.helmet : '#f2f4f6', bikeColor: COLOR.test(look.bikeColor) ? look.bikeColor : '#e9eef2', skin: COLOR.test(look.skin) ? look.skin : '#e3b18c', av: { head: txt(look.av?.head, 10), bike: txt(look.av?.bike, 10), glasses: txt(look.av?.glasses, 10), helmetStyle: txt(look.av?.helmetStyle, 10), pattern: txt(look.av?.pattern, 10), jersey2: COLOR.test(look.av?.jersey2) ? look.av.jersey2 : undefined, beard: !!look.av?.beard } } };
 }
+// Schnellweg: Änderungen (Lobby beitreten, anlegen, losfahren) gehen zusätzlich sofort als Direktnachricht raus.
+// Die Anwesenheit des Servers kommt teils mit Verzögerung; bis sie nachzieht, gilt die frischere Direktnachricht (max. 20 s).
+const fast = new Map(); // sid -> { m, t }
 const sync = () => {
   const st = (P.ch !== 'pending' && P.ch?.presenceState?.()) || {}; P.peers.clear();
   for (const [key, arr] of Object.entries(st)) { const m = cleanMeta(arr?.[arr.length - 1]); if (m && key !== sid) P.peers.set(key, m); }
+  for (const [key, f] of fast) { if (Date.now() - f.t > 20e3) fast.delete(key); else if (f.m) P.peers.set(key, f.m); else P.peers.delete(key); }
   bus.emit('presence'); checkStart();
 };
+function fastSend() { try { if (P.ch && P.ch !== 'pending' && P.ready) P.ch.send({ type: 'broadcast', event: 'meta', payload: { from: sid, meta: myMeta() } }); } catch (e) { } }
 export async function joinPresence() {
   if (P.ch || !loggedIn() || !access().ok) return;
   P.ch = 'pending'; // gegen doppelten Aufruf während des Aufräumens
@@ -55,6 +60,11 @@ export async function joinPresence() {
   if (P.ch !== 'pending') return;
   P.ch = sb.channel('lobby', { config: { private: true, presence: { key: sid } } });
   P.ch.on('presence', { event: 'sync' }, sync);
+  P.ch.on('broadcast', { event: 'meta' }, ({ payload: x }) => {
+    if (!x || typeof x.from !== 'string' || x.from.length > 40 || x.from === sid) return;
+    const m = x.meta === null ? null : cleanMeta(x.meta); if (x.meta !== null && !m) return;
+    fast.set(x.from, { m, t: Date.now() }); sync();
+  });
   // Einladungen anderer Spieler an mich (Lobby oder Mitfahren), streng geprüft
   P.ch.on('broadcast', { event: 'invite' }, ({ payload: m }) => {
     if (!m || m.to !== sid || typeof m.from !== 'string' || m.from.length > 40 || !['lobby', 'ride'].includes(m.kind)) return;
@@ -65,7 +75,7 @@ export async function joinPresence() {
   const c = P.ch;
   c.subscribe(async st => {
     if (c !== P.ch) return;
-    if (st === 'SUBSCRIBED') { P.ready = true; await push(); sync(); }
+    if (st === 'SUBSCRIBED') { P.ready = true; fastSend(); await push(); sync(); }
     else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') { P.ready = false; bus.emit('presence'); }
   });
 }
@@ -84,7 +94,7 @@ setInterval(async () => {
   try { (await client()).removeChannel(old); } catch (e) { }
   joinPresence().catch(() => { });
 }, 5000);
-export async function leavePresence() { const c = P.ch; P.ch = null; if (c && c !== 'pending') { try { await c.untrack(); (await client()).removeChannel(c); } catch (e) { } } P.ready = false; P.peers.clear(); bus.emit('presence'); }
+export async function leavePresence() { try { if (P.ch && P.ch !== 'pending' && P.ready) P.ch.send({ type: 'broadcast', event: 'meta', payload: { from: sid, meta: null } }); } catch (e) { } const c = P.ch; P.ch = null; if (c && c !== 'pending') { try { await c.untrack(); (await client()).removeChannel(c); } catch (e) { } } P.ready = false; P.peers.clear(); bus.emit('presence'); }
 // Eigene Meldung senden; schlägt sie fehl (Zeitüberschreitung, Ratenlimit), bis zu 5-mal mit wachsender Pause wiederholen
 let pushTry = 0, pushTimer = null;
 const myMeta = () => ({ name: online.profile?.display_name || 'Fahrer', look: onlineLook(), ...P.me });
@@ -95,7 +105,7 @@ async function push() {
   if (r === 'ok') { pushTry = 0; return; }
   if (++pushTry <= 5) pushTimer = setTimeout(() => push().catch(() => { }), 500 * pushTry);
 }
-export function setStatus(patch) { Object.assign(P.me, patch); for (const k in P.me) if (P.me[k] == null) delete P.me[k]; push().catch(() => { }); }
+export function setStatus(patch) { Object.assign(P.me, patch); for (const k in P.me) if (P.me[k] == null) delete P.me[k]; fastSend(); push().catch(() => { }); bus.emit('presence'); }
 
 /* ---------- Einladungen ---------- */
 // Was kann ich gerade anbieten? Eigene bzw. beigetretene Lobby, sonst meine laufende Fahrt
