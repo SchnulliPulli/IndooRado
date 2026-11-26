@@ -109,6 +109,7 @@ export async function render(el) {
       <button class="tbtn" id="tLayout" title="Anzeige anordnen">${ICON.layout}<span>Anordnen</span></button>
       <button class="tbtn" id="tFull" title="Vollbild">${ICON.full}<span>Vollbild</span></button>
       <button class="tbtn" id="tBuddy" title="Trainingsbuddy, der dich pusht"><b class="dots">🤝</b><span id="tBuddyL">Buddy</span></button>
+      <button class="tbtn" id="tMusic" title="Nächstes Musikstück (Taste T)"><b class="dots">🎵</b><span>Nächstes Stück</span></button>
       <button class="tbtn" id="tDemo" title="Demo-Geräte (simulierte Rolle, Puls und Kadenz)"><b class="dots">🧪</b><span id="tDemoL">Demo an</span></button>
     </div>
     <div class="envpanel" id="envPanel" hidden>
@@ -306,6 +307,8 @@ function bindUi() {
   $('#woSkip', el).onclick = () => { const w = woAt(S.wo, S.wT); if (w && !w.done) S.wT += w.left + .01; };
   $('#tSnd', el).onclick = toggleSound;
   $('#tRideOn', el).onclick = giveRideOn;
+  const nextTrack = () => { if (!music.playing) { flash('🎵 Musik ist aus (Fahrt-Einstellungen › Ton)', 2200); return; } music.skip(); setTimeout(() => flash('🎵 ' + (music.trackName || 'Nächstes Stück'), 2000), 60); };
+  $('#tMusic', el).onclick = nextTrack;
   // Mehr-Menü: klappt über der Knopfleiste auf, schließt nach Auswahl oder Tippen daneben
   const pop = $('#tbPop', el), more = $('#tMore', el), popSet = o => { pop.hidden = !o; more.setAttribute('aria-expanded', String(o)); more.classList.toggle('on', o); };
   more.onclick = e => { e.stopPropagation(); popSet(pop.hidden); };
@@ -366,6 +369,7 @@ function bindUi() {
     else if (e.key === 'n' || e.key === 'N') toggleNpcs();
     else if (e.key === 'r' || e.key === 'R') giveRideOn();
     else if (e.key === 'm' || e.key === 'M') toggleSound();
+    else if (e.key === 't' || e.key === 'T') nextTrack();
     else if (e.key === 'k' || e.key === 'K') { if ($('#bigMap').hidden) openMap(); else closeMap(); }
     else if (e.key === 'w' || e.key === 'W') $('#tEnv').click();
     else if (e.key === 'Escape') { closeMap(); $('#envPanel').hidden = true; }

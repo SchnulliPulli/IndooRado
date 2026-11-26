@@ -12,6 +12,7 @@ const SW = (o, k, label, hint = '', d = true) => `<label class="switch"><input t
 const SEL = (o, k, label, opts, d) => `<label class="f">${label}<select class="inp" data-o="${o}" data-k="${k}">${opts.map(([v, l]) => `<option value="${v}" ${String(get(o, k, d)) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`;
 const RNG = (o, k, label, min, max, step, d, fmt) => `<label class="f">${label}: <b data-v="${k}">${fmt(get(o, k, d))}</b><input type="range" data-o="${o}" data-k="${k}" data-fmt="${k}" min="${min}" max="${max}" step="${step}" value="${get(o, k, d)}"></label>`;
 const FMT = {
+  musicBpm: v => `${v} BPM`,
   hudOpacity: v => Math.round(v * 100) + ' %', npcStrength: v => (v > 0 ? '+' : '') + (+v).toFixed(1).replace('.', ',') + ' W/kg', gearDiff: v => v + ' %', simDiff: v => v + ' %',
   volMaster: v => Math.round(v * 100) + ' %', volAmb: v => Math.round(v * 100) + ' %', volFx: v => Math.round(v * 100) + ' %', drinkEvery: v => v + ' min', shotEvery: v => v + ' min',
 };
@@ -36,6 +37,11 @@ export async function render(el, params = []) {
       <h2 style="margin-top:14px">Musik</h2>
       ${SEL('p', 'music', 'Musik während der Fahrt', Object.entries(MUSIC), 'off')}
       ${SEL('p', 'musicFollow', 'Musik wird intensiver mit …', [['power', 'der Leistung (Anteil an der FTP)'], ['hr', 'dem Puls (zwischen Ruhe- und Maximalpuls)']], 'power')}
+      ${SEL('p', 'musicTrack', 'Stück', [['auto', 'Automatisch wechseln (alle 32 Takte)'], ['0', 'Stück 1'], ['1', 'Stück 2'], ['2', 'Stück 3 (falls vorhanden)']], 'auto')}
+      ${SEL('p', 'musicTempo', 'Tempo', [['style', 'Wie der Stil vorgibt'], ['cadence', 'Im Takt meiner Trittfrequenz'], ['fixed', 'Festes Tempo (Regler unten)']], 'style')}
+      ${RNG('p', 'musicBpm', 'Festes Tempo', 60, 180, 2, profile.musicBpm ?? 120, FMT.musicBpm)}
+      ${SW('p', 'musicDrums', 'Schlagzeug', 'Aus = nur Flächen und Bass')}
+      ${SW('p', 'musicLead', 'Melodie und Arpeggios')}
       ${RNG('p', 'volMusic', 'Lautstärke Musik', 0, 1, .05, profile.volMusic ?? .35, FMT.volMaster)}
       <p class="small muted">Die erzeugte Musik passt sich deiner Intensität an: Bei harten Intervallen kommen Hi-Hats und Arpeggios dazu, in Pausen wird sie leiser. „Eigene Musikdateien“ spielt deine Dateien in zufälliger Reihenfolge, sie bleiben nur in diesem Browser.</p>
       <div class="row"><button class="btn sm" id="rsMusTest">Musik probehören</button><label class="btn sm">Eigene Musik hinzufügen<input type="file" id="rsMusFiles" accept="audio/*" multiple hidden></label></div>
@@ -125,7 +131,7 @@ export async function render(el, params = []) {
     const t = e.target, o = t.dataset.o, k = t.dataset.k; if (!o || !k) return;
     if (t.type === 'checkbox') store(o, k, t.checked);
     else if (t.type === 'range') store(o, k, +t.value);
-    else { const n = +t.value; store(o, k, t.value !== '' && !isNaN(n) && !['hudStyle', 'quality', 'time', 'weather', 'mode', 'npcCount', 'music', 'musicFollow'].includes(k) ? n : (k === 'npcCount' && t.value !== 'auto' ? n : t.value)); }
+    else { const n = +t.value; store(o, k, t.value !== '' && !isNaN(n) && !['hudStyle', 'quality', 'time', 'weather', 'mode', 'npcCount', 'music', 'musicFollow', 'musicTrack', 'musicTempo'].includes(k) ? n : (k === 'npcCount' && t.value !== 'auto' ? n : t.value)); }
     toast('Gespeichert', 900);
   };
   el.oninput = e => { const t = e.target; if (t.type === 'range' && t.dataset.k) { const k = t.dataset.k; $(`[data-v="${k}"]`, el).textContent = FMT[k](+t.value); store(t.dataset.o, k, +t.value); } };

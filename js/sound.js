@@ -12,7 +12,6 @@ export const SOUNDS = {
   amb: [['wind', 'Fahrtwind'], ['roll', 'Reifen auf Asphalt'], ['chain', 'Kette und Kurbel'], ['hum', 'Antrieb, Brummen'], ['free', 'Freilauf-Klicken'], ['birds', 'Vögel'], ['sea', 'Meer und Wellen'], ['rain', 'Regen']],
   fx: [['shift', 'Schalten'], ['beep', 'Countdown 3-2-1'], ['gate', 'Zieltor'], ['fanfare', 'Fanfaren: Gipfel, Sprint, Ziel'], ['levelup', 'Level-up'], ['pass', 'Überholen, Ride On'], ['traffic', 'Autos und Lkw'], ['warn', 'Warnungen'], ['whoosh', 'Beamen, Überspringen']],
 };
-export const MUSIC = { off: 'Aus', chill: 'Chill (ruhig, 84 BPM)', drive: 'Drive (treibend, 124 BPM)', synth: 'Synthwave (100 BPM)', own: 'Eigene Musikdateien' };
 
 function noiseBuffer(type = 'white', sec = 2) {
   // Stereo, damit Rauschen breit klingt und nicht "in der Mitte klebt"
@@ -138,6 +137,7 @@ export function update(st) {
   // Musik folgt der Intensität
   // Musik folgt der Leistung oder (Einstellung) dem Puls zwischen Ruhe- und Maximalpuls
   const hrI = profile.musicFollow === 'hr' && st.hr ? (st.hr - (profile.hrRest || 55)) / Math.max(40, (profile.hrMax || 190) - (profile.hrRest || 55)) * 1.25 : null;
+  M.cad = st.cad || 0;
   M.intensity = st.riding ? Math.min(1.3, hrI ?? (st.ftp ? st.power / st.ftp : .3)) : .3;
   const duck = !st.riding; if (duck !== M.duck) { M.duck = duck; apply(); }
 }
@@ -192,12 +192,33 @@ function bird(t) {
 /* ---------- Musik: selbst erzeugt (Akkorde, Bass, Schlagzeug) oder eigene Dateien ---------- */
 const M = { on: false, style: null, next: 0, step: 0, timer: null, intensity: .3, duck: false, audio: null, list: [], idx: 0 };
 const NOTE = n => 440 * 2 ** ((n - 69) / 12);
-// Akkordfolgen als MIDI-Grundtöne + Akkordtöne
-const PROG = {
-  chill: { bpm: 84, chords: [[53, [0, 4, 7, 11]], [52, [0, 3, 7, 10]], [50, [0, 3, 7, 10]], [48, [0, 4, 7, 11]]] },
-  drive: { bpm: 124, chords: [[57, [0, 3, 7]], [53, [0, 4, 7]], [48, [0, 4, 7]], [55, [0, 4, 7]]] },
-  synth: { bpm: 100, chords: [[57, [0, 3, 7, 12]], [53, [0, 4, 7, 12]], [48, [0, 4, 7, 12]], [55, [0, 4, 7, 12]]] },
+// Akkordfolgen (je 4 Takte): Grundton als MIDI-Note, dazu die Akkordtöne in Halbtönen
+const MAJ7 = [0, 4, 7, 11], MIN7 = [0, 3, 7, 10], MAJ = [0, 4, 7], MIN = [0, 3, 7], PWR = [0, 7, 12], ADD9 = [0, 4, 7, 14], MIN9 = [0, 3, 7, 10, 14];
+const P = (...c) => c;
+// Stile: Tempo, Klang, Schlagzeug als 16tel-Muster (x = Schlag), Bass-Muster und mehrere Stücke (Akkordfolgen)
+export const STYLES = {
+  chill: { n: 'Chill', bpm: 84, pad: 'triangle', padVol: .035, kick: 'x.........x.....', snare: '', hat: '..x...x...x...x.', hatFrom: .5, bass: 'x.......x.......', bassWave: 'sine', bassLen: 7, sparkle: .35,
+    tracks: [P([53, MAJ7], [52, MIN7], [50, MIN7], [48, MAJ7]), P([55, MAJ7], [52, MIN7], [57, MIN7], [53, MAJ7]), P([50, MIN9], [55, ADD9], [48, MAJ7], [53, MAJ7])] },
+  lofi: { n: 'Lo-Fi', bpm: 78, swing: .2, crackle: true, pad: 'triangle', padVol: .03, kick: 'x......x..x.....', snare: '....x.......x...', snareVol: .1, hat: 'x.x.x.x.x.x.x.x.', hatVol: .03, bass: 'x.....x...x.....', bassWave: 'sine', bassLen: 3, sparkle: .25,
+    tracks: [P([50, MIN9], [55, ADD9], [48, MAJ7], [57, MIN7]), P([53, MAJ7], [52, MIN7], [50, MIN9], [55, ADD9]), P([57, MIN9], [50, MIN7], [55, MAJ7], [48, MAJ7])] },
+  ambient: { n: 'Ambient', bpm: 64, pad: 'sine', padVol: .04, kick: '', snare: '', hat: '', bass: 'x...............', bassWave: 'sine', bassLen: 14, sparkle: .5,
+    tracks: [P([48, ADD9], [53, ADD9], [45, MIN9], [50, MIN9]), P([52, MIN9], [48, MAJ7], [55, ADD9], [50, MIN9])] },
+  synth: { n: 'Synthwave', bpm: 100, pad: 'sawtooth', padVol: .022, kick: 'x.......x.......', snare: '....x.......x...', hat: '.x.x.x.x.x.x.x.x', hatFrom: .95, bass: 'x.x.x.x.x.x.x.x.', bassWave: 'square', bassVol: .045, lead: 'arp', leadFrom: .6,
+    tracks: [P([57, [0, 3, 7, 12]], [53, [0, 4, 7, 12]], [48, [0, 4, 7, 12]], [55, [0, 4, 7, 12]]), P([52, MIN], [48, MAJ], [55, MAJ], [50, MIN]), P([45, MIN], [53, MAJ], [48, MAJ], [55, MAJ])] },
+  house: { n: 'House', bpm: 122, pad: 'triangle', padVol: .018, kick: 'x...x...x...x...', snare: '....x.......x...', snareVol: .1, hat: '..x...x...x...x.', bass: '..x...x...x...x.', bassWave: 'sawtooth', bassVol: .07, stab: '..x..x....x..x..',
+    tracks: [P([57, MIN7], [55, MAJ7], [53, MAJ7], [52, MIN7]), P([50, MIN7], [53, MAJ7], [48, MAJ7], [55, MAJ7])] },
+  drive: { n: 'Drive', bpm: 124, pad: 'sawtooth', padVol: .022, kick: 'x...x...x...x...', snare: '....x.......x...', hat: '..x...x...x...x.', hatFast: .85, bass: '..x...x...x...x.', bassWave: 'sawtooth', bassVol: .09,
+    tracks: [P([57, MIN], [53, MAJ], [48, MAJ], [55, MAJ]), P([52, MIN], [55, MAJ], [50, MAJ], [57, MIN]), P([45, MIN], [48, MAJ], [55, MAJ], [53, MAJ])] },
+  techno: { n: 'Techno', bpm: 132, pad: 'sawtooth', padVol: .012, kick: 'x...x...x...x...', snare: '....x.......x...', snareVol: .08, hat: '..x...x...x...x.', hatFast: .7, bass: 'xxxxxxxxxxxxxxxx', bassWave: 'sawtooth', bassVol: .05, acid: true,
+    tracks: [P([45, MIN], [45, MIN], [48, MAJ], [43, MAJ]), P([40, MIN], [40, MIN], [43, MAJ], [45, MIN])] },
+  rock: { n: 'Rock', bpm: 140, pad: 'sawtooth', padVol: .02, padLp: 2400, kick: 'x.....x.x.......', snare: '....x.......x...', snareVol: .18, hat: 'x.x.x.x.x.x.x.x.', bass: 'x.x.x.x.x.x.x.x.', bassWave: 'sawtooth', bassVol: .07, power: true,
+    tracks: [P([45, PWR], [48, PWR], [43, PWR], [50, PWR]), P([40, PWR], [43, PWR], [45, PWR], [47, PWR]), P([45, PWR], [41, PWR], [48, PWR], [43, PWR])] },
+  dnb: { n: 'Drum & Bass', bpm: 172, pad: 'triangle', padVol: .025, kick: 'x.........x.....', snare: '....x.......x...', snareVol: .16, hat: 'xxxxxxxxxxxxxxxx', hatVol: .03, bass: 'x...............', bassWave: 'sine', bassVol: .16, bassLen: 12,
+    tracks: [P([50, MIN9], [46, MAJ7], [48, ADD9], [45, MIN7]), P([52, MIN7], [48, MAJ7], [55, ADD9], [50, MIN9])] },
+  chip: { n: '8-Bit', bpm: 150, pad: 'square', padVol: .012, kick: 'x...x...x...x...', snare: '....x.......x...', snareVol: .1, hat: '..x...x...x...x.', bass: 'x.x.x.x.x.x.x.x.', bassWave: 'triangle', bassVol: .09, lead: 'arp', leadFrom: 0, leadWave: 'square',
+    tracks: [P([60, MAJ], [57, MIN], [53, MAJ], [55, MAJ]), P([57, MIN], [53, MAJ], [55, MAJ], [52, MIN]), P([62, MIN], [58, MAJ], [60, MAJ], [57, MIN])] },
 };
+export const MUSIC = { off: 'Aus', ...Object.fromEntries(Object.entries(STYLES).map(([k, v]) => [k, `${v.n} (${v.bpm} BPM)`])), own: 'Eigene Musikdateien' };
 function drum(kind, t, vol) {
   if (kind === 'kick') { const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(42, t + .14); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + .3); o.connect(g).connect(mus); o.start(t); o.stop(t + .32); return; }
   const s = ctx.createBufferSource(); s.buffer = kind === 'hat' ? NB.hat : NB.snare;
@@ -205,36 +226,45 @@ function drum(kind, t, vol) {
   const g = ctx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + (kind === 'hat' ? .05 : .18));
   s.connect(f).connect(g).connect(mus); s.start(t);
 }
-function pad(notes, t, dur, style) {
-  const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = style === 'chill' ? 900 : 600 + M.intensity * 1600; f.connect(mus);
-  for (const n of notes) { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = style === 'chill' ? 'triangle' : 'sawtooth'; o.frequency.value = NOTE(n); o.detune.value = (Math.random() - .5) * 12; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(style === 'chill' ? .035 : .022, t + .4); g.gain.setValueAtTime(style === 'chill' ? .035 : .022, t + dur - .3); g.gain.linearRampToValueAtTime(0, t + dur); o.connect(g).connect(f); o.start(t); o.stop(t + dur + .05); }
+function pad(notes, t, dur, S) {
+  const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = S.padLp || (S.pad === 'sawtooth' || S.pad === 'square' ? 600 + M.intensity * 1600 : 900); f.connect(mus);
+  for (const n of notes) { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = S.pad; o.frequency.value = NOTE(n); o.detune.value = (Math.random() - .5) * 12; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(S.padVol, t + .4); g.gain.setValueAtTime(S.padVol, t + dur - .3); g.gain.linearRampToValueAtTime(0, t + dur); o.connect(g).connect(f); o.start(t); o.stop(t + dur + .05); }
 }
+// Tempo: wie der Stil, fest eingestellt oder im Takt der Trittfrequenz (90 U/min = 90 BPM, langsame Kadenz verdoppelt)
+function bpmNow(S) {
+  const m = profile.musicTempo || 'style';
+  if (m === 'fixed') return Math.max(50, Math.min(190, +profile.musicBpm || S.bpm));
+  if (m === 'cadence' && M.cad > 30) { let b = M.cad; while (b < S.bpm * .7) b *= 2; while (b > S.bpm * 1.4) b /= 2; M.bpmS = (M.bpmS || b) + (b - (M.bpmS || b)) * .05; return M.bpmS; }
+  return S.bpm;
+}
+// Stück: fest gewählt oder automatisch alle 32 Takte wechselnd
+function trackNow(S) { const t = profile.musicTrack ?? 'auto'; return t === 'auto' ? (M.track ?? 0) % S.tracks.length : Math.min(S.tracks.length - 1, +t || 0); }
 function schedule() {
   if (!M.on || !ctx || ctx.state !== 'running') return;
-  const P = PROG[M.style], spb = 60 / P.bpm / 4; // Sechzehntel
+  const S = STYLES[M.style]; if (!S) return;
+  const spb = 60 / bpmNow(S) / 4, drums = profile.musicDrums !== false, lead = profile.musicLead !== false;
   if (M.next < now()) M.next = now() + .05;
   while (M.next < now() + .4) {
-    const t = M.next, s = M.step % 64, beat = s % 16, [root, chord] = P.chords[Math.floor(s / 16)], hi = M.intensity;
-    if (beat === 0) pad(chord.map(c => root + 12 + c), t, spb * 16, M.style);
-    if (M.style === 'drive') {
-      if (s % 4 === 0) drum('kick', t, .5);
-      if (s % 4 === 2) drum('hat', t, .12);
-      if (hi > .85 && s % 2 === 1) drum('hat', t, .05);
-      if (s % 4 === 2) tone(NOTE(root - 12), t, spb * 1.6, { type: 'sawtooth', vol: .09, out: mus });
-      if (beat === 4 || beat === 12) drum('snare', t, .14);
-    } else if (M.style === 'synth') {
-      if (beat === 0 || beat === 8) drum('kick', t, .45);
-      if (beat === 4 || beat === 12) drum('snare', t, .2);
-      if (s % 2 === 0) tone(NOTE(root - 12), t, spb * 1.8, { type: 'square', vol: .045, out: mus });
-      if (hi > .6) tone(NOTE(root + 24 + chord[s % chord.length]), t, spb * .9, { type: 'square', vol: .025 + (hi - .6) * .03, out: mus });
-      if (hi > .95 && s % 2 === 1) drum('hat', t, .06);
-    } else {
-      if (beat === 0 || beat === 10) drum('kick', t, .25);
-      if (hi > .5 && beat % 4 === 2) drum('hat', t, .05);
-      if (beat === 0 || beat === 8) tone(NOTE(root - 12), t, spb * 7, { type: 'sine', vol: .12, out: mus, attack: .05 });
-      if (s % 4 === 0 && Math.random() < .35) tone(NOTE(root + 24 + chord[Math.floor(Math.random() * chord.length)]), t, spb * 6, { type: 'sine', vol: .03, out: mus, attack: .02 });
+    const s = M.step % 64, beat = s % 16, tr = S.tracks[trackNow(S)], [root, chord] = tr[Math.floor(s / 16)], hi = M.intensity;
+    const t = M.next + (S.swing && s % 2 ? spb * S.swing : 0), on = (pat, i = beat) => pat && pat[i] === 'x';
+    if (beat === 0) pad(chord.map(c => root + 12 + c), t, spb * 16, S);
+    if (drums) {
+      if (on(S.kick)) drum('kick', t, M.style === 'chill' || M.style === 'lofi' ? .25 : .45);
+      if (on(S.snare)) drum('snare', t, S.snareVol || .14);
+      if (on(S.hat) && hi >= (S.hatFrom || 0)) drum('hat', t, S.hatVol || .1);
+      if (S.hatFast && hi > S.hatFast && s % 2 === 1) drum('hat', t, .05);
+      if (S.crackle && Math.random() < .12) drum('hat', t, .012);
     }
+    if (on(S.bass)) {
+      const n = S.acid ? root - 12 + (s % 3 === 0 ? 12 : 0) : S.power ? root - 12 : root - 12;
+      tone(NOTE(n), t, spb * (S.bassLen || 1.6), { type: S.bassWave, vol: S.bassVol || .1, out: mus, attack: S.bassLen > 4 ? .05 : .005, lp: S.acid ? 300 + hi * 2200 : 0 });
+    }
+    if (S.power && on(S.bass)) for (const c of chord) tone(NOTE(root + c), t, spb * 1.4, { type: 'sawtooth', vol: .018, out: mus, lp: 1800 });
+    if (S.stab && on(S.stab)) for (const c of chord) tone(NOTE(root + 12 + c), t, spb * .9, { type: 'triangle', vol: .022, out: mus });
+    if (lead && S.lead === 'arp' && hi >= (S.leadFrom || 0)) tone(NOTE(root + 24 + chord[s % chord.length]), t, spb * .9, { type: S.leadWave || 'square', vol: .022 + Math.max(0, hi - .6) * .03, out: mus });
+    if (lead && S.sparkle && s % 4 === 0 && Math.random() < S.sparkle) tone(NOTE(root + 24 + chord[Math.floor(Math.random() * chord.length)]), t, spb * 6, { type: 'sine', vol: .03, out: mus, attack: .02 });
     M.step++; M.next += spb;
+    if (M.step % 512 === 0) M.track = (M.track || 0) + 1; // nach 32 Takten nächstes Stück
   }
 }
 async function playOwn() {
@@ -259,7 +289,9 @@ export const music = {
     M.on = false; clearInterval(M.timer); M.timer = null;
     if (M.audio) { M.audio.pause(); if (M.audio.src) URL.revokeObjectURL(M.audio.src); M.audio = null; }
   },
-  skip() { if (M.audio && M.list.length) M.audio.onended(); },
+  // Nächstes Stück (eigene Dateien) bzw. nächste Akkordfolge (erzeugte Musik)
+  skip() { if (M.audio && M.list.length) M.audio.onended(); else if (M.on) { M.track = (M.track || 0) + 1; M.step = Math.ceil(M.step / 16) * 16; } },
+  get trackName() { const S = STYLES[M.style]; return S ? `${S.n} · Stück ${trackNow(S) + 1}/${S.tracks.length} · ${Math.round(bpmNow(S))} BPM` : ''; },
   get playing() { return M.on; },
 };
 
