@@ -5,7 +5,7 @@ let info = null;
 export async function buildInfo() {
   if (info) return info;
   let b = null; try { const r = await fetch('build.json', { cache: 'no-cache' }); if (r.ok) b = await r.json(); } catch (e) { }
-  let cache = ''; try { cache = (await caches.keys()).find(k => k.startsWith('veloverse-')) || ''; } catch (e) { }
+  let cache = ''; try { cache = (await caches.keys()).find(k => k.startsWith('indoorado-')) || ''; } catch (e) { }
   return info = { version: APP_VERSION, cache, ...(b && typeof b.commit === 'string' ? { commit: b.commit.replace(/[^0-9a-f]/gi, '').slice(0, 40), short: String(b.short || '').replace(/[^0-9a-f]/gi, '').slice(0, 12), date: b.date, build: +b.build || null, message: String(b.message || '').slice(0, 120), repo: /^[\w.-]+\/[\w.-]+$/.test(b.repo || '') ? b.repo : null } : {}) };
 }
 // Kurzer Text, z. B. „2026.11 · Build 87 · a1b2c3d · 26.11.2026“

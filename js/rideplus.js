@@ -205,8 +205,8 @@ export function photoMode(S, on) {
     if (e.target.closest('[data-close]')) photoMode(S, false);
     if (e.target.closest('[data-save]')) {
       const src = W.capture(1920), c = document.createElement('canvas'); c.width = src.width; c.height = src.height; const x = c.getContext('2d'); x.filter = FILTERS[filt][1]; x.drawImage(src, 0, 0);
-      x.filter = 'none'; x.font = `600 ${Math.round(c.height / 36)}px Barlow, sans-serif`; x.fillStyle = 'rgba(255,255,255,.85)'; x.textAlign = 'right'; x.fillText('VeloVerse · ' + S.route.name, c.width - 24, c.height - 24);
-      c.toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'veloverse-foto-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.jpg'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }, 'image/jpeg', .92);
+      x.filter = 'none'; x.font = `600 ${Math.round(c.height / 36)}px Barlow, sans-serif`; x.fillStyle = 'rgba(255,255,255,.85)'; x.textAlign = 'right'; x.fillText('Indoorado · ' + S.route.name, c.width - 24, c.height - 24);
+      c.toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'indoorado-foto-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.jpg'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }, 'image/jpeg', .92);
     }
   };
   // Kamera drehen und zoomen

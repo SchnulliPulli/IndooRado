@@ -12,7 +12,7 @@ export async function render(el) {
   <p class="muted">Jeder Plan ist eine Folge von Workouts, Woche für Woche. Alle Ziele hängen an deiner FTP (${profile.ftp} W) und passen sich automatisch an, wenn sie sich ändert. Eine Einheit zählt als erledigt, wenn du mindestens 90 % davon fährst.</p>
   ${pr ? active(pr) : ''}
   <section class="card form"><h2>Plan importieren</h2>
-    <p class="small muted">Mehrere Workout-Dateien (.zwo, .erg, .mrc) oder ein ZIP-Archiv damit wählen: daraus wird ein Plan, Reihenfolge nach Dateiname (am besten nummeriert: 01_…, 02_…). Plan-Dateien (VeloVerse-Plan <code>.json</code>, z. B. <code>…veloverse-plan.json</code>, oder eine Textdatei mit kopierter Plan-Übersicht) werden direkt als Plan übernommen, auch oben über „Plan-Datei importieren“. Die Ziele werden aus deiner FTP berechnet. <a href="#/help">Anleitung</a></p>
+    <p class="small muted">Mehrere Workout-Dateien (.zwo, .erg, .mrc) oder ein ZIP-Archiv damit wählen: daraus wird ein Plan, Reihenfolge nach Dateiname (am besten nummeriert: 01_…, 02_…). Plan-Dateien (Indoorado-Plan <code>.json</code>, z. B. <code>…indoorado-plan.json</code>, oder eine Textdatei mit kopierter Plan-Übersicht) werden direkt als Plan übernommen, auch oben über „Plan-Datei importieren“. Die Ziele werden aus deiner FTP berechnet. <a href="#/help">Anleitung</a></p>
     <div class="grid2 tight"><label class="f">Name des Plans<input class="inp" id="cpName" placeholder="z. B. Mein Gran Fondo"></label><label class="f">Einheiten pro Woche<input class="inp" id="cpPer" type="number" min="1" max="7" value="3"></label></div>
     <div class="row"><label class="btn pri">Dateien wählen und Plan anlegen<input type="file" id="cpFiles" accept=".zwo,.erg,.mrc,.json,.zip,.xml" multiple hidden></label></div>
     <details class="f"><summary><b>Plan aus Text einfügen</b> <span class="small muted">(z. B. kopierte Wochenübersicht einer Workout-Sammlung)</span></summary>
@@ -71,7 +71,7 @@ export async function render(el) {
       if (plan.active) stopPlan();
       startPlan(b.dataset.start); toast('Plan gestartet. Viel Erfolg!'); render(el); window.scrollTo(0, 0);
     }
-    if (b.dataset.expplan) { const p = getPlan(b.dataset.expplan); download(p.name.replace(/[^\wäöüÄÖÜß -]+/g, '').trim() + '.veloverse-plan.json', planToJson(p), 'application/json'); return; }
+    if (b.dataset.expplan) { const p = getPlan(b.dataset.expplan); download(p.name.replace(/[^\wäöüÄÖÜß -]+/g, '').trim() + '.indoorado-plan.json', planToJson(p), 'application/json'); return; }
     if (b.dataset.delplan) { if (await dialog({ title: 'Eigenen Plan löschen?', buttons: [{ label: 'Abbrechen', value: false }, { label: 'Löschen', value: true, cls: 'danger' }] })) { await deleteCustomPlan(b.dataset.delplan); render(el); } return; }
     if (b.dataset.go) { sel.workoutId = b.dataset.go; saveSel(); location.hash = '#/ride'; }
     if (b.dataset.pick) { sel.workoutId = b.dataset.pick; saveSel(); toast('Für die nächste Fahrt ausgewählt'); }

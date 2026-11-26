@@ -1,4 +1,4 @@
-// VeloVerse Online: Abgleich läuft über js/sync.js (gleiches Verfahren wie NAS/Cloud, Speicherort = privater Supabase-Ordner).
+// Indoorado Online: Abgleich läuft über js/sync.js (gleiches Verfahren wie NAS/Cloud, Speicherort = privater Supabase-Ordner).
 // Hier: Fahrt-Zusammenfassungen für Bestenlisten, Ankündigungen, Online-Daten und Konto löschen.
 import { db, kv } from '../db.js';
 import { online, client, access } from './client.js';

@@ -7,7 +7,7 @@ export function stravaTitle(ride) {
   if (ride.plan || ride.planId) parts.push(`${ride.plan?.name || 'Trainingsplan'} W${ride.planWeek || '?'}`);
   if (ride.workoutName) parts.push(ride.workoutName);
   parts.push(ride.routeName + (ride.laps ? ` (${ride.laps + 1} Runden)` : ''));
-  return 'VeloVerse: ' + parts.join(' · ');
+  return 'Indoorado: ' + parts.join(' · ');
 }
 export function stravaText(ride) {
   const s = ride.sum, L = [];
@@ -18,7 +18,7 @@ export function stravaText(ride) {
   if (tops.length) L.push(tops.join(' · '));
   if (ride.overtakes) L.push(`${ride.overtakes} Fahrer überholt`);
   if (ride.newBadges?.length) L.push('🏆 ' + ride.newBadges.map(b => BADGES.find(x => x.id === b)?.name).filter(Boolean).join(', '));
-  L.push('Indoor gefahren mit VeloVerse');
+  L.push('Indoor gefahren mit Indoorado');
   return L.join('\n');
 }
 
@@ -27,7 +27,7 @@ export async function overviewImage(ride, ftp) {
   try { await document.fonts?.ready; } catch (e) { }
   const W = 1600, H = 1000, c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
   const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#141a20'); g.addColorStop(1, '#1d2731'); x.fillStyle = g; x.fillRect(0, 0, W, H);
-  x.fillStyle = '#ff6a3d'; x.font = '700 30px Barlow, Arial'; x.fillText('VELOVERSE', 56, 70);
+  x.fillStyle = '#ff6a3d'; x.font = '700 30px Barlow, Arial'; x.fillText('INDOORADO', 56, 70);
   x.fillStyle = '#fff'; x.font = '700 54px "Barlow Condensed", Barlow, Arial'; x.fillText(trim(x, ride.title, W - 112), 56, 132);
   x.fillStyle = '#9aa7b3'; x.font = '500 24px Barlow, Arial'; x.fillText(new Date(ride.date).toLocaleString('de-DE', { dateStyle: 'full', timeStyle: 'short' }), 56, 170);
   // Karte aus den aufgezeichneten Koordinaten; Sprünge (Beamen) werden nicht verbunden
@@ -68,7 +68,7 @@ export async function factsImage(ride, ftp, bgBlob, opt = {}) {
   else { const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#1b2633'); g.addColorStop(1, '#2b1d24'); x.fillStyle = g; x.fillRect(0, 0, W, H); }
   let g = x.createLinearGradient(0, 0, W, 0); g.addColorStop(0, 'rgba(8,10,14,.92)'); g.addColorStop(.62, 'rgba(8,10,14,.72)'); g.addColorStop(1, 'rgba(8,10,14,.35)'); x.fillStyle = g; x.fillRect(0, 0, W, H);
   // Kopf
-  x.fillStyle = '#ff6a3d'; x.font = '700 26px Barlow, Arial'; x.fillText('VELOVERSE', 64, 72);
+  x.fillStyle = '#ff6a3d'; x.font = '700 26px Barlow, Arial'; x.fillText('INDOORADO', 64, 72);
   x.fillStyle = '#fff'; x.font = '700 58px "Barlow Condensed", Barlow, Arial'; x.fillText(trim(x, ride.title, W - 128), 64, 136);
   x.fillStyle = '#b8c3cc'; x.font = '500 24px Barlow, Arial'; x.fillText(new Date(ride.date).toLocaleString('de-DE', { dateStyle: 'full', timeStyle: 'short' }) + (ride.workoutDone ? '  ·  ✅ Workout geschafft' : ''), 64, 176);
   // Große Werte
@@ -112,7 +112,7 @@ export function shareText(ride) {
   const pr = (ride.prs || []).filter(k => [60, 300, 1200].includes(+k)); if (pr.length) L.push('🏆 Neue Bestwerte: ' + pr.map(k => (k < 60 ? k + ' s' : k / 60 + ' min') + ' ' + s.curve?.[k] + ' W').join(', '));
   const cl = (ride.climbs || []).find(c => c.pr); if (cl) L.push(`⛰ Bestzeit am ${cl.name}`);
   if (ride.mp?.riders?.length) L.push('🌐 Zusammen mit ' + ride.mp.riders.slice(0, 3).join(', '));
-  L.push('', '#VeloVerse #IndoorCycling #Radtraining #Rollentraining');
+  L.push('', '#Indoorado #IndoorCycling #Radtraining #Rollentraining');
   return L.join('\n');
 }
 // Bild für soziale Medien: 'story' 1080×1920 (Instagram/WhatsApp-Status/TikTok), 'square' 1080×1080 (Feed), sonst das Querformat
@@ -126,7 +126,7 @@ export async function socialImage(ride, ftp, bgBlob, fmt = 'story') {
   let g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, 'rgba(8,10,14,.55)'); g.addColorStop(story ? .3 : .25, 'rgba(8,10,14,.35)'); g.addColorStop(story ? .55 : .5, 'rgba(8,10,14,.82)'); g.addColorStop(1, 'rgba(8,10,14,.96)'); x.fillStyle = g; x.fillRect(0, 0, W, H);
   const M = 72;
   // Kopf
-  x.fillStyle = '#ff6a3d'; x.font = '800 34px Barlow, Arial'; x.fillText('VELOVERSE', M, M + 30);
+  x.fillStyle = '#ff6a3d'; x.font = '800 34px Barlow, Arial'; x.fillText('INDOORADO', M, M + 30);
   x.fillStyle = 'rgba(255,255,255,.8)'; x.font = '500 28px Barlow, Arial'; x.textAlign = 'right'; x.fillText(new Date(ride.date).toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' }), W - M, M + 30); x.textAlign = 'left';
   // Titel (bis zwei Zeilen)
   const ty = story ? 700 : 420; x.fillStyle = '#fff'; x.font = `700 ${story ? 84 : 66}px "Barlow Condensed", Barlow, Arial`;
@@ -160,7 +160,7 @@ export async function socialImage(ride, ftp, bgBlob, fmt = 'story') {
     for (let i = st; i < E.length; i += st) { const x0 = M + D[i - st] / Dm * pw, x1 = M + D[i] / Dm * pw, y1 = py0 + ph - (E[i] - lo) / (hi - lo) * ph; x.fillStyle = zoneColor((ride.samples[i].p || 0) / ftp); x.globalAlpha = .9; x.fillRect(x0, y1, Math.max(1, x1 - x0 + .6), py0 + ph - y1); }
     x.globalAlpha = 1;
   }
-  x.fillStyle = 'rgba(255,255,255,.65)'; x.font = '500 26px Barlow, Arial'; x.fillText('Indoor gefahren mit VeloVerse', M, H - M + 6);
+  x.fillStyle = 'rgba(255,255,255,.65)'; x.font = '500 26px Barlow, Arial'; x.fillText('Indoor gefahren mit Indoorado', M, H - M + 6);
   return new Promise(res => c.toBlob(res, 'image/jpeg', .92));
 }
 function wrap(x, t, max) { const w = String(t).split(' '), out = []; let cur = ''; for (const s of w) { const n = cur ? cur + ' ' + s : s; if (x.measureText(n).width > max && cur) { out.push(cur); cur = s; } else cur = n; } if (cur) out.push(cur); return out; }

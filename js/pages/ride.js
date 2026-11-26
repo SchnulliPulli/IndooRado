@@ -1045,7 +1045,7 @@ function shot(caption) {
   const items = [[p3 + ' W', 'Leistung'], [(live.heart ?? '–') + '', 'Puls'], [(S.v * 3.6).toFixed(1).replace('.', ',') + ' km/h', 'Tempo'], [fmtKm(S.odo) + ' km', 'Distanz'], [Math.round(S.asc) + ' m', 'Höhe'], [fmtT(S.t), 'Zeit']];
   let xx = w - 28; x.textAlign = 'right';
   for (let i = items.length - 1; i >= 0; i--) { x.fillStyle = '#fff'; x.font = '700 30px Barlow, Arial'; x.fillText(items[i][0], xx, h - 52); x.fillStyle = '#9aa7b3'; x.font = '500 15px Barlow, Arial'; x.fillText(items[i][1], xx, h - 30); xx -= Math.max(x.measureText(items[i][0]).width, 90) + 34; }
-  x.textAlign = 'left'; x.fillStyle = '#ff6a3d'; x.font = '700 20px Barlow, Arial'; x.fillText('VELOVERSE', 28, 40);
+  x.textAlign = 'left'; x.fillStyle = '#ff6a3d'; x.font = '700 20px Barlow, Arial'; x.fillText('INDOORADO', 28, 40);
   c.toBlob(b => { if (b && S) { S.shots.push({ blob: b, caption, t: Math.round(S.t), d: Math.round(S.odo) }); if (caption === 'Foto') flash('📷 Foto gespeichert', 900); } }, 'image/jpeg', .86);
   const fl = document.createElement('div'); fl.className = 'shotflash'; S.el.querySelector('.ridewrap').appendChild(fl); setTimeout(() => fl.remove(), 500);
 }

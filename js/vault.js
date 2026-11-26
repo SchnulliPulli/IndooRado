@@ -6,7 +6,7 @@
 import { kv } from './db.js';
 
 const MAGIC = new Uint8Array([86, 86, 69, 49]); // "VVE1"
-const CHECK = 'veloverse-vault-ok';
+const CHECK = 'indoorado-vault-ok', OLD_CHECKS = ['veloverse-vault-ok']; // ältere Tresore bleiben entsperrbar
 const ITER = 600000;
 export const vault = { key: null, meta: null, status: 'unknown' }; // status: unknown | off | locked | on
 const b64 = u8 => btoa(String.fromCharCode(...u8)), unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
@@ -44,7 +44,7 @@ export async function enableVault(io, pass) {
 export async function unlockVault(pass) {
   const m = vault.meta; if (!m) throw new Error('Kein Tresor eingerichtet');
   const key = await derive(pass, unb64(m.salt), m.iter);
-  let ok = false; try { ok = new TextDecoder().decode(await decrypt(unb64(m.check), key)) === CHECK; } catch (e) { }
+  let ok = false; try { ok = new TextDecoder().decode(await decrypt(unb64(m.check), key)) ; ok = ok === CHECK || OLD_CHECKS.includes(ok); } catch (e) { }
   if (!ok) throw new Error('Tresor-Passwort stimmt nicht');
   await kv.set('vaultKey:' + m.id, key); vault.key = key; vault.status = 'on';
 }

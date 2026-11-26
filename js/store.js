@@ -1,11 +1,12 @@
-// VeloVerse-Datenschnittstelle: ein festes, versioniertes Format für alle App-Daten.
+// Indoorado-Datenschnittstelle: ein festes, versioniertes Format für alle App-Daten.
 // - Schema-Version + Migrationen: nach App-Updates werden alte Daten beim Start automatisch angehoben, nichts geht verloren.
-// - Datenpaket ("veloverse-data"): dasselbe Format für Datei-Sicherung, Cloud-Speicher und (später) Server.
+// - Datenpaket ("indoorado-data"): dasselbe Format für Datei-Sicherung, Cloud-Speicher und (später) Server.
 //   Anmeldungen (Strava, Cloud, NAS) können mit einem Passwort verschlüsselt mitgesichert werden (AES-GCM, PBKDF2).
 // - Adapter: jede Speicherart implementiert { id, name, save(pkgText), load() } und benutzt nur exportData/importData.
 import { db, kv } from './db.js';
 
-export const FORMAT = 'veloverse-data';
+export const FORMAT = 'indoorado-data';
+const OLD_FORMATS = ['veloverse-data']; // Sicherungen aus der Zeit vor der Umbenennung bleiben lesbar
 export const SCHEMA = 2; // bei Änderungen am Datenmodell erhöhen und unten eine Migration ergänzen
 const STORES = ['rides', 'routes', 'workouts'];
 // Diese kv-Schlüssel sind Zugangsdaten bzw. gerätebezogen; sie wandern nur verschlüsselt ins Paket
@@ -63,9 +64,9 @@ export async function exportData(opt = {}) {
 export async function importData(text, { askPass } = {}) {
   const raw = typeof text === 'string' ? JSON.parse(text) : text;
   let d, schema, secrets = null;
-  if (raw.format === FORMAT) { d = raw.data; schema = raw.schema || 1; secrets = raw.secrets; }
+  if (raw.format === FORMAT || OLD_FORMATS.includes(raw.format)) { d = raw.data; schema = raw.schema || 1; secrets = raw.secrets; }
   else if (raw.app === 'trittwerk') { d = raw; schema = 1; }
-  else throw new Error('Keine VeloVerse-Sicherung');
+  else throw new Error('Keine Indoorado-Sicherung');
   if (schema > SCHEMA) throw new Error('Die Sicherung stammt aus einer neueren App-Version, bitte die App aktualisieren');
   for (const k in d.kv || {}) if (!LOCAL_ONLY.includes(k) && !SECRET_KEYS.includes(k) && k !== 'schemaVersion') await db.put('kv', d.kv[k], k);
   for (const s of STORES) for (const v of d[s] || []) await db.put(s, v);

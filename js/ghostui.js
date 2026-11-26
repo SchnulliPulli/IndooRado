@@ -20,7 +20,7 @@ export async function shareGhost(ride, routeName) {
     <p class="small muted">Enthalten sind nur Strecke, Name, Aussehen, Tag und deine Position alle 2 Sekunden – kein Puls, keine Watt.</p>
     <div class="row shbtns">${navigator.canShare?.({ files: [f] }) ? '<button class="btn pri" id="gsShare">📤 Datei teilen …</button>' : ''}<button class="btn" id="gsDl">⬇ Datei speichern</button><button class="btn" id="gsCopy">📋 Code kopieren</button></div>
     <label class="f">Geist-Code (${Math.round(code.length / 1024 * 10) / 10} KB) – z. B. per Messenger schicken<textarea class="inp gcode" readonly rows="3">${esc(code)}</textarea></label>`);
-  w.querySelector('#gsShare')?.addEventListener('click', () => navigator.share({ files: [f], title: 'VeloVerse-Geist', text: `Fahr gegen mich auf ${g.routeName}! Datei in VeloVerse unter Aktivitäten › Importieren › Geist öffnen.` }).catch(() => { }));
+  w.querySelector('#gsShare')?.addEventListener('click', () => navigator.share({ files: [f], title: 'Indoorado-Geist', text: `Fahr gegen mich auf ${g.routeName}! Datei in Indoorado unter Aktivitäten › Importieren › Geist öffnen.` }).catch(() => { }));
   w.querySelector('#gsDl').onclick = () => download(f.name, f);
   w.querySelector('#gsCopy').onclick = async () => { try { await navigator.clipboard.writeText(code); toast('Code kopiert'); } catch (e) { w.querySelector('.gcode').select(); toast('Bitte markierten Code kopieren'); } };
 }

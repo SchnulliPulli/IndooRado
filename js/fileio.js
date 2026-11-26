@@ -1,4 +1,4 @@
-// Import und Export von Workouts und Plänen: .zwo, .erg, .mrc, .json (VeloVerse) und .zip mit solchen Dateien
+// Import und Export von Workouts und Plänen: .zwo, .erg, .mrc, .json (Indoorado) und .zip mit solchen Dateien
 import { parseZwo, parseErg } from './workouts.js';
 
 // ZIP lesen (ohne Bibliothek): zentrales Verzeichnis, gespeicherte oder "deflate"-komprimierte Einträge
@@ -27,8 +27,8 @@ function fromText(name, text, ftp) {
   const base = name.split('/').pop();
   if (/\.json$/i.test(base) || /^\s*[{[]/.test(text)) {
     const j = JSON.parse(text);
-    if (j.veloverse === 'plan' || (j.wos && j.perWeek)) return { plan: { name: j.name || base.replace(/\.\w+$/, ''), perWeek: j.perWeek || 3, wos: j.wos, weeksLayout: j.weeksLayout } };
-    if (j.veloverse === 'workout' || j.segs) return { workout: { ...j, id: 'u-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), cat: j.cat && !/^Plan:/.test(j.cat) ? j.cat : 'Eigene', builtin: false, created: new Date().toISOString() } };
+    if ((j.indoorado || j.veloverse) === 'plan' || (j.wos && j.perWeek)) return { plan: { name: j.name || base.replace(/\.\w+$/, ''), perWeek: j.perWeek || 3, wos: j.wos, weeksLayout: j.weeksLayout } };
+    if ((j.indoorado || j.veloverse) === 'workout' || j.segs) return { workout: { ...j, id: 'u-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), cat: j.cat && !/^Plan:/.test(j.cat) ? j.cat : 'Eigene', builtin: false, created: new Date().toISOString() } };
     throw new Error('Unbekanntes JSON-Format');
   }
   if (/\.zwo$/i.test(base) || /<workout/i.test(text.slice(0, 4000))) return { workout: parseZwo(text, base.replace(/\.\w+$/, '')) };
@@ -69,10 +69,10 @@ export function toZwo(w) {
     const tag = i === 0 && g.b > g.a ? 'Warmup' : i === w.segs.length - 1 && g.b < g.a ? 'Cooldown' : 'Ramp';
     return `<${tag} Duration="${g.dur}" PowerLow="${r(g.a)}" PowerHigh="${r(g.b)}"${cad}>${txt}</${tag}>`;
   });
-  return `<workout_file>\n  <author>VeloVerse</author>\n  <name>${x(w.name)}</name>\n  <description>${x(w.desc || '')}</description>\n  <sportType>bike</sportType>\n  <workout>\n    ${segs.join('\n    ')}\n  </workout>\n</workout_file>\n`;
+  return `<workout_file>\n  <author>Indoorado</author>\n  <name>${x(w.name)}</name>\n  <description>${x(w.desc || '')}</description>\n  <sportType>bike</sportType>\n  <workout>\n    ${segs.join('\n    ')}\n  </workout>\n</workout_file>\n`;
 }
-export const planToJson = p => JSON.stringify({ veloverse: 'plan', version: 1, name: p.name, perWeek: p.perWeek, weeksLayout: p.weeks?.map(w => w.length), wos: p.all.map(w => ({ name: w.name, desc: w.desc, segs: w.segs })) }, null, 1);
-export const workoutToJson = w => JSON.stringify({ veloverse: 'workout', version: 1, name: w.name, cat: w.cat, desc: w.desc, segs: w.segs }, null, 1);
+export const planToJson = p => JSON.stringify({ indoorado: 'plan', version: 1, name: p.name, perWeek: p.perWeek, weeksLayout: p.weeks?.map(w => w.length), wos: p.all.map(w => ({ name: w.name, desc: w.desc, segs: w.segs })) }, null, 1);
+export const workoutToJson = w => JSON.stringify({ indoorado: 'workout', version: 1, name: w.name, cat: w.cat, desc: w.desc, segs: w.segs }, null, 1);
 
 /* ---------- Plan aus eingefügtem Text (z. B. kopierte Wochenübersicht einer Workout-Sammlung) ---------- */
 // Erkennt Wochen ("Week 3", "Week 0 Prep"), Workouts (Titel, dann Schritte bis "View %FTP"), Schritte wie

@@ -1,6 +1,6 @@
 {
-  "name": "VeloVerse",
-  "short_name": "VeloVerse",
+  "name": "Indoorado",
+  "short_name": "Indoorado",
   "description": "Indoor-Radtraining im Browser",
   "start_url": "./index.html",
   "display": "fullscreen",

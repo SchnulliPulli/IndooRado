@@ -24,8 +24,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: build.json erzeugen
         run: |
-          jq -n --arg c "$GITHUB_SHA" --arg d "$(git log -1 --format=%cI)" --arg m "$(git log -1 --format=%s | head -c 120)" --arg r "$GITHUB_RUN_NUMBER" \
-            '{commit: $c, short: $c[0:7], date: $d, message: $m, build: ($r | tonumber), repo: "SchnulliPulli/VeloVerse"}' > build.json
+          jq -n --arg c "$GITHUB_SHA" --arg d "$(git log -1 --format=%cI)" --arg m "$(git log -1 --format=%s | head -c 120)" --arg r "$GITHUB_RUN_NUMBER" --arg repo "$GITHUB_REPOSITORY" \
+            '{commit: $c, short: $c[0:7], date: $d, message: $m, build: ($r | tonumber), repo: $repo}' > build.json
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

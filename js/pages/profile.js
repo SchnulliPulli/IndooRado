@@ -20,7 +20,7 @@ function stravaCard(box) {
       <label class="switch"><input type="checkbox" id="sAuto" ${c.auto ? 'checked' : ''}><span></span> Jede gespeicherte Fahrt automatisch hochladen</label>
       <div class="row"><button class="btn sm ghost danger" id="sOff">Verbindung trennen</button></div>`
     : `<p class="small muted"><b>Auch ohne Verbindung geht es:</b> In der Zusammenfassung lädt „Zu Strava“ die FIT-Datei und die Bilder herunter, kopiert Titel und Beschreibung und öffnet die Upload-Seite von Strava. Die direkte Verbindung braucht eine eigene Strava-API-App; Strava bietet das inzwischen nur noch mit Abo an.</p><p class="small muted">Für den direkten Upload brauchst du eine eigene Strava-API-App. Client-ID und Client-Secret bleiben nur in diesem Browser, sie landen weder in der Sicherungsdatei noch auf dem NAS.</p>
-      <ol class="tips small muted"><li>Auf <b>strava.com/settings/api</b> eine App anlegen (Name z. B. „VeloVerse“, Website beliebig).</li><li>Als <b>Authorization Callback Domain</b> eintragen: <code>${esc(location.hostname)}</code></li><li>Client-ID und Client-Secret hier eintragen und „Mit Strava verbinden“ tippen.</li></ol>
+      <ol class="tips small muted"><li>Auf <b>strava.com/settings/api</b> eine App anlegen (Name z. B. „Indoorado“, Website beliebig).</li><li>Als <b>Authorization Callback Domain</b> eintragen: <code>${esc(location.hostname)}</code></li><li>Client-ID und Client-Secret hier eintragen und „Mit Strava verbinden“ tippen.</li></ol>
       <div class="grid2 tight"><label class="f">Client-ID<input class="inp" id="sId" inputmode="numeric" value="${esc(c.clientId || '')}"></label><label class="f">Client-Secret<input class="inp" id="sSec" type="password" autocomplete="off" value="${esc(c.clientSecret || '')}"></label></div>
       <label class="switch"><input type="checkbox" id="sAuto2" ${c.auto !== false ? 'checked' : ''}><span></span> Danach jede gespeicherte Fahrt automatisch hochladen</label>
       <div class="row"><button class="btn pri sm" id="sCon">Mit Strava verbinden</button></div>`}
@@ -40,17 +40,17 @@ const MODES = [['dsm', 'Synology'], ['webdav', 'WebDAV / Nextcloud'], ['onedrive
 function oauthHelp(mode) {
   const ru = esc(redirectUri()), og = esc(location.origin);
   if (mode === 'onedrive') return `<ol class="tips"><li><a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank" rel="noopener">Microsoft Entra → App-Registrierungen</a> → <b>Neue Registrierung</b> (mit deinem Microsoft-Konto, kostenlos).</li>
-    <li>Name z. B. „VeloVerse“. Unterstützte Kontotypen: <b>Konten in einem beliebigen Organisationsverzeichnis und persönliche Microsoft-Konten</b>.</li>
+    <li>Name z. B. „Indoorado“. Unterstützte Kontotypen: <b>Konten in einem beliebigen Organisationsverzeichnis und persönliche Microsoft-Konten</b>.</li>
     <li>Umleitungs-URI: Plattform <b>Single-Page-Anwendung (SPA)</b>, Adresse <code>${ru}</code>.</li>
     <li>Die <b>Anwendungs-ID (Client-ID)</b> von der Übersichtsseite hier eintragen. Ein Geheimnis ist nicht nötig.</li>
-    <li>Beim Verbinden fragt Microsoft einmal nach der Erlaubnis. VeloVerse sieht nur seinen eigenen Ordner <b>Apps/VeloVerse</b>, nicht deine übrigen Dateien.</li>
+    <li>Beim Verbinden fragt Microsoft einmal nach der Erlaubnis. Indoorado sieht nur seinen eigenen Ordner <b>Apps/Indoorado</b>, nicht deine übrigen Dateien.</li>
     <li>Hinweis: Microsoft lässt Browser-Apps höchstens 24 Stunden ohne neue Anmeldung zu. Danach einmal auf „Neu verbinden“ tippen, die Daten bleiben.</li></ol>`;
   if (mode === 'gdrive') return `<ol class="tips"><li><a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a> → neues Projekt anlegen.</li>
     <li>APIs &amp; Dienste → Bibliothek → <b>Google Drive API</b> aktivieren.</li>
     <li>OAuth-Zustimmungsbildschirm: Typ <b>Extern</b>, App-Name, deine E-Mail. Danach unter „Zielgruppe“ <b>App veröffentlichen</b> (der verwendete Zugriff „nur von der App erstellte Dateien“ braucht keine Google-Prüfung). Im Testmodus läuft die Anmeldung sonst nach 7 Tagen ab.</li>
     <li>Anmeldedaten → <b>OAuth-Client-ID</b> → Typ <b>Webanwendung</b>. Autorisierte JavaScript-Quellen: <code>${og}</code>, autorisierte Weiterleitungs-URIs: <code>${ru}</code>.</li>
-    <li><b>Client-ID</b> und <b>Clientschlüssel</b> hier eintragen (bleiben nur in diesem Browser). Die Daten landen sichtbar im Ordner <b>VeloVerse</b> in „Meine Ablage“.</li></ol>`;
-  return `<ol class="tips"><li><a href="https://www.dropbox.com/developers/apps" target="_blank" rel="noopener">Dropbox App Console</a> → <b>Create app</b> → Scoped access → <b>App folder</b> → Name z. B. „VeloVerse“.</li>
+    <li><b>Client-ID</b> und <b>Clientschlüssel</b> hier eintragen (bleiben nur in diesem Browser). Die Daten landen sichtbar im Ordner <b>Indoorado</b> in „Meine Ablage“.</li></ol>`;
+  return `<ol class="tips"><li><a href="https://www.dropbox.com/developers/apps" target="_blank" rel="noopener">Dropbox App Console</a> → <b>Create app</b> → Scoped access → <b>App folder</b> → Name z. B. „Indoorado“.</li>
     <li>Reiter <b>Permissions</b>: <code>files.metadata.read</code>, <code>files.content.read</code>, <code>files.content.write</code> anhaken → Submit.</li>
     <li>Reiter <b>Settings</b>: unter OAuth 2 Redirect URIs <code>${ru}</code> hinzufügen, „Allow public clients (Implicit Grant &amp; PKCE)“ auf <b>Allow</b>.</li>
     <li>Den <b>App key</b> hier eintragen. Ein Geheimnis ist nicht nötig, die Anmeldung bleibt dauerhaft bestehen.</li></ol>`;
@@ -61,7 +61,7 @@ async function oauthBlock(box, mode, c, connected) {
       <label class="switch"><input type="checkbox" id="nAuto" ${c.auto !== false ? 'checked' : ''}><span></span> Automatisch abgleichen (beim Start und nach jeder Änderung)</label>
       <div class="row"><button class="btn sm" id="nPush">Jetzt abgleichen</button><button class="btn sm" id="nPull">Alles aus ${esc(P.name)} übernehmen</button><button class="btn sm ghost danger" id="nOff">Trennen</button></div>`;
   return `${c.mode === mode && sync.needLogin ? `<p class="warn small">🔑 Die Anmeldung bei ${esc(P.name)} ist abgelaufen. Einmal neu verbinden, die Daten bleiben.</p>` : ''}
-      <p class="small muted">Einmalig eine eigene, kostenlose App bei ${esc(P.name)} anlegen und die Kennung hier eintragen. VeloVerse spricht ${esc(P.name)} dann direkt aus dem Browser an, ohne fremden Server.</p>
+      <p class="small muted">Einmalig eine eigene, kostenlose App bei ${esc(P.name)} anlegen und die Kennung hier eintragen. Indoorado spricht ${esc(P.name)} dann direkt aus dem Browser an, ohne fremden Server.</p>
       <details class="small"><summary><b>So legst du die App an</b></summary>${oauthHelp(mode)}</details>
       <label class="f">${mode === 'dropbox' ? 'App key' : 'Client-ID'}<input class="inp" id="oId" value="${esc(app.clientId || (c.mode === mode ? c.clientId : '') || '')}" autocomplete="off" spellcheck="false"></label>
       ${P.secret ? `<label class="f">Clientschlüssel (Client-Secret)<input class="inp" id="oSec" type="password" value="${esc(app.secret || (c.mode === mode ? c.secret : '') || '')}" autocomplete="off"></label>` : ''}
@@ -85,10 +85,10 @@ async function nasCard(box) {
       <div class="row"><button class="btn sm" id="nPush">Jetzt abgleichen</button><button class="btn sm" id="nPull">Alles vom NAS übernehmen</button><button class="btn sm ghost" id="nLogout">Abmelden</button></div>`
     : `<p class="small muted">Anmeldung wie in DSM, Synology Drive oder Photos, mit deinem DSM-Konto und, falls aktiviert, dem 2FA-Code aus der Authenticator-App.</p>
       <div class="row"><button class="btn pri sm" id="nLogin">${c.host ? 'Neu anmelden' : 'Beim NAS anmelden'}</button>${c.host ? '<button class="btn sm ghost danger" id="nOff">Trennen</button>' : ''}</div>`)
-    : `<label class="f">WebDAV-Adresse des Ordners<input class="inp" id="nUrl" type="url" placeholder="https://dav.deine-domain.de/home/veloverse" value="${esc(c.url || '')}"></label>
+    : `<label class="f">WebDAV-Adresse des Ordners<input class="inp" id="nUrl" type="url" placeholder="https://dav.deine-domain.de/home/indoorado" value="${esc(c.url || '')}"></label>
       <div class="grid2 tight"><label class="f">Benutzer<input class="inp" id="nUser" autocomplete="username" value="${esc(c.user || '')}"></label><label class="f">Passwort<input class="inp" id="nPass" type="password" autocomplete="current-password" value="${esc(c.pass || '')}"></label></div>
       <label class="switch"><input type="checkbox" id="nAuto" ${c.auto !== false ? 'checked' : ''}><span></span> Automatisch abgleichen</label>
-      <p class="small muted">WebDAV kennt keine 2FA, das Passwort bleibt dafür in diesem Browser. Für Synology besser die Synology-Anmeldung nutzen. <b>Nextcloud/ownCloud</b>: Adresse <code>https://cloud.example.de/remote.php/dav/files/BENUTZER/VeloVerse</code>, dazu ein App-Passwort (Einstellungen → Sicherheit) und eine CORS-Freigabe für ${esc(location.origin)} auf dem Server.</p>
+      <p class="small muted">WebDAV kennt keine 2FA, das Passwort bleibt dafür in diesem Browser. Für Synology besser die Synology-Anmeldung nutzen. <b>Nextcloud/ownCloud</b>: Adresse <code>https://cloud.example.de/remote.php/dav/files/BENUTZER/Indoorado</code>, dazu ein App-Passwort (Einstellungen → Sicherheit) und eine CORS-Freigabe für ${esc(location.origin)} auf dem Server.</p>
       <div class="row"><button class="btn sm" id="nSave">Speichern und testen</button><button class="btn sm" id="nPush">Jetzt abgleichen</button><button class="btn sm" id="nPull">Alles vom NAS übernehmen</button>${c.url ? '<button class="btn sm ghost danger" id="nOff">Trennen</button>' : ''}</div>`}
     <div class="small" id="nStat">${status()}</div>
     ${on && sync.device ? `<div class="devlist small"><label class="f">Name dieses Geräts<input class="inp" id="nDev" value="${esc(sync.device.name)}" maxlength="40"></label>
@@ -99,7 +99,7 @@ async function nasCard(box) {
         <li>Das NAS braucht HTTPS mit gültigem Zertifikat (Systemsteuerung → Sicherheit → Zertifikat, z. B. Let’s Encrypt für deine Domain).</li>
         <li>Systemsteuerung → Anmeldeportal → Erweitert → <b>Reverse Proxy</b> → Erstellen. Quelle: HTTPS, z. B. <code>nas-api.deine-domain.de</code>, Port 443. Ziel: HTTPS, <code>localhost</code>, Port <b>5001</b> (für WebDAV: 5006).</li>
         <li>Im selben Eintrag unter „Benutzerdefinierte Kopfzeile“ hinzufügen:<br><code>Access-Control-Allow-Origin</code> = <code>${esc(location.origin)}</code>${mode === 'webdav' ? '<br><code>Access-Control-Allow-Methods</code> = <code>GET, PUT, DELETE, MKCOL, PROPFIND, OPTIONS</code><br><code>Access-Control-Allow-Headers</code> = <code>Authorization, Content-Type, Depth</code>' : ''}</li>
-        <li>${mode === 'dsm' ? 'Als NAS-Adresse dann <code>https://nas-api.deine-domain.de</code> eintragen. Als Ordner z. B. <code>/home/Drive/VeloVerse</code> (erscheint in Synology Drive unter „Meine Dateien“) oder einen freigegebenen Ordner wie <code>/Sport/VeloVerse</code>.' : 'Das Paket „WebDAV Server“ installieren und die Ordner-Adresse über den Reverse Proxy eintragen.'}</li>
+        <li>${mode === 'dsm' ? 'Als NAS-Adresse dann <code>https://nas-api.deine-domain.de</code> eintragen. Als Ordner z. B. <code>/home/Drive/Indoorado</code> (erscheint in Synology Drive unter „Meine Dateien“) oder einen freigegebenen Ordner wie <code>/Sport/Indoorado</code>.' : 'Das Paket „WebDAV Server“ installieren und die Ordner-Adresse über den Reverse Proxy eintragen.'}</li>
         <li>Am besten ein eigenes DSM-Konto nur mit Zugriff auf diesen Ordner und auf File Station verwenden.</li>
         <li><b>NAS hinter einem eigenen Server (VPS, Tunnel)</b>: Die Kopfzeile dann im Proxy auf dem VPS setzen statt in DSM, die NAS-Adresse ist die öffentliche Subdomain (Port 443).<br>nginx: <code>add_header Access-Control-Allow-Origin "${esc(location.origin)}" always;</code>${mode === 'webdav' ? ' <code>add_header Access-Control-Allow-Methods "GET, PUT, DELETE, MKCOL, PROPFIND, OPTIONS" always; add_header Access-Control-Allow-Headers "Authorization, Content-Type, Depth" always;</code>' : ''}<br>Caddy: <code>header Access-Control-Allow-Origin "${esc(location.origin)}"</code><br>Weiterleiten muss der Proxy dabei mindestens den Pfad <code>/webapi/</code> an DSM (Port 5001).</li>
       </ol>
@@ -151,7 +151,7 @@ function loginDialog() {
     w.innerHTML = `<form class="card dlg form syno" autocomplete="on">
       <div class="syno-head"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><circle cx="7" cy="7.5" r="1"/><circle cx="7" cy="16.5" r="1"/></svg><div><h2 style="margin:0">Beim NAS anmelden</h2><div class="small muted">Synology DSM-Konto</div></div></div>
       <label class="f">NAS-Adresse (HTTPS, Port 443)<input class="inp" name="host" type="text" inputmode="url" required placeholder="nas.deine-domain.de" value="${esc(c.host || '')}"></label>
-      <label class="f">Ordner für VeloVerse<input class="inp" name="folder" required placeholder="/home/Drive/VeloVerse" value="${esc(c.folder || '/home/Drive/VeloVerse')}"></label>
+      <label class="f">Ordner für Indoorado<input class="inp" name="folder" required placeholder="/home/Drive/Indoorado" value="${esc(c.folder || '/home/Drive/Indoorado')}"></label>
       <label class="f">Benutzername<input class="inp" name="user" required autocomplete="username" value="${esc(c.user || '')}"></label>
       <label class="f">Passwort<input class="inp" name="pass" type="password" required autocomplete="current-password"></label>
       <label class="f" id="otpBox" hidden>Bestätigungscode (2FA)<input class="inp" name="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="6-stelliger Code aus der Authenticator-App"></label>
@@ -253,7 +253,7 @@ export async function render(el, params = []) {
   </section>`,
   connect: `
   <section class="pagehead"><h1>Verbindungen</h1></section>
-  ${sync.online ? `<section class="card pausebox"><b>☁ Abgleich läuft über VeloVerse Online.</b> <span class="small muted">Solange du angemeldet bist, pausiert ${sync.cfg && (sync.cfg.host || sync.cfg.url || sync.cfg.clientId) ? 'der Abgleich mit ' + esc(providerName(sync.cfg.mode)) : 'jeder andere Cloud-Speicher'}. Nach dem Abmelden geht es dort automatisch weiter. Strava ist davon unabhängig.</span> <a href="#/account" class="small">Zum Konto</a></section>` : ''}
+  ${sync.online ? `<section class="card pausebox"><b>☁ Abgleich läuft über Indoorado Online.</b> <span class="small muted">Solange du angemeldet bist, pausiert ${sync.cfg && (sync.cfg.host || sync.cfg.url || sync.cfg.clientId) ? 'der Abgleich mit ' + esc(providerName(sync.cfg.mode)) : 'jeder andere Cloud-Speicher'}. Nach dem Abmelden geht es dort automatisch weiter. Strava ist davon unabhängig.</span> <a href="#/account" class="small">Zum Konto</a></section>` : ''}
   <section class="card form" id="stravaCard"></section>
   <section class="card form" id="nasCard"></section>`,
   };
@@ -293,7 +293,7 @@ export async function render(el, params = []) {
   on('#bk', 'onclick', async () => {
     let secretsPass = null;
     if ($('#bkSec', el)?.checked) { secretsPass = await askPass('Passwort für die Anmeldungen', true); if (!secretsPass) return; }
-    download('veloverse-sicherung-' + new Date().toISOString().slice(0, 10) + '.json', await backup({ secretsPass }), 'application/json');
+    download('indoorado-sicherung-' + new Date().toISOString().slice(0, 10) + '.json', await backup({ secretsPass }), 'application/json');
   });
   on('#rs', 'onchange', async e => { try { await restore(await e.target.files[0].text(), { askPass: () => askPass('Sicherung enthält Anmeldungen: Passwort eingeben') }); toast('Sicherung eingespielt, App wird neu geladen'); setTimeout(() => location.reload(), 1200); } catch (err) { toast('Fehler: ' + err.message, 5000); } });
   on('#wp', 'onclick', async () => {

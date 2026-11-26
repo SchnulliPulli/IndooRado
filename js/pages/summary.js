@@ -44,7 +44,7 @@ export async function render(el, [id], query) {
     </section>` : ''}
   <section class="card act">
     <div class="acthead"><div class="actav" style="background:${esc(profile.jersey || '#ff6a3d')}">${esc((profile.name || 'F')[0].toUpperCase())}</div>
-      <div style="flex:1;min-width:0"><div class="small muted">${esc(profile.name)} · ${fmtDate(ride.date, { dateStyle: 'full', timeStyle: 'short' })} · ${ride.imported ? 'übernommen aus ' + (ride.imported === 'strava' ? 'Strava' : 'FIT-Datei') : 'Indoor mit VeloVerse'}</div>
+      <div style="flex:1;min-width:0"><div class="small muted">${esc(profile.name)} · ${fmtDate(ride.date, { dateStyle: 'full', timeStyle: 'short' })} · ${ride.imported ? 'übernommen aus ' + (ride.imported === 'strava' ? 'Strava' : 'FIT-Datei') : 'Indoor mit Indoorado'}</div>
         <h1 id="title">${esc(ride.title)}${ride.demoDevices ? ' <span class="prtag">🧪 Demo</span>' : ''}</h1>
         <div class="small muted">${esc(ride.routeName || '')}${ride.laps ? ` · ${ride.laps + 1} Runden` : ''}${ride.workoutName ? ' · Workout ' + esc(ride.workoutName) + (ride.workoutDone ? ' ✅' : '') : ''}${ride.mode && ride.mode !== 'import' ? ' · ' + ({ gear: 'virtuelle Gänge', sim: 'Steigung', erg: 'ERG', hr: 'Puls-Ziel' }[ride.mode] || ride.mode) : ''} · FTP ${ride.ftpUsed} W</div></div></div>
     <div class="actmain">

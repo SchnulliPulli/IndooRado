@@ -1,4 +1,4 @@
-VELOVERSE – Indoor-Radtraining im Browser
+INDOORADO – Indoor-Radtraining im Browser
 ==========================================
 
 Den ganzen Ordner auf einen Webserver legen, index.html ist der Einstieg.

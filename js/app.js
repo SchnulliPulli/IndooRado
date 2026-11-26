@@ -7,8 +7,8 @@ import { ICON, avatarSvg } from './components.js';
 import { loadPlan } from './plans.js';
 import { loadSync, autoSync, sync, isConfigured, providerName, handleCloudRedirect } from './sync.js';
 import { loadStrava, handleRedirect, strava, connected as stravaConnected } from './strava.js';
-// Schutz gegen Clickjacking: VeloVerse läuft nie eingebettet in einer fremden Seite (GitHub Pages kann dafür keinen Header setzen)
-if (window.top !== window.self) { const a = document.createElement('a'); a.href = location.href; a.target = '_top'; a.textContent = 'VeloVerse direkt öffnen'; document.body.replaceChildren(document.createTextNode('VeloVerse kann nicht eingebettet werden. '), a); throw new Error('eingebettet'); }
+// Schutz gegen Clickjacking: Indoorado läuft nie eingebettet in einer fremden Seite (GitHub Pages kann dafür keinen Header setzen)
+if (window.top !== window.self) { const a = document.createElement('a'); a.href = location.href; a.target = '_top'; a.textContent = 'Indoorado direkt öffnen'; document.body.replaceChildren(document.createTextNode('Indoorado kann nicht eingebettet werden. '), a); throw new Error('eingebettet'); }
 
 const PAGES = {
   '': () => import('./pages/start.js'), ride: () => import('./pages/ride.js'), summary: () => import('./pages/summary.js'),
@@ -61,7 +61,7 @@ function nav() {
   const fs = $('#fsBtn'), fsUpd = () => { const on = !!(document.fullscreenElement || document.webkitFullscreenElement); fs.innerHTML = on ? '<svg viewBox="0 0 24 24"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>' : ICON.full; fs.title = on ? 'Vollbild beenden' : 'Vollbild'; fs.dataset.st = on ? 'on' : 'off'; };
   fs.onclick = toggleFullscreen; document.addEventListener('fullscreenchange', fsUpd); document.addEventListener('webkitfullscreenchange', fsUpd); fsUpd();
   if (!document.documentElement.requestFullscreen && !document.documentElement.webkitRequestFullscreen) fs.hidden = true;
-  // Anmelden-Knopf (nur wenn VeloVerse Online eingerichtet ist); angemeldet zeigt er Initiale und Namen
+  // Anmelden-Knopf (nur wenn Indoorado Online eingerichtet ist); angemeldet zeigt er Initiale und Namen
   const lb = document.createElement('a'); lb.className = 'btn sm loginbtn'; lb.href = '#/account'; lb.hidden = true;
   document.querySelector('.ridebtn').before(lb);
   const loginUpd = async () => {
@@ -312,7 +312,7 @@ async function init() {
   bus.on('toast', m => toast(m));
   if (await kv.get('demo', !support().ok)) setDemo(true);
   persist();
-  // VeloVerse Online läuft im Hintergrund an, die Startseite wartet nicht darauf.
+  // Indoorado Online läuft im Hintergrund an, die Startseite wartet nicht darauf.
   // Nur bei Rückkehr vom Login (?code=…) erst die Anmeldung abschließen, damit niemand sonst den Code nimmt.
   const O = await import('./online/client.js');
   const onlineP = O.loadSiteConfig().then(() => { window.__loginUpd?.(); if (O.configured()) return O.initOnline().then(() => window.__loginUpd?.()); }).catch(e => console.warn('Online:', e.message));

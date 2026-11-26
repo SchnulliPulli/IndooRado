@@ -1,4 +1,4 @@
-// Admin-Panel für VeloVerse Online: Kennzahlen, Nutzer (Rolle, Sperre, Daten löschen), Ankündigungen.
+// Admin-Panel für Indoorado Online: Kennzahlen, Nutzer (Rolle, Sperre, Daten löschen), Ankündigungen.
 // Die Datenbank prüft selbst: nur Rolle "admin" mit bestätigter 2FA (aal2) darf hier lesen und schreiben.
 import { $, esc, toast, dialog, fmtDate } from '../util.js';
 import * as O from '../online/client.js';
@@ -167,7 +167,7 @@ export async function render(el) {
     if (e.target.closest('#adCsv')) {
       const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`, st = u => stat(u)[0];
       const csv = ['Name;Rolle;Status;Level;Angelegt;Zuletzt online;Öffentlich', ...users.map(u => [u.display_name, u.role, st(u), u.level, u.created_at, u.last_seen || '', u.public_profile ? 'ja' : 'nein'].map(q).join(';'))].join('\n');
-      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv' })); a.download = `veloverse-nutzer-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv' })); a.download = `indoorado-nutzer-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     }
   });
   kpis(); loadUsers(); anns(); activity(); evAdm(); clAdm();

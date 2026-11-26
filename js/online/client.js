@@ -1,4 +1,4 @@
-// VeloVerse Online: Verbindung zu Supabase (Login, Profil, 2FA). Ohne Konfiguration bleibt alles aus und die App läuft rein lokal.
+// Indoorado Online: Verbindung zu Supabase (Login, Profil, 2FA). Ohne Konfiguration bleibt alles aus und die App läuft rein lokal.
 // Die Supabase-Bibliothek wird erst geladen, wenn Online wirklich genutzt wird.
 import { bus } from '../util.js';
 import { CONFIG } from './config.js';
@@ -86,7 +86,7 @@ export function forgetAccount(uid) { setAccounts(accounts().filter(x => x.uid !=
 export async function realtimeAuth() { const sb = await client(); const { data } = await sb.auth.getSession(); if (data.session) await sb.realtime.setAuth(data.session.access_token); return !!data.session; }
 export async function client() {
   if (online.client) return online.client;
-  if (!configured()) throw new Error('VeloVerse Online ist nicht eingerichtet');
+  if (!configured()) throw new Error('Indoorado Online ist nicht eingerichtet');
   const { createClient } = await import('../../vendor/supabase.esm.js');
   const c = config();
   online.client = createClient(c.url, c.anonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: loginReturn(), flowType: 'pkce', storageKey: 'vv-auth', storage: authStore, lock: tabLock }, global: { fetch: trackedFetch } });
@@ -171,7 +171,7 @@ export async function mfaFactorsCached() { if (fCache && Date.now() - fCache.t <
 export const dropFactorCache = () => { fCache = null; };
 // QR-Code als sichere data:-Adresse (Supabase liefert rohes SVG mit Anführungszeichen, das in einem HTML-Attribut zerbricht)
 export function qrSrc(q) { if (!q) return ''; const m = /^data:image\/svg\+xml;(?:utf-8|charset=utf-8),(.*)$/s.exec(q); const svg = m ? m[1] : q.trim().startsWith('<svg') ? q : null; return svg ? 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg) : q; }
-export async function mfaEnroll() { dropFactorCache(); const { data, error } = await (await client()).auth.mfa.enroll({ factorType: 'totp', friendlyName: 'VeloVerse ' + new Date().toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) + ' ' + Math.random().toString(36).slice(2, 6) }); if (error) throw error; return data; } // { id, totp: { qr_code, secret, uri } }
+export async function mfaEnroll() { dropFactorCache(); const { data, error } = await (await client()).auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Indoorado ' + new Date().toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) + ' ' + Math.random().toString(36).slice(2, 6) }); if (error) throw error; return data; } // { id, totp: { qr_code, secret, uri } }
 export async function mfaVerify(factorId, code) { dropFactorCache();
   const sb = await client();
   const { data: ch, error: e1 } = await sb.auth.mfa.challenge({ factorId }); if (e1) throw e1;

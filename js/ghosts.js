@@ -2,7 +2,7 @@
 // Inhalt: Strecke, Name, Aussehen und die Position alle 2 s – keine Puls- oder Wattwerte, kein Datum genauer als der Tag.
 import { kv } from './db.js';
 import { profile } from './state.js';
-const KIND = 'veloverse-ghost', STEP = 2;
+const KIND = 'indoorado-ghost', OLD_KINDS = ['veloverse-ghost'], STEP = 2;
 export async function listGhosts() { return (await kv.get('ghosts', [])) || []; }
 async function saveGhosts(l) { await kv.set('ghosts', l); }
 export async function ghostsFor(routeId) { return (await listGhosts()).filter(g => g.route === routeId && g.on !== false); }
@@ -20,7 +20,7 @@ export function makeGhost(ride, routeName) {
 }
 // Geist auslesen und prüfen (Daten von außen: nur erwartete Felder, Längen begrenzt)
 export function parseGhost(obj) {
-  if (!obj || obj.kind !== KIND || !Array.isArray(obj.d) || !obj.route) throw new Error('Das ist keine VeloVerse-Geist-Datei');
+  if (!obj || (obj.kind !== KIND && !OLD_KINDS.includes(obj.kind)) || !Array.isArray(obj.d) || !obj.route) throw new Error('Das ist keine Indoorado-Geist-Datei');
   if (obj.d.length > 20000 || !obj.d.every(Number.isFinite)) throw new Error('Geist-Datei ist beschädigt');
   const col = c => /^#[0-9a-f]{6}$/i.test(c || '') ? c : undefined, word = w => /^[a-z0-9]{1,12}$/i.test(w || '') ? w : undefined, L = obj.look || {}, A = L.av || {};
   return { v: 1, kind: KIND, id: String(obj.id || Date.now()).slice(0, 80), route: String(obj.route).slice(0, 80), routeName: String(obj.routeName || '').slice(0, 80), name: String(obj.name || 'Freund').replace(/[<>]/g, '').slice(0, 30),

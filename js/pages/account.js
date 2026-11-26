@@ -1,4 +1,4 @@
-// Konto: VeloVerse Online (Supabase). Registrierung Schritt für Schritt, Anmelden, Passwort zurücksetzen, 2FA,
+// Konto: Indoorado Online (Supabase). Registrierung Schritt für Schritt, Anmelden, Passwort zurücksetzen, 2FA,
 // welche Daten online landen, Abgleich zwischen Geräten, Sicherheit und Konto löschen.
 import { $, esc, toast, dialog, bus } from '../util.js';
 import { profile, progress, levelOf, saveProfile } from '../state.js';
@@ -7,7 +7,7 @@ import * as O from '../online/client.js';
 const PROV = { google: 'Google', github: 'GitHub', gitlab: 'GitLab', apple: 'Apple', discord: 'Discord', azure: 'Microsoft' };
 // Hinweis zu Datenschutz und Eigenverantwortung (bei Registrierung zu bestätigen, im Konto jederzeit nachlesbar)
 export const NOTICE = `<div class="notice small">
-  <p><b>⚠️ Experimentelles Hobbyprojekt.</b> VeloVerse Online befindet sich im Aufbau und wird privat und ohne Gewinnabsicht betrieben. Die Nutzung erfolgt freiwillig und auf eigene Verantwortung, ohne Gewähr für Verfügbarkeit, Fehlerfreiheit oder dauerhaften Erhalt der Daten. Funktionen können sich jederzeit ändern oder eingestellt werden.</p>
+  <p><b>⚠️ Experimentelles Hobbyprojekt.</b> Indoorado Online befindet sich im Aufbau und wird privat und ohne Gewinnabsicht betrieben. Die Nutzung erfolgt freiwillig und auf eigene Verantwortung, ohne Gewähr für Verfügbarkeit, Fehlerfreiheit oder dauerhaften Erhalt der Daten. Funktionen können sich jederzeit ändern oder eingestellt werden.</p>
   <p><b>Welche Daten?</b> Für das Konto: E-Mail-Adresse, Passwort (nur als verschlüsselter Hash), Anzeigename, Zeitpunkt der letzten Anmeldung. Nur wenn du den Abgleich nutzt: deine App-Daten (Einstellungen, Fahrten, Trainingspläne). Welche Fahrtwerte (z. B. Herzfrequenz, Leistung, GPS-Spur, Fotos) hochgeladen werden, legst du im Konto selbst fest. Herzfrequenz ist ein Gesundheitswert: lade sie nur hoch, wenn du das möchtest.</p>
   <p><b>Wo?</b> Bei Supabase (Datenbank und Login) im Rechenzentrum der Projektregion; die Website liegt bei GitHub Pages. Deine Abgleichsdaten sind privat, auch der Betreiber sieht sie in der App nicht. Andere sehen nur deinen Anzeigenamen, bei Live-Fahrten Position, Tempo, W/kg und Avatar, in Bestenlisten Strecke und Zeit (abschaltbar).</p>
   <p><b>Deine Rechte.</b> Du kannst jederzeit festlegen, was hochgeladen wird, deine Online-Daten löschen und das Konto vollständig löschen (unten im Konto). Sichere wichtige Daten zusätzlich selbst (Einstellungen › App › Sicherung herunterladen).</p>
@@ -38,7 +38,7 @@ export function leave() { off?.(); off = null; }
 function renderSetup(el) {
   el.innerHTML = `
   <section class="pagehead"><h1>Konto</h1></section>
-  <section class="card form"><h2>VeloVerse Online einrichten</h2>
+  <section class="card form"><h2>Indoorado Online einrichten</h2>
     <p class="muted">Mit einem Konto liegen deine Daten zusätzlich online, du fährst live mit anderen und erscheinst in Bestenlisten. Ohne Konto funktioniert alles wie bisher, nur lokal.</p>
     <p class="small muted">Für den Betreiber: Supabase-Projekt anlegen, <code>supabase/schema.sql</code> ausführen, dann <code>online.json</code> neben die App legen (Anleitung in <code>docs/ONLINE.md</code>) oder hier eintragen.</p>
     <label class="f">Projekt-URL<input class="inp" id="cfgUrl" placeholder="https://xxxx.supabase.co"></label>
@@ -59,7 +59,7 @@ const RULES = [
   ['num', 'Eine Zahl', p => /\d/.test(p)],
   ['sym', 'Ein Sonderzeichen', p => /[^A-Za-z0-9äöüÄÖÜß]/.test(p)],
 ];
-const COMMON = /^(passwort|password|12345|qwertz|qwerty|veloverse|fahrrad|radfahren)/i;
+const COMMON = /^(passwort|password|12345|qwertz|qwerty|indoorado|fahrrad|radfahren)/i;
 function strength(p, mail = '') {
   let s = RULES.filter(r => r[2](p)).length + (p.length >= 14 ? 1 : 0);
   const local = (mail || '').split('@')[0].toLowerCase();
@@ -150,7 +150,7 @@ function renderAuth(el, mode = 'in') {
         ${pwField('aPass', 'Passwort', 'new-password')}${meter()}
         ${pwField('aPass2', 'Passwort wiederholen', 'new-password')}<small class="fieldhint" id="matchHint"></small>
         <details class="small"><summary>Hinweis zu Datenschutz und Nutzung lesen</summary>${NOTICE}<p><a href="#/legal/datenschutz" target="_blank">Vollständige Datenschutzerklärung</a> · <a href="#/legal/nutzung" target="_blank">Nutzungshinweise</a></p></details>
-        <label class="switch"><input type="checkbox" id="aOk"><span></span> <div class="swt">Ich habe den Hinweis gelesen und nutze VeloVerse Online freiwillig und auf eigene Verantwortung</div></label>
+        <label class="switch"><input type="checkbox" id="aOk"><span></span> <div class="swt">Ich habe den Hinweis gelesen und nutze Indoorado Online freiwillig und auf eigene Verantwortung</div></label>
         <label class="switch"><input type="checkbox" id="aHr"><span></span> <div class="swt">Ich willige ein, dass meine Herzfrequenz mit meinen Fahrten in meinem Konto gespeichert wird <small class="muted">Puls zählt als Gesundheitsdatum (Art. 9 DSGVO). Freiwillig und jederzeit unter Konto › Was online gespeichert wird widerrufbar. Ohne Einwilligung bleibt der Puls nur auf deinen Geräten. Tipp: Mit der Tresor-Verschlüsselung kann auch Supabase ihn nicht lesen.</small></div></label>
         ${keepHtml}
         <div class="row end createrow"><small class="fieldhint" id="createHint"></small><button class="btn pri" id="aCreate" disabled>Konto anlegen</button></div>`;
