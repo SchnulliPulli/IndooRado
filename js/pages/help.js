@@ -1,73 +1,98 @@
-// Anleitung
-const S = (id, title, body) => `<section class="card help" id="${id}"><h2>${title}</h2>${body}</section>`;
-
+// Anleitung: durchsuchbar, nach Themen gegliedert, Abschnitte zum Auf- und Zuklappen
+import { RIDE } from '../shortcuts.js';
+const T = [
+  ['start', '🚀', 'Erste Schritte', `<ol class="tips">
+    <li><b>Profil</b> (Einstellungen › Profil): Name, <b>FTP</b> und Gewicht eintragen. Alle Workout-Watt und Zonen hängen an der FTP. FTP unbekannt? Fahr ein paar Mal – die App schätzt sie und schlägt sie auf der Startseite vor.</li>
+    <li><b>Geräte</b> verbinden: Smart-Trainer, Pulsgurt, Trittfrequenz-Sensor, Click-Controller. Ohne Geräte probierst du alles mit den <b>Demo-Geräten</b> aus.</li>
+    <li>Auf der Startseite <b>⚡ Schnellstart</b> (letzte Strecke, sofort los) oder Strecke und Workout wählen und „Fahren“. Die Fahrt startet, sobald du trittst.</li>
+    <li>Am Ende <b>Beenden › Speichern</b>. Nur gespeicherte Fahrten zählen für Level, Saison, Missionen, Plan und Bestzeiten.</li>
+  </ol><p class="small muted">Bluetooth gibt es in Chrome und Edge (Windows, macOS, Android, ChromeOS), nicht in Safari und nicht auf dem iPhone. Bei der ersten Fahrt erklärt eine kurze <b>Einführung</b> die Anzeigen (später wieder über Mehr › Einführung).</p>`],
+  ['geraete', '📡', 'Geräte', `<ul class="tips">
+    <li><b>Smart-Trainer</b> (FTMS): liefert Leistung und Kadenz und wird gesteuert – feste Watt (ERG), Steigung oder virtuelle Gänge.</li>
+    <li><b>Pulsgurt</b>: Pulsanzeige, Pulszonen, Puls-Ziel-Modus, Musik nach Puls und adaptive Workouts.</li>
+    <li><b>Click-Controller</b> und Fernbedienungen: Tasten unter Geräte anlernen. Einmal klicken schaltet, dreimal schnell Plus springt im Workout vor, dreimal Minus zurück.</li>
+    <li>Bekannte Geräte verbindet die App beim Start selbst. <b>Demo-Geräte</b> lassen sich auch während der Fahrt über Mehr › Demo an- und ausschalten; solche Fahrten werden nur gespeichert, wenn du das unter Einstellungen › App erlaubst.</li></ul>`],
+  ['fahren', '🚴', 'Fahren', `<ul class="tips">
+    <li><b>Widerstand</b>: virtuelle Gänge (Gang × Kadenz × Steigung ergibt die Leistung, Schaltbereich unter Fahransicht), Steigung, ERG fix oder Puls-Ziel. Umschalten über den Modus-Knopf.</li>
+    <li><b>Anzeigen</b>: Watt mit Zonenfarbe und FTP-Ring, Tempo, Strecke, Zeit, Höhenmeter, Puls, Kadenz, Höhenprofil, Karte, Mitfahrerliste. Mit <b>Anordnen</b> verschiebst, vergrößerst, versteckst und ergänzt du Anzeigen – getrennt für Computer, Handy hochkant und Handy quer.</li>
+    <li><b>Karte</b> (Taste K oder Minikarte antippen): zoomen, verschieben und an jede Stelle <b>beamen</b>. Gebeamte Fahrten zählen nicht als Streckenbestzeit.</li>
+    <li><b>Kamera</b> (Tasten 1–5, C), <b>Fotomodus</b> (O), Fotos (P) und automatische Fotos an Gipfeln und im Ziel.</li>
+    <li><b>Wetter und Tageszeit</b> (W): Morgen bis Nacht, klar bis Regen, oder automatisch.</li>
+    <li><b>Mehr</b> (⋯): Kamera, Wetter, Musik, Trainingsbuddy, Demo-Geräte, Anordnen, Einführung, Tastenkürzel, Vollbild.</li>
+    <li><b>Zum Menü</b> parkt die Fahrt pausiert, „Zurück zur Fahrt“ oder Treten setzt sie fort. Meldungen schließt du mit einmal Antippen.</li></ul>`],
+  ['spielen', '🎮', 'Mitfahrer, Rennen und Spielmodi', `<ul class="tips">
+    <li><b>Mitfahrer</b> (Taste N) geben Windschatten (bis 33 % weniger Luftwiderstand) und zählen beim Überholen. Anzahl und Stärke unter Fahransicht.</li>
+    <li><b>Rennen gegen Bots</b>, <b>Zeitfahren</b> (allein gegen die Uhr) und die <b>Tagesherausforderung</b> (für alle gleich, Serie zählt) startest du auf der Startseite oder bei der Strecke.</li>
+    <li><b>Sprints und Gipfel</b> mit Bestzeiten, <b>Zieltore</b> am Ende jedes Intervalls, <b>Power-ups</b> (Taste U) und <b>Sammelglocken</b> für Extra-XP.</li>
+    <li><b>Geist</b>: deine Bestfahrt auf dieser Strecke als durchsichtiger Fahrer.</li>
+    <li><b>Freunde-Geister</b>: in der Auswertung „👻 Als Geist“ teilt eine Fahrt als Datei oder Code. Freunde öffnen sie unter Aktivitäten › Importieren › Geist und fahren dann gegen dich (bis zu fünf Geister gleichzeitig, ohne Puls und Watt).</li>
+    <li><b>Trainingsbuddy</b> (Mehr › Buddy): fährt locker neben dir her und plaudert ein wenig.</li></ul>`],
+  ['training', '🏋️', 'Workouts, Pläne und FTP', `<ul class="tips">
+    <li>Workout-Ziele sind Prozent deiner FTP – ändert sich die FTP, passt sich alles an. Jedes Intervall zeigt Kadenz-Ziel und Tipp, ein Countdown piept vor dem Wechsel.</li>
+    <li><b>Adaptiv</b>: bricht die Kadenz ein, sinkt der Widerstand kurz; ist der Puls lange am Anschlag, sinkt die Intensität. Mit + und − änderst du die Intensität in 2-%-Schritten.</li>
+    <li><b>Workout-Editor</b> und <b>Plan-Editor</b>: eigene Workouts aus Bausteinen, eigene Pläne Woche für Woche. Import von .zwo, .erg, .mrc und Plänen als Text.</li>
+    <li><b>Trainingspläne</b> führen Woche für Woche, passen die Intensität an deine Leistung an und zeigen die nächste Einheit auf der Startseite.</li>
+    <li><b>FTP-Schätzung</b>: aus deinen besten 20, 10 oder 5 Minuten der letzten 90 Tage. Weicht sie deutlich ab, schlägt die Startseite die neue FTP vor. Genauer ist ein FTP-Test (unter Workouts).</li>
+    <li><b>Empfehlung für heute</b> nach deiner Frische (TSB) und dem Plan.</li></ul>`],
+  ['strecken', '🗺️', 'Strecken und Baukasten', `<ul class="tips">
+    <li>Fast 30 eingebaute Welten von Hügelland bis Weltall, Tiefsee, Lava-Insel, Wolken und Zuckerland. Jede Strecke zeigt ein Vorschaubild.</li>
+    <li><b>🧱 Strecken-Baukasten</b> (Strecken › Baukasten): Bausteine antippen – Geraden, Kurven, Spitzkehren, Serpentinen, Anstiege, Steilwände, Abfahrten, Achterbahn, Korkenzieher und mehr. Jeden Baustein in Länge, Steilheit und Richtung anpassen, Landschaft und Belag wählen, als Rundkurs schließen, speichern und fahren. Vorlagen und 🎲 Zufall helfen beim Start.</li>
+    <li><b>GPX und Strava-Routen</b> importieren; auf Wunsch mit <b>echtem Gelände</b> aus einem frei verfügbaren Höhenmodell.</li>
+    <li>Einmal die ganze Strecke fahren bringt das <b>Routen-Abzeichen</b> 🏅 (+100 XP).</li></ul>`],
+  ['fortschritt', '🏆', 'Level, Saison und Werkstatt', `<ul class="tips">
+    <li><b>XP</b> gibt es für Kilometer, Zeit, Höhenmeter, Gipfel, Sprints, Zieltore, Überholen, Bestwerte, Missionen, Plan-Einheiten und Multiplayer. Level schalten Trikotfarben, Räder, Tiere und Extras im <b>Avatar</b> frei.</li>
+    <li><b>Wochenmissionen</b> und <b>Serien</b> (mehrere Tage in Folge geben Bonus-XP).</li>
+    <li><b>Saison</b> (Aktivitäten › Saison): jedes Quartal ein Belohnungspfad mit 25 Stufen – Saisonfarben für den Avatar, Titel, XP und am Ende ein Pokal mit Gold-Lack.</li>
+    <li><b>Werkstatt</b>: jede dritte Saisonstufe bringt einen Teile-Gutschein 🔧 für bessere Laufräder, Rahmen, Reifen und Bekleidung. Sie machen dich ein wenig schneller; sobald echte Mitfahrer auf der Strecke sind, gelten für alle gleiche Bedingungen.</li></ul>`],
+  ['online', '🌐', 'Online: Mitfahren, Events und Teams', `<ul class="tips">
+    <li><b>Konto</b> (Online › Konto): Anmeldung mit Passwort oder <b>Code per E-Mail</b>, empfohlen mit <b>Zwei-Faktor</b> (Authenticator-App). Mehrere Konten lassen sich über das Avatar-Menü oben wechseln.</li>
+    <li><b>Wer ist online</b>: sieh, wer gerade fährt, <b>fahr mit</b> (du landest direkt hinter dem anderen) oder <b>lade ein</b>. Echte Spieler haben einen Pfeil und ein Leuchten über dem Kopf.</li>
+    <li><b>Lobby</b>: Gruppenfahrten und Rennen mit gemeinsamem Start, gleichem Wetter und optional einem gemeinsamen Workout oder Plan.</li>
+    <li><b>📅 Events</b>: geplante Gruppenfahrten. Anmelden, zur Startzeit „Jetzt beitreten“. Die Startseite erinnert dich.</li>
+    <li><b>🛡️ Teams</b>: gründen oder beitreten (ein Team pro Person) und gemeinsam Kilometer sammeln, gewertet über die letzten 7 Tage.</li>
+    <li>Ride Ons gehen auch an echte Mitspieler; beim gemeinsamen Fahren zählt die gemeinsame Zeit, es gibt Duelle und Gruppenbonus.</li></ul>`],
+  ['ton', '🎵', 'Ton, Musik und Sprachansagen', `<ul class="tips">
+    <li><b>Geräusche</b> (Einstellungen › Ton): Fahrtwind, Reifen, Kette, Natur, Countdown, Fanfaren – jedes mit eigenem Regler. Taste M schaltet alles stumm.</li>
+    <li><b>Musik</b>: zehn Stile (Chill, Lo-Fi, Ambient, Synthwave, House, Drive, Techno, Rock, Drum & Bass, 8-Bit) mit mehreren Stücken. Tempo nach Stil, fest oder <b>im Takt deiner Trittfrequenz</b>. Wird mit Leistung oder Puls intensiver. Nächstes Stück: Taste T oder Mehr › Nächstes Stück. Oder eigene Musikdateien.</li>
+    <li><b>Sprachansagen</b>: eine Stimme sagt Intervalle, Anstiege, Gipfelzeiten, Bestleistungen, Runden und Zwischenstände (alle 1, 5 oder 10 km) an – ideal, wenn du nicht auf den Bildschirm schaust. Themen, Stimme und Tempo einstellbar.</li></ul>`],
+  ['tasten', '⌨️', 'Tastenkürzel und Barrierefreiheit', `<table class="tbl keys"><tr><th>Taste</th><th>In der Fahrt</th></tr>${RIDE.map(([k, l]) => `<tr><td>${k.split(' / ').map(x => `<kbd>${x}</kbd>`).join(' / ')}</td><td>${l}</td></tr>`).join('')}</table>
+    <ul class="tips"><li>Die Taste <kbd>?</kbd> zeigt die Übersicht überall in der App.</li>
+    <li><b>Barrierefreiheit</b> (Einstellungen › App): Schriftgröße bis 130 %, hoher Kontrast, weniger Bewegung (keine Kamerafahrten und Animationen). Alles ist per Tastatur bedienbar, Dialoge schließen mit Esc, Meldungen werden Bildschirmlesern vorgelesen.</li></ul>`],
+  ['daten', '🔒', 'Daten, Tresor und Strava', `<ul class="tips">
+    <li>Ohne Konto bleibt <b>alles im Browser</b> dieses Geräts; die App sendet dann nichts ins Internet. Unter Profil gibt es eine Sicherungsdatei zum Herunterladen und Einspielen.</li>
+    <li><b>Online-Abgleich</b>: Mit Konto werden Einstellungen, Fahrten und Fotos zwischen deinen Geräten abgeglichen (verschlüsselt übertragen über HTTPS).</li>
+    <li><b>🔐 Tresor</b> (Konto › Tresor, empfohlen): verschlüsselt deine Online-Daten schon im Browser mit einem eigenen Tresor-Passwort (AES-256). Dann kann sie auch der Server-Betreiber nicht lesen. Passwort gut aufheben – ohne es sind die Online-Daten nicht wiederherstellbar.</li>
+    <li>Alternativ Abgleich über <b>NAS (Synology)</b>, OneDrive, Google Drive oder Dropbox (Einstellungen › Verbindungen).</li>
+    <li><b>Strava</b>: „Zu Strava“ in der Auswertung speichert FIT-Datei und Bild und öffnet die Upload-Seite. Mit eigener Strava-API-App (braucht ein Strava-Abo) geht der Upload automatisch. Bisherige Fahrten übernimmst du unter Aktivitäten › Importieren (FIT, ZIP-Export oder Strava).</li>
+    <li><b>Teilen</b>: „📤 Teilen“ erstellt ein schickes Bild mit Karte und Kennzahlen für soziale Netzwerke.</li></ul>`],
+  ['handy', '📱', 'Handy und Tablet', `<ul class="tips">
+    <li>Auf dem Handy wählt die App automatisch eine kompakte Ansicht. Die Fahrtanzeige passt sich hochkant und quer an, jede Lage hat ihre eigene Anordnung.</li>
+    <li>Als App installieren: im Browser-Menü „Zum Startbildschirm hinzufügen“.</li>
+    <li><b>Live-Ansicht</b>: Läuft auf einem anderen Gerät deines Kontos eine Fahrt, siehst du sie live auf der Startseite. Pro Konto läuft immer nur eine Fahrt gleichzeitig.</li></ul>`],
+  ['probleme', '🛠️', 'Wenn etwas nicht klappt', `<ul class="tips">
+    <li><b>Ruckelt die Fahrt?</b> Die App senkt die Auflösung selbst. Zusätzlich hilft Einstellungen › App › Grafik „Mittel“ oder „Niedrig“.</li>
+    <li><b>Gerät wird nicht gefunden?</b> Chrome oder Edge verwenden, Bluetooth am Gerät einschalten, andere Apps (z. B. auf dem Handy) vom Trainer trennen.</li>
+    <li><b>Online-Probleme?</b> Online › Konto › Verbindungstest prüft Schritt für Schritt Anmeldung, Datenbank und Live-Verbindung.</li>
+    <li><b>Neue Version?</b> Die App aktualisiert sich beim nächsten Öffnen. Die Versionsnummer steht unten links im Menü.</li></ul>`],
+];
 export async function render(el) {
   el.innerHTML = `
-  <section class="pagehead"><h1>Anleitung</h1></section>
-  <nav class="chips-row helpnav">${[['start', 'Erste Schritte'], ['geraete', 'Geräte'], ['fahren', 'Fahren'], ['tasten', 'Tasten und Click'], ['companion', 'Companion'], ['workouts', 'Workouts und Pläne'], ['import', 'Dateien importieren'], ['strecken', 'Strecken und Gelände'], ['spiel', 'Level und Missionen'], ['daten', 'Daten, NAS, Strava'], ['tipps', 'Tipps']].map(([k, l]) => `<a class="chipb" href="#/help" data-go="${k}">${l}</a>`).join('')}</nav>
-  ${S('start', 'Erste Schritte', `<ol class="tips">
-    <li>Unter <a href="#/profile">Profil</a> Name, <b>FTP</b> und Gewicht eintragen. Alle Workout-Ziele hängen an der FTP.</li>
-    <li>Unter <a href="#/devices">Geräte</a> Smart-Trainer, Pulsgurt, Trittfrequenz-Sensor und Click-Controller verbinden. Ohne Geräte lässt sich alles im Demo-Modus testen.</li>
-    <li>Auf der <a href="#/">Startseite</a> Strecke und Workout wählen, dann „Fahrt starten“. Die Fahrt beginnt, sobald du trittst.</li>
-    <li>Am Ende „Beenden“ → „Speichern“. Erst gespeicherte Fahrten zählen für Level, Missionen, Plan und Bestzeiten.</li>
-  </ol><p class="small muted">Bluetooth funktioniert in Chrome und Edge (Windows, macOS, Android, ChromeOS), nicht in Safari und nicht unter iOS. Der Knopf oben rechts schaltet das Vollbild ein, es bleibt beim Seitenwechsel erhalten.</p>`)}
-  ${S('geraete', 'Geräte', `<ul class="tips">
-    <li><b>Smart-Trainer</b> (FTMS): liefert Leistung und Kadenz und wird von der App gesteuert, entweder mit festen Watt (ERG) oder über die Steigung.</li>
-    <li><b>Pulsgurt</b>: für Pulsanzeige, Pulszonen und die adaptive Steuerung.</li>
-    <li><b>Click-Controller</b>: virtuelles Schalten. Die Tasten lassen sich unter Geräte anlernen.</li>
-    <li>Bekannte Geräte verbindet die App beim Start selbst wieder, wenn der Browser das unterstützt.</li>
-  </ul>`)}
-  ${S('fahren', 'Fahren', `<ul class="tips">
-    <li><b>Widerstand</b>: „Virtuelle Gänge“ (wie draußen schalten, die App rechnet Leistung aus Gang, Kadenz und Steigung), „Steigung“ (geht direkt an den Trainer) oder „ERG fix“ (feste Wattzahl).</li>
-    <li><b>Mitfahrer</b> fahren mit, geben Windschatten (bis 33 % weniger Luftwiderstand, wenn du dicht dahinter bist) und zählen beim Überholen.</li>
-    <li><b>Zieltore</b>: Kurz vor Ende eines Intervalls steht ein Tor auf der Straße, beim Durchfahren schwenkt die Kamera.</li>
-    <li><b>Karte</b> (Minikarte antippen oder Taste K): ganze Strecke, Schnellziele und <b>Beamen</b> an jede Stelle. Gebeamte Fahrten zählen nicht als Streckenbestzeit.</li>
-    <li><b>Menü</b>: pausiert die Fahrt und öffnet das Startmenü. Mit dem Balken „Zurück zur Fahrt“ geht es weiter, treten setzt die Fahrt fort.</li>
-    <li><b>Wetter</b> (Taste W): Morgen, Tag, Abend, Nacht und klar, Wolken, Regen, Nebel oder automatisch nach Uhrzeit.</li>
-    <li><b>Anordnen</b>: Anzeigen ziehen. Größe über den Eckgriff unten rechts oder mit zwei Fingern direkt auf dem Widget. Einzelne Widgets ein- und ausblenden und eigene hinzufügen (z. B. NP, TSS, Rundenzeit, Platz im Feld, Abstand zum Geist, Leistungs- und Pulskurve). Vorlagen (Kompakt, Minimal, Rennen, Workout-Fokus, Datenfreak), Stile (Dunkel, Glas, Farbig, Neon, Kontrast, Hell, Durchsichtig), eigene Akzentfarbe und Deckkraft. Das Fenster lässt sich an der Kopfzeile verschieben und einklappen. Die Knopfleiste bleibt unten rechts, ihre Breite stellst du am linken Rand ein.</li>
-    <li><b>Ride On</b>: Mitfahrer geben dir ab und zu einen Daumen hoch. Mit dem Knopf „Ride On“ oder der Taste R gibst du dem nächsten Fahrer einen. Beides bringt ein wenig XP.</li>
-    <li><b>Geist</b>: Auf einer bereits gefahrenen Strecke fährt ein halbdurchsichtiger Fahrer deine Bestfahrt nach. Der Abstand steht im Widget „Abstand zum Geist“.</li>
-    <li><b>Puls-Ziel</b>: Widerstandsart, bei der der Trainer die Watt alle 5 Sekunden so nachregelt, dass dein Puls am Zielwert bleibt. Mit + und − den Zielpuls ändern.</li>
-    <li><b>Sanfter ERG-Einstieg</b>: Bei großen Sprüngen nach oben fährt der Trainer die Leistung über 5 Sekunden hoch.</li>
-    <li><b>Ton und Musik</b> (Taste M): Fahrtwind, Reifen, Kette und Kurbel, Natur, Countdown und Fanfaren, jedes Geräusch mit eigenem Regler. Musik in drei Stilen (Chill, Drive, Synthwave), die sich deiner Intensität anpasst, oder eigene Musikdateien. Alles unter <a href="#/ridesettings">Fahransicht</a>.</li>
-    <li><b>Fahransicht-Einstellungen</b>: Anzeige, Farben, Vorlagen, Kamera, Mitfahrer (Anzahl, Stärke, Namen), Zieltore, Countdown, Fahrgefühl, Trinkerinnerung, Ton und Musik auf einer Seite.</li>
-  </ul>`)}
-  ${S('tasten', 'Tasten und Click-Controller', `<table class="tbl"><tr><th>Taste</th><th>Funktion</th></tr>${[['↑ / + und ↓ / −', 'Schalten, im ERG ±10 W, im Workout Intensität ±2 %'], ['Leertaste', 'Pause / weiter'], ['C oder 1–5', 'Kamera'], ['P', 'Foto'], ['K', 'Karte und Beamen'], ['W', 'Wetter und Tageszeit'], ['M', 'Ton an/aus'], ['N', 'Mitfahrer an/aus'], ['R', 'Ride On an den nächsten Fahrer'], ['Esc', 'Karte und Fenster schließen']].map(([a, b]) => `<tr><td><b>${a}</b></td><td>${b}</td></tr>`).join('')}</table>
-    <p><b>Click-Controller</b>: einzelner Klick schaltet. <b>Dreimal schnell Plus</b> springt zum nächsten Intervall, <b>dreimal schnell Minus</b> startet das Intervall neu (in den ersten 10 Sekunden eins zurück). Die drei Schaltvorgänge werden dabei zurückgenommen. Abschaltbar unter Profil.</p>`)}
-  ${S('workouts', 'Workouts und Pläne', `<ul class="tips">
-    <li>Ziele sind Prozent deiner FTP. Ändert sich die FTP (z. B. nach einem FTP-Test), passen sich alle Workouts und Pläne an.</li>
-    <li><b>Adaptiv</b>: Bricht die Kadenz ein, wird der Widerstand kurz gesenkt. Ist der Puls lange am Anschlag, sinkt die Intensität um 3 %. Schafft der Trainer das Ziel nicht, gibt es einen Hinweis. Umschalten mit dem Feld „adaptiv“.</li>
-    <li>Jedes Intervall zeigt einen <b>Tipp</b> zu Kadenz und Fahrweise sowie einen Kadenz-Zielbereich.</li>
-    <li><b>Empfehlung für heute</b> (Startseite): schlägt nach deiner Frische (TSB) und dem Trainingsplan eine passende Einheit vor, von Erholung bis Intensität.</li>
-    <li><b>FTP-Erkennung</b>: Fährst du ohne Test deutlich über deiner FTP (beste 20 Minuten × 0,95 oder beste 8 Minuten × 0,9), bietet die Auswertung an, die neue FTP zu übernehmen.</li>
-    <li><b>Auswertung</b> nach der Fahrt wie bei Strava: Karte, Distanz, Bewegungs- und Gesamtzeit, Höhenmeter, Tempo, Leistung, NP, Kalorien (aus der Leistung, sonst aus dem Puls mit Alter, Gewicht und Geschlecht), Anstrengung aus dem Puls, Bestleistungen mit Platzierung, Abschnitte je Kilometer und Segmente. „Bild teilen“ erzeugt ein Übersichtsbild.</li>
-    <li><b>Kalender</b>: Im aktiven Plan stehen zu jeder Woche die Daten, die laufende Woche ist markiert.</li>
-    <li><b>Workout-Editor</b> (Workouts → „Neues Workout“ oder „Anpassen“): aus Bausteinen wie Aufwärmen, Konstant, Intervalle, Rampe, Frei und Ausrollen ein eigenes Workout bauen, mit Kadenz und Hinweis je Baustein.</li>
-    <li><b>Plan aus Text</b> (Pläne → Plan importieren → „Plan aus Text einfügen“): kopierte Wochenübersicht einer Workout-Sammlung einfügen, Wochen, Workouts, Watt, Kadenz und Wiederholungen werden erkannt und in % FTP umgerechnet. Der Plan bleibt nur in deinem Browser.</li>
-    <li><b>Plan-Editor</b> (Pläne → „+ Neuer Plan“, oder „Anpassen“ bei einem eingebauten Plan): Wochen anlegen, je Woche beliebig viele Einheiten aus deiner Workout-Bibliothek einplanen, Wochen kopieren und verschieben.</li>
-    <li><b>Pläne</b> führen Woche für Woche durch passende Workouts. Eine Einheit zählt ab 90 % als erledigt, du kannst Einheiten überspringen.</li>
-  </ul>`)}
-  ${S('import', 'Dateien importieren und exportieren', `<table class="tbl"><tr><th>Format</th><th>Wo</th><th>Hinweis</th></tr>
-    ${[['.zwo', 'Workouts, Pläne', 'Workout im verbreiteten XML-Format, z. B. aus Workout-Sammlungen im Internet'], ['.erg / .mrc', 'Workouts, Pläne', 'Watt- bzw. Prozent-Kurven (TrainerRoad, Golden Cheetah u. a.)'], ['.zip', 'Workouts, Pläne', 'Archiv mit .zwo/.erg/.mrc, wird auf Wunsch als Plan angelegt (Reihenfolge nach Dateiname)'], ['.json', 'Workouts, Pläne', 'VeloVerse-Export eines Workouts oder ganzen Plans'], ['.gpx', 'Strecken', 'Track aus Komoot, Strava, Garmin usw., auf Wunsch mit echtem Gelände']].map(r => `<tr><td><b>${r[0]}</b></td><td>${r[1]}</td><td class="small">${r[2]}</td></tr>`).join('')}</table>
-    <p class="small muted">Alles Importierte landet im Browser-Speicher (und, falls eingerichtet, auf dem NAS). Workouts lassen sich als .zwo exportieren, Pläne als .json, um sie zu teilen oder auf ein anderes Gerät zu bringen.</p>`)}
-  ${S('strecken', 'Strecken und echtes Gelände', `<p><b>Strava-Routen</b>: Mit verbundenem Strava unter Strecken „Von Strava laden“, deine gespeicherten Rad-Routen erscheinen zur Auswahl und werden mit echtem Gelände angelegt.</p><p>Eingebaute Welten haben Orte mit Sprintwertung, Tunnel, Küste und Berge. Eigene Strecken als GPX importieren: Der Verlauf und die Höhen kommen aus der Datei, die Umgebung entsteht passend dazu.</p>
-    <p><b>Echtes Gelände</b>: Beim Import (oder später über „Echtes Gelände laden“) lädt die App ein Höhenmodell der Umgebung (frei verfügbare Terrain-Kacheln von AWS Open Data). Dann stehen die echten Berge und Täler rund um die Strecke und am Horizont. Wälder, Häuser und Orte werden weiterhin erzeugt, echte Gebäude oder Satellitenbilder gibt es nicht.</p>`)}
-  ${S('spiel', 'Level, Missionen und Abzeichen', `<ul class="tips"><li>XP gibt es für Kilometer, Zeit, Höhenmeter, Gipfel, Sprints, Zieltore, Überholen, Bestwerte, Plan-Einheiten und Missionen.</li><li>Fährst du an mehreren Tagen hintereinander, gibt es einen <b>Serienbonus</b> bis +50 %.</li><li>Jede Woche gibt es drei neue <b>Missionen</b>. Mit höheren Leveln schaltest du Titel und Trikotfarben frei.</li></ul>`)}
-  ${S('companion', 'Companion auf dem Handy', `<ul class="tips">
-    <li>Öffne VeloVerse auf dem Handy, melde dich unter Einstellungen › Verbindungen beim NAS an und öffne Start › <b>Handy-Ansicht</b>. Am besten „Zum Startbildschirm hinzufügen“, dann gibt es eine eigene Verknüpfung.</li>
-    <li>Du siehst deine Woche, Fitness und Form, Missionen und alle Fahrten mit Auswertung und kannst Workout und Strecke für die nächste Fahrt <b>vormerken</b>. Das geht über das NAS an den PC und ist dort beim nächsten Öffnen bereit.</li>
-    <li>Läuft am PC eine Fahrt, erscheint oben eine <b>Live</b>-Karte mit Leistung, Puls, Kadenz, Intervall, Platz und Streckenfortschritt (alle 5 Sekunden über den NAS-Ordner, abschaltbar unter Fahransicht).</li>
-  </ul>`)}
-  ${S('daten', 'Daten, Cloud und Strava', `<ul class="tips">
-    <li>Alle Daten liegen im Browser dieses Geräts unter dieser Adresse. Unter Profil gibt es eine <b>Sicherungsdatei</b> zum Herunterladen und Einspielen sowie „Alle lokalen Daten löschen“.</li>
-    <li><b>NAS (Synology)</b>: Unter Profil mit deinem DSM-Konto anmelden, auf Wunsch mit 2FA-Code und gemerktem Gerät. Dann landen Einstellungen, Fahrten und Fotos zusätzlich in einem Ordner, z. B. in Synology Drive. Damit der Browser zugreifen darf, braucht das NAS einmalig einen Reverse-Proxy-Eintrag mit CORS-Kopfzeile, die Schritte stehen dort unter „Einrichtung“.</li>
-    <li><b>OneDrive, Google Drive, Dropbox</b>: statt NAS geht auch einer dieser Dienste. Unter Einstellungen › Verbindungen den Dienst wählen, einmalig eine kostenlose eigene App beim Anbieter anlegen (Schritt-für-Schritt-Anleitung steht dort), Kennung eintragen und verbinden. Es ist immer nur ein Speicher gleichzeitig aktiv.</li>
-    <li><b>Mehrere Geräte</b>: Ein neu verbundenes Gerät holt zuerst nur. Danach gewinnt je Einstellung die zuletzt geänderte Seite, Fahrten, Fotos und Pläne werden ergänzt, Gelöschtes verschwindet überall. Unter Profil siehst du alle verbundenen Geräte.</li>
-    <li><b>Strava</b>: ohne Verbindung lädt „Zu Strava“ in der Zusammenfassung FIT und Bilder herunter und öffnet die Upload-Seite. Mit Strava-Abo: eigene Strava-API-App anlegen, Client-ID und Secret unter Einstellungen › Verbindungen eintragen und verbinden. Dann gehen Fahrten mit Titel und Beschreibung automatisch hoch. Fotos nimmt die Strava-Schnittstelle nicht an, Übersichtsbild und Fahrtfoto werden mitgespeichert.</li>
-    <li><b>Bisherige Fahrten übernehmen</b> (Verlauf): „Aus Strava übernehmen“ holt Rad- und virtuelle Fahrten, auch die von anderen Trainings-Apps übertragenen. „FIT-Dateien importieren“ liest .fit, .fit.gz und ZIP (z. B. Strava-Kontoexport oder aus anderen Apps heruntergeladene Fahrten). Sie zählen für Fitness, Form und Leistungskurve, bringen aber keine XP.</li>
-    <li>Die <b>Wolke</b> in der Kopfleiste zeigt, wenn Daten außerhalb des Browsers landen: grün NAS abgeglichen, gelb Abgleich läuft, rot Fehler oder Anmeldung abgelaufen, orange nur Strava.</li>
-    <li>Ohne Verbindung: „Zu Strava“ speichert FIT-Datei und Bilder und kopiert Titel und Beschreibung in die Zwischenablage.</li>
-  </ul>`)}
-  ${S('tipps', 'Tipps', `<ul class="tips"><li>Ruckelt die Fahrt, senkt die App die Auflösung automatisch. Zusätzlich hilft unter Einstellungen › App die Grafikqualität „Mittel“ oder „Niedrig“.</li><li>Auf dem Tablet die App über das Browser-Menü „Zum Startbildschirm hinzufügen“, dann startet sie im Vollbild.</li><li>Für Bluetooth die Seite über https öffnen (z. B. die GitHub-Pages-Adresse), nicht über eine IP-Adresse.</li></ul>`)}`;
-  el.querySelector('.helpnav').onclick = e => { const a = e.target.closest('[data-go]'); if (!a) return; e.preventDefault(); el.querySelector('#' + a.dataset.go)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  <section class="pagehead"><h1>Anleitung</h1><span class="small muted">Tippe auf ein Thema oder suche nach einem Stichwort</span></section>
+  <div class="helpsearch"><input class="inp" id="hQ" type="search" placeholder="🔍 z. B. Geist, Tresor, Schalten, Musik …" aria-label="Anleitung durchsuchen"></div>
+  <nav class="helptiles">${T.map(([id, i, t]) => `<a href="#" data-go="${id}"><span>${i}</span>${t}</a>`).join('')}</nav>
+  <div class="helpbody">${T.map(([id, i, t, b], n) => `<details class="card help" id="h-${id}" ${n === 0 ? 'open' : ''}><summary><span>${i}</span> ${t}</summary><div class="helpin">${b}</div></details>`).join('')}</div>
+  <p class="small muted" id="hNone" hidden>Nichts gefunden. Probier ein anderes Wort.</p>`;
+  el.querySelector('.helptiles').onclick = e => { const a = e.target.closest('[data-go]'); if (!a) return; e.preventDefault(); const d = el.querySelector('#h-' + a.dataset.go); d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  // Suche: passende Abschnitte öffnen, andere ausblenden, Treffer markieren
+  const q = el.querySelector('#hQ');
+  q.oninput = () => {
+    const w = q.value.trim().toLowerCase(); let any = false;
+    for (const d of el.querySelectorAll('details.help')) {
+      d.querySelectorAll('mark').forEach(m => m.replaceWith(m.textContent)); d.normalize();
+      const hit = !w || d.textContent.toLowerCase().includes(w); d.hidden = !hit; any ||= hit;
+      if (w && hit) { d.open = true; const walk = document.createTreeWalker(d.querySelector('.helpin'), NodeFilter.SHOW_TEXT), nodes = []; while (walk.nextNode()) nodes.push(walk.currentNode);
+        for (const n of nodes) { const i = n.data.toLowerCase().indexOf(w); if (i < 0) continue; const r = n.splitText(i); r.splitText(w.length); const m = document.createElement('mark'); m.textContent = r.data; r.replaceWith(m); } }
+    }
+    el.querySelector('#hNone').hidden = any;
+  };
 }

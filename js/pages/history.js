@@ -46,14 +46,18 @@ export async function render(el) {
   const bar = document.createElement('div'); bar.className = 'selbar'; bar.hidden = true;
   bar.innerHTML = '<span id="selN">0 ausgewählt</span><span class="row"><button class="btn sm ghost" id="selAll">Alle sichtbaren</button><button class="btn sm danger" id="selDel" disabled>Löschen</button><button class="btn sm ghost" id="selX">Fertig</button></span>';
   el.prepend(bar);
-  const selOn = on => { bar.hidden = !on; el.classList.toggle('selecting', on); el.querySelectorAll('.rsel').forEach(x => x.hidden = !on); if (!on) el.querySelectorAll('[data-sel]').forEach(c => c.checked = false); cnt(); };
-  const cnt = () => { const n = el.querySelectorAll('[data-sel]:checked').length; $('#selN', el).textContent = n + ' ausgewählt'; $('#selDel', el).disabled = !n; };
+  const setSel = (c, v) => { c.setAttribute('aria-checked', String(v)); c.closest('.riderow')?.classList.toggle('picked', v); };
+  const selOn = on => { bar.hidden = !on; el.classList.toggle('selecting', on); el.querySelectorAll('.rsel').forEach(x => x.hidden = !on); if (!on) el.querySelectorAll('[data-sel]').forEach(c => setSel(c, false)); cnt(); };
+  const cnt = () => { const n = el.querySelectorAll('[data-sel][aria-checked="true"]').length; $('#selN', el).textContent = n + ' ausgewählt'; $('#selDel', el).disabled = !n; };
   $('#selMode', el).onclick = () => selOn(bar.hidden);
   $('#selX', el).onclick = () => selOn(false);
-  $('#selAll', el).onclick = () => { el.querySelectorAll('.riderow:not([hidden]) [data-sel]').forEach(c => c.checked = true); cnt(); };
-  el.addEventListener('click', e => { if (!el.classList.contains('selecting')) return; const row = e.target.closest('.riderow'); if (!row || e.target.closest('[data-delride]')) return; e.preventDefault(); const c = row.querySelector('[data-sel]'); if (e.target !== c) c.checked = !c.checked; cnt(); });
+  $('#selAll', el).onclick = () => { el.querySelectorAll('.riderow:not([hidden]) [data-sel]').forEach(c => setSel(c, true)); cnt(); };
+  // Auswahlmodus: Tippen auf eine Zeile hakt sie an (statt sie zu öffnen). Nur ein Klick-Empfänger, auch nach erneutem Öffnen der Seite.
+  if (el._selClick) el.removeEventListener('click', el._selClick, true);
+  el._selClick = e => { if (!el.classList.contains('selecting')) return; const row = e.target.closest('.riderow'); if (!row || e.target.closest('[data-delride]')) return; e.preventDefault(); e.stopPropagation(); const c = row.querySelector('[data-sel]'); setSel(c, c.getAttribute('aria-checked') !== 'true'); cnt(); };
+  el.addEventListener('click', el._selClick, true);
   $('#selDel', el).onclick = async () => {
-    const ids = [...el.querySelectorAll('[data-sel]:checked')].map(c => c.dataset.sel);
+    const ids = [...el.querySelectorAll('[data-sel][aria-checked="true"]')].map(c => c.dataset.sel);
     if (!(await dialog({ title: ids.length + ' Fahrten löschen?', html: '<p class="muted">Fahrten und Fotos werden entfernt, auch auf deinen anderen Geräten beim nächsten Abgleich. Erfahrungspunkte und Abzeichen bleiben erhalten.</p>', buttons: [{ label: 'Abbrechen', value: false }, { label: 'Löschen', value: true, cls: 'danger' }] }))) return;
     const { deleteRide } = await import('../ridesave.js'); for (const id of ids) await deleteRide(id);
     toast(ids.length + ' Fahrten gelöscht'); render(el);

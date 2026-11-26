@@ -1055,26 +1055,25 @@ async function endRide(auto = false) {
   if (!S) return;
   auto = auto === true; // als Klick-Handler kommt hier ein Event an
   const prevState = S.state; if (S.state === 'riding') S.state = 'paused';
-  // Fahrten mit Demo-Geräten werden nicht gespeichert (kein XP, keine Rekorde, kein Strava)
-  if (S.demoUsed && !profile.saveDemo) {
-    const v = await dialog({ title: auto ? 'Ziel erreicht' : 'Demo-Fahrt beenden?', html: `<p>${S.samples.length ? fmtKm(S.samples.at(-1).d) + ' km in ' + fmtT(S.t) + '. ' : ''}</p><p class="muted small">Diese Fahrt lief mit Demo-Geräten und wird nicht gespeichert. Sie zählt nicht für Level, Missionen, Rekorde oder Strava.</p>`, buttons: [{ label: 'Weiterfahren', value: 'back', cls: 'ghost' }, { label: 'Zum Menü (Fahrt bleibt)', value: 'menu', cls: 'ghost' }, { label: 'Beenden', value: 'quit', cls: 'pri' }] });
-    if (v === 'menu') { if (S) S.state = 'paused'; location.hash = '#/'; return; }
-    if (v === 'quit') { leave(); location.hash = '#/'; return; }
-    if (S && !S.finished) S.state = prevState === 'auto' ? 'riding' : prevState; return;
-  }
-  if (!S.samples.length) {
-    const v = await dialog({ title: 'Fahrt beenden?', html: '<p class="muted">Es wurde noch nichts aufgezeichnet.</p>', buttons: [{ label: 'Weiterfahren', value: 'back' }, { label: 'Zum Menü', value: 'menu', cls: 'ghost' }, { label: 'Beenden', value: 'quit', cls: 'pri' }] });
-    if (v === 'menu') { S.state = 'paused'; location.hash = '#/'; return; }
-    if (v === 'quit') { leave(); location.hash = '#/'; } else if (S) S.state = prevState === 'ready' ? 'ready' : prevState; return;
-  }
-  const v = await dialog({ title: auto ? 'Ziel erreicht' : 'Fahrt beenden?', html: `<p>${fmtKm(S.samples.at(-1).d)} km in ${fmtT(S.t)}.</p><p class="muted small">Gespeicherte Fahrten zählen für Level, Missionen, Trainingsplan und Rekorde.</p>`, buttons: [{ label: 'Weiterfahren', value: 'back', cls: 'ghost' }, { label: 'Zum Menü (Fahrt bleibt)', value: 'menu', cls: 'ghost' }, { label: 'Verwerfen', value: 'drop' }, { label: 'Speichern', value: 'save', cls: 'pri' }] });
+  const resume = () => { if (S && !S.finished) S.state = prevState === 'auto' ? 'riding' : prevState; };
+  // Kennzahlen als Kacheln
+  const ps = S.samples.filter(x => x.p != null), avg = ps.length ? ps.reduce((a, x) => a + x.p, 0) / ps.length : 0;
+  const tiles = S.samples.length ? `<div class="endtiles">${[['🛣️', fmtKm(S.odo) + ' km', 'Strecke'], ['⏱️', fmtT(S.t), 'Zeit'], ['⚡', Math.round(avg) + ' W', 'Ø Leistung'], ['⛰️', Math.round(S.asc) + ' m', 'Höhenmeter']].map(([i, v, l]) => `<div class="endtile"><span>${i}</span><b class="num">${v}</b><small>${l}</small></div>`).join('')}</div>` : '';
+  const demo = S.demoUsed && !profile.saveDemo, empty = !S.samples.length;
+  const note = demo ? '🧪 Diese Fahrt lief mit Demo-Geräten und wird nicht gespeichert – sie zählt nicht für Level, Missionen, Rekorde oder Strava.'
+    : empty ? 'Es wurde noch nichts aufgezeichnet.' : 'Gespeicherte Fahrten zählen für Level, Saison, Missionen, Trainingsplan und Rekorde.';
+  const buttons = demo || empty
+    ? [{ label: '⏹ Beenden', value: 'quit', cls: 'pri big' }, { label: '▶ Weiterfahren', value: 'back' }, { label: '🏠 Zum Menü – Fahrt bleibt pausiert', value: 'menu', cls: 'ghost' }]
+    : [{ label: '💾 Speichern und Auswertung', value: 'save', cls: 'pri big' }, { label: '▶ Weiterfahren', value: 'back' }, { label: '🏠 Zum Menü – Fahrt bleibt pausiert', value: 'menu' }, { label: '🗑 Verwerfen', value: 'drop', cls: 'ghost danger' }];
+  const v = await dialog({ title: auto ? '🏁 Ziel erreicht!' : 'Fahrt beenden?', html: `${tiles}<p class="small muted endnote">${note}</p>`, buttons, cls: 'enddlg' });
   // Ins Menü, ohne zu beenden: Fahrt wird pausiert geparkt und lässt sich über „Zurück zur Fahrt“ fortsetzen
   if (v === 'menu') { if (S) S.state = 'paused'; location.hash = '#/'; return; }
+  if (v === 'quit') { leave(); location.hash = '#/'; return; }
   if (v === 'drop') {
     const ok = await dialog({ title: 'Wirklich verwerfen?', html: '<p class="muted">Die Fahrt und ihre Fotos gehen verloren.</p>', buttons: [{ label: 'Abbrechen', value: false }, { label: 'Verwerfen', value: true, cls: 'danger' }] });
-    if (ok) { leave(); location.hash = '#/'; } return;
+    if (ok) { leave(); location.hash = '#/'; } else resume(); return;
   }
-  if (v !== 'save') { if (S && !S.finished) S.state = prevState === 'auto' ? 'riding' : prevState; return; }
+  if (v !== 'save') { resume(); return; }
   $('#load', S.el).hidden = false; $('#loadTxt', S.el).textContent = 'Fahrt wird gespeichert …';
   const id = await saveRide(S);
   leave();

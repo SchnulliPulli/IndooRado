@@ -103,7 +103,7 @@ export function rideRow(r) {
   const ico = r.imported ? '⬇' : r.race ? '🏁' : r.workoutName ? '🏋️' : '🚴';
   const tags = [r.workoutDone ? '<i class="rtag ok">✓ Workout</i>' : '', r.race ? `<i class="rtag">Platz ${r.race.place}</i>` : '', r.stravaId ? '<i class="rtag st">Strava</i>' : '', r.demoDevices ? '<i class="rtag">🧪 Demo</i>' : '', r.imported ? '<i class="rtag">übernommen</i>' : '', r.mp?.riders?.length ? '<i class="rtag">🌐 zusammen</i>' : ''].join('');
   return `<a class="riderow" href="#/summary/${esc(r.id)}" data-rid="${esc(r.id)}">
-    <label class="rsel" hidden><input type="checkbox" data-sel="${esc(r.id)}"></label>
+    <span class="rsel" hidden role="checkbox" aria-checked="false" aria-label="Auswählen" data-sel="${esc(r.id)}"></span>
     <span class="ricon" style="--rc:${col}">${ico}</span>
     <div class="rmain"><div class="t">${esc(r.title)}</div><div class="small muted">${fmtDate(r.date)}${tags ? ' ' + tags : ''}</div></div>
     <div class="riderow-stats num"><span><b>${fmtKm(s.dist || 0)}</b> km</span><span>${fmtDur(s.dur || 0)}</span><span>${s.avgP ?? '–'} W</span><span>${s.tss ?? '–'} TSS</span></div>

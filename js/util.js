@@ -34,11 +34,11 @@ export function toast(msg, ms = 3200) {
 }
 
 // Modaler Dialog, gibt Promise mit gewähltem Wert zurück
-export function dialog({ title, html, buttons }) {
+export function dialog({ title, html, buttons, cls = '' }) {
   return new Promise(res => {
     const wrap = document.createElement('div');
     wrap.className = 'modal on';
-    wrap.innerHTML = `<div class="card dlg" role="dialog" aria-modal="true"><h2>${esc(title)}</h2><div class="dlg-body">${html || ''}</div><div class="row end">${buttons.map((b, i) => `<button class="btn ${b.cls || ''}" data-i="${i}">${esc(b.label)}</button>`).join('')}</div></div>`;
+    wrap.innerHTML = `<div class="card dlg ${cls}" role="dialog" aria-modal="true"><h2>${esc(title)}</h2><div class="dlg-body">${html || ''}</div><div class="row end">${buttons.map((b, i) => `<button class="btn ${b.cls || ''}" data-i="${i}">${esc(b.label)}</button>`).join('')}</div></div>`;
     document.body.appendChild(wrap);
     const prevFocus = document.activeElement, dlg = wrap.querySelector('.dlg'), h = dlg.querySelector('h2');
     h.id = 'dlg' + Math.random().toString(36).slice(2, 8); dlg.setAttribute('aria-labelledby', h.id);
@@ -58,7 +58,7 @@ export function dialog({ title, html, buttons }) {
       if (b) close(buttons[+b.dataset.i].value);
       else if (e.target === wrap) close(null);
     });
-    wrap.querySelector('.btn:last-child')?.focus();
+    (wrap.querySelector('.dlg > .row .btn.pri') || wrap.querySelector('.btn:last-child'))?.focus();
   });
 }
 

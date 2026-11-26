@@ -1,6 +1,6 @@
 // Übersicht der Tastenkürzel (Taste ? überall in der App)
 import { dialog } from './util.js';
-const RIDE = [
+export const RIDE = [
   ['Leertaste', 'Pause / weiter'], ['↑ / +', 'Hochschalten (schwerer)'], ['↓ / −', 'Runterschalten (leichter)'], ['← / →', 'Spur wechseln, überholen'],
   ['1 – 5', 'Kamera-Ansicht'], ['C', 'Nächste Kamera'], ['K', 'Karte öffnen / schließen (beamen)'], ['W', 'Tageszeit und Wetter'],
   ['N', 'Mitfahrer (Bots) an/aus'], ['R', 'Ride On geben'], ['U', 'Power-up benutzen'], ['P', 'Foto speichern'], ['O', 'Fotomodus'],
