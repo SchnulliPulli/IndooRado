@@ -143,6 +143,7 @@ function renderAuth(el, mode = 'in') {
         ${pwField('aPass2', 'Passwort wiederholen', 'new-password')}<small class="fieldhint" id="matchHint"></small>
         <details class="small"><summary>Hinweis zu Datenschutz und Nutzung lesen</summary>${NOTICE}</details>
         <label class="switch"><input type="checkbox" id="aOk"><span></span> <div class="swt">Ich habe den Hinweis gelesen und nutze VeloVerse Online freiwillig und auf eigene Verantwortung</div></label>
+        <label class="switch"><input type="checkbox" id="aHr"><span></span> <div class="swt">Ich willige ein, dass meine Herzfrequenz mit meinen Fahrten in meinem Konto gespeichert wird <small class="muted">Puls zählt als Gesundheitsdatum (Art. 9 DSGVO). Freiwillig und jederzeit unter Konto › Was online gespeichert wird widerrufbar. Ohne Einwilligung bleibt der Puls nur auf deinen Geräten. Tipp: Mit der Tresor-Verschlüsselung kann auch Supabase ihn nicht lesen.</small></div></label>
         ${keepHtml}
         <div class="row end createrow"><small class="fieldhint" id="createHint"></small><button class="btn pri" id="aCreate" disabled>Konto anlegen</button></div>`;
       wirePw(el);
@@ -158,6 +159,7 @@ function renderAuth(el, mode = 'in') {
         if (!$('#aOk', el).checked || busy) return;
         keep(); busy = true; const b = $('#aCreate', el); b.disabled = true; b.innerHTML = '<span class="spinner sm"></span> Konto wird angelegt …';
         for (const id of ['aPass', 'aPass2', 'aOk', 'aBack']) { const x = $('#' + id, el); if (x) x.disabled = true; }
+        localStorage.setItem('vvHrConsent', $('#aHr', el).checked ? new Date().toISOString() : '0');
         const done = () => { localStorage.setItem('vvLastEmail', st.mail); localStorage.setItem('vvNoticeOk', new Date().toISOString()); st.step = 3; draw(); };
         try {
           // Der Server wartet, bis die Bestätigungsmail verschickt ist; das kann dauern. Spätestens nach 25 s geht es weiter.
@@ -232,6 +234,8 @@ async function renderAccount(el) {
   if (tok !== window.__routeTok) return;
   document.body.classList.toggle('is-admin', O.isAdmin() && !O.needsMfa());
   const u = O.online.user, p = O.online.profile || {}, verified = factors.filter(f => f.status === 'verified'), stale = factors.filter(f => f.status !== 'verified');
+  // Einwilligung aus der Registrierung übernehmen (einmalig nach der ersten Anmeldung)
+  { const c = localStorage.getItem('vvHrConsent'); if (c != null) { await OS.setPrefs({ hr: c !== '0', hrConsentAt: c !== '0' ? c : null }).catch(() => { }); localStorage.removeItem('vvHrConsent'); } }
   const P = await OS.prefs(), lv = levelOf(progress.xp).lv;
   const devs = Object.entries(S.sync.devices || {}).sort((a, b) => (b[1].last || '').localeCompare(a[1].last || ''));
   const aal2 = O.online.aal?.currentLevel === 'aal2';
@@ -257,11 +261,12 @@ async function renderAccount(el) {
       <div class="row"><button class="btn sm pri" id="sNow">↻ Jetzt abgleichen</button><button class="btn sm ghost" id="sPull" title="Bei Abweichungen gewinnt der Stand im Konto">Alles aus dem Konto übernehmen</button></div>
     </div>
   </section>
+  <section class="card form vaultcard" id="vaultCard"><h2>🔐 Tresor-Verschlüsselung <span class="prtag">empfohlen</span></h2><div id="vaultBody"><div class="small muted">Wird geprüft …</div></div></section>
   <section class="card form"><h2>Was online gespeichert wird</h2>
     <p class="small muted">Dein Speicher im Konto ist privat: Nur du kommst an diese Daten, auch Admins nicht. Für Bestenlisten wird nur eine Zusammenfassung geteilt (Name, Strecke, Zeit).</p>
     <div class="grid2 tight">
       <label class="f">Fahrten<select class="inp" id="prRides">${[['full', 'Vollständig mit Verlauf'], ['summary', 'Nur Zusammenfassung (ohne Verlauf)'], ['none', 'Gar nicht hochladen']].map(([v, l]) => `<option value="${v}" ${P.rides === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-      <div class="form">${opt('hr', 'Herzfrequenz', 'Puls und Pulszonen')}${opt('cad', 'Trittfrequenz')}${opt('power', 'Leistung')}${opt('gps', 'Virtuelle GPS-Spur')}${opt('shots', 'Fotos der Fahrten', 'Braucht viel Speicher')}</div>
+      <div class="form">${opt('hr', 'Herzfrequenz (Einwilligung)', 'Puls ist ein Gesundheitsdatum. Ein = du willigst in die Speicherung im Konto ein, Aus = Widerruf, bereits hochgeladene Pulsdaten bleiben bis zum Löschen der Online-Daten.')}${opt('cad', 'Trittfrequenz')}${opt('power', 'Leistung')}${opt('gps', 'Virtuelle GPS-Spur')}${opt('shots', 'Fotos der Fahrten', 'Braucht viel Speicher')}</div>
     </div>
     ${opt('leaderboard', 'An Bestenlisten teilnehmen', 'Zusammenfassung je Fahrt: Strecke, Distanz, Zeit, Höhenmeter' + (P.power ? ', Ø Watt' : '') + '. Aus = vorhandene Einträge werden entfernt.')}
     <p class="small muted">Gilt ab jetzt für neu hochgeladene Fahrten. Bereits hochgeladene bleiben, bis du unten die Online-Daten löschst.</p>
@@ -285,9 +290,10 @@ async function renderAccount(el) {
   wirePw(el);
   $('#aOut', el).onclick = async () => { await O.signOut(); window.__loginUpd?.(); render(el); };
   $('#pSave', el).onclick = async () => { try { await O.updateProfile({ display_name: $('#pName', el).value.trim().slice(0, 30) || 'Fahrer', public_profile: $('#pPub', el).checked, avatar: { jersey: profile.jersey, helmet: profile.helmet, bikeColor: profile.bikeColor, skin: profile.skin, av: profile.av }, level: lv }); toast('Gespeichert'); window.__loginUpd?.(); } catch (e) { toast(e.message, 4000); } };
+  vaultUi(el, S);
   $('#sNow', el).onclick = async e => { e.target.disabled = true; await S.pushNow(); await OS.pushRides().catch(() => { }); toast(S.sync.error ? 'Fehler: ' + S.sync.error : 'Abgeglichen ✅', 3000); render(el); };
   $('#sPull', el).onclick = async () => { if (!(await dialog({ title: 'Stand aus dem Konto übernehmen?', html: '<p class="muted">Bei Abweichungen gewinnt der Stand im Konto. Fahrten dieses Geräts bleiben erhalten.</p>', buttons: [{ label: 'Abbrechen', value: false }, { label: 'Übernehmen', value: true, cls: 'pri' }] }))) return; await S.pullNow(); if (S.sync.error) return toast(S.sync.error, 5000); toast('Übernommen, App lädt neu'); setTimeout(() => location.reload(), 1000); };
-  el.querySelectorAll('[data-pref]').forEach(c => c.onchange = async () => { await OS.setPrefs({ [c.dataset.pref]: c.checked }); if (c.dataset.pref === 'leaderboard') OS.pushRides().catch(() => { }); toast('Gespeichert', 900); });
+  el.querySelectorAll('[data-pref]').forEach(c => c.onchange = async () => { await OS.setPrefs({ [c.dataset.pref]: c.checked, ...(c.dataset.pref === 'hr' ? { hrConsentAt: c.checked ? new Date().toISOString() : null } : {}) }); if (c.dataset.pref === 'leaderboard') OS.pushRides().catch(() => { }); toast('Gespeichert', 900); });
   $('#prRides', el).onchange = async e => { await OS.setPrefs({ rides: e.target.value }); toast('Gespeichert', 900); };
   // Passwort
   const chk = () => { const s = updMeter(el, $('#cNew', el).value, u.email); $('#cGo', el).disabled = !($('#cOld', el).value && $('#cNew', el).value.length >= 10 && s >= 3); };
@@ -328,4 +334,44 @@ async function renderAccount(el) {
     if (await pr !== 'ok' || t !== 'LÖSCHEN') { if (t) toast('Abgebrochen', 2000); return; }
     try { await OS.deleteAccount(); toast('Konto gelöscht'); setTimeout(() => { location.hash = '#/'; location.reload(); }, 800); } catch (e) { toast(e.message, 6000); }
   };
+}
+
+/* ---------- Tresor-Verschlüsselung ---------- */
+async function vaultUi(el, S) {
+  const box = $('#vaultBody', el); if (!box) return;
+  let info; try { info = await S.vaultInfo(); } catch (e) { box.innerHTML = `<p class="small" style="color:var(--hr)">Status nicht abrufbar: ${esc(e.message)}</p>`; return; }
+  if (!document.body.contains(box)) return;
+  const intro = '<p class="small muted">Verschlüsselt alles, was dein Konto zum Abgleich speichert (Fahrten mit Puls und Leistung, Fotos, Einstellungen, Pläne, Live-Fahrt), schon in deinem Browser. Supabase sieht nur unlesbare Daten. Nicht verschlüsselt werden können: E-Mail und Login, dein Anzeigename und Avatar, Bestenlisten-Einträge (abschaltbar) und das Live-Fahren mit anderen.</p>';
+  const prog = (n, t) => { const p = $('#vProg', el); if (p) p.textContent = `${n} von ${t} Dateien …`; };
+  if (info.status === 'off') {
+    box.innerHTML = `${intro}
+      <div class="accbox"><b>Wähle ein eigenes Tresor-Passwort</b> <span class="small muted">(nicht dein Login-Passwort). Ohne dieses Passwort lassen sich die Online-Daten nicht mehr lesen, auch nicht von einem Admin. Die Daten auf deinen Geräten bleiben aber immer erhalten.</span></div>
+      ${pwField('vPass', 'Tresor-Passwort', 'new-password')}${pwField('vPass2', 'Tresor-Passwort wiederholen', 'new-password')}
+      <label class="switch"><input type="checkbox" id="vOk"><span></span> <div class="swt">Ich habe das Tresor-Passwort sicher notiert (z. B. im Passwort-Manager)</div></label>
+      <div class="row"><button class="btn pri" id="vOn" disabled>Verschlüsselung einschalten</button><span class="small muted" id="vProg"></span></div>`;
+    wirePw(el);
+    const chk = () => { const a = $('#vPass', el).value, b = $('#vPass2', el).value; $('#vOn', el).disabled = !(a.length >= 10 && a === b && $('#vOk', el).checked); };
+    for (const id of ['vPass', 'vPass2']) $('#' + id, el).addEventListener('input', chk); $('#vOk', el).onchange = chk;
+    $('#vOn', el).onclick = async e => {
+      e.target.disabled = true; e.target.innerHTML = '<span class="spinner sm"></span> Verschlüssele …';
+      try { const n = await S.vaultEnable($('#vPass', el).value, prog); toast(`🔐 Tresor eingeschaltet, ${n} Dateien verschlüsselt`, 4000); vaultUi(el, S); }
+      catch (er) { toast('Tresor: ' + er.message, 6000); e.target.textContent = 'Verschlüsselung einschalten'; chk(); }
+    };
+  } else if (info.status === 'locked') {
+    box.innerHTML = `<div class="accbox bad"><b>🔒 Auf diesem Gerät gesperrt</b><p class="small muted">Deine Online-Daten sind verschlüsselt. Gib einmal das Tresor-Passwort ein, dann gleicht dieses Gerät wieder ab. Bis dahin wird nichts hoch- oder heruntergeladen.</p></div>
+      ${pwField('vPass', 'Tresor-Passwort', 'current-password')}
+      <div class="row"><button class="btn pri" id="vUnlock">Entsperren</button></div>`;
+    wirePw(el);
+    const go = async () => { const b = $('#vUnlock', el); b.disabled = true; b.innerHTML = '<span class="spinner sm"></span> Prüfe …'; try { await S.vaultUnlock($('#vPass', el).value); toast('🔓 Entsperrt, der Abgleich läuft wieder'); S.pushNow?.(); vaultUi(el, S); } catch (er) { toast(er.message, 5000); b.disabled = false; b.textContent = 'Entsperren'; } };
+    $('#vUnlock', el).onclick = go; $('#vPass', el).onkeydown = e => { if (e.key === 'Enter') go(); };
+  } else {
+    box.innerHTML = `<div class="accbox"><b>✅ Eingeschaltet</b> <span class="small muted">seit ${new Date(info.meta.created).toLocaleDateString('de-DE')} · ${esc(info.meta.alg)} · Schlüssel auf diesem Gerät gespeichert</span></div>${intro}
+      <div class="row"><button class="btn sm ghost" id="vLock" title="Der Schlüssel wird auf diesem Gerät gelöscht; danach ist das Tresor-Passwort erneut nötig">Auf diesem Gerät sperren</button><button class="btn sm ghost danger" id="vOff">Verschlüsselung ausschalten</button><span class="small muted" id="vProg"></span></div>`;
+    $('#vLock', el).onclick = async () => { const { forgetLocalKey } = await import('../vault.js'); await forgetLocalKey(); toast('Auf diesem Gerät gesperrt'); vaultUi(el, S); };
+    $('#vOff', el).onclick = async e => {
+      if (!(await dialog({ title: 'Verschlüsselung ausschalten?', html: '<p class="muted">Alle Online-Daten werden wieder unverschlüsselt gespeichert. Supabase kann sie dann grundsätzlich einsehen.</p>', buttons: [{ label: 'Abbrechen', value: false }, { label: 'Ausschalten', value: true, cls: 'danger' }] }))) return;
+      e.target.disabled = true; e.target.innerHTML = '<span class="spinner sm"></span> Entschlüssele …';
+      try { const n = await S.vaultDisable(prog); toast(`Tresor ausgeschaltet, ${n} Dateien entschlüsselt`); vaultUi(el, S); } catch (er) { toast('Tresor: ' + er.message, 6000); e.target.disabled = false; e.target.textContent = 'Verschlüsselung ausschalten'; }
+    };
+  }
 }

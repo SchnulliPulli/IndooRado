@@ -52,6 +52,7 @@ export async function tomb(key, id) { const l = await kv.get(key, []); if (!l.in
 export const kv = {
   get: async (k, d) => { try { const v = await db.get('kv', k); return v === undefined ? d : v; } catch (e) { return d; } },
   set: (k, v) => db.put('kv', v, k),
+  del: k => db.del('kv', k),
 };
 
 // Speicher als dauerhaft markieren, damit der Browser nichts aufräumt

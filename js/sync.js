@@ -1,3 +1,4 @@
+import { vault, loadVault, enableVault, unlockVault, disableVaultMeta, isEncrypted, encrypt, decrypt } from './vault.js';
 // Abgleich mit dem NAS, zusätzlich zum Browser-Speicher.
 // Zwei Wege: Synology-Anmeldung (DSM-Konto inkl. 2FA, File Station API) oder WebDAV.
 // Aufbau im Ordner: state.json (Einstellungen, Fortschritt, eigene Strecken/Workouts), rides/<id>.json, shots/<id>.jpg
@@ -6,7 +7,9 @@ import { db, kv } from './db.js';
 import { bus } from './util.js';
 import { PROVIDERS, isOAuth, backend, finishOAuth, fresh } from './cloud.js';
 
-const LOCAL_ONLY = new Set(['sync', 'syncMeta', 'demo', 'strava', 'musicFiles', 'device', 'kvTimes', 'cloudApps']);
+const LOCAL_ONLY_SET = new Set(['sync', 'syncMeta', 'demo', 'strava', 'musicFiles', 'device', 'kvTimes', 'cloudApps']);
+// Tresor-Schlüssel bleiben immer nur auf dem Gerät
+const LOCAL_ONLY = { has: k => LOCAL_ONLY_SET.has(k) || String(k).startsWith('vaultKey:') };
 // Listen gelöschter Einträge: werden zwischen den Geräten zusammengeführt, nicht überschrieben
 const TOMBS = ['deletedRides', 'deletedWorkouts', 'deletedRoutes', 'deletedPlans'];
 export const sync = { online: false, cfg: null, busy: false, last: null, error: null, dirsOk: false, needLogin: false, rev: null, devices: {}, device: null, info: '' };
@@ -17,27 +20,65 @@ export const sync = { online: false, cfg: null, busy: false, last: null, error: 
 let ON = null; // { sb, uid }
 const META = () => ON ? 'syncMetaOnline' : 'syncMeta';
 export async function setOnlineBackend(o) {
-  const was = !!ON; ON = o && o.uid ? o : null; sync.online = !!ON; sync.dirsOk = false; sync.needLogin = false; sync.error = null;
+  const was = !!ON; ON = o && o.uid ? o : null; vault.status = 'unknown'; vault.key = null; vault.meta = null; sync.online = !!ON; sync.dirsOk = false; sync.needLogin = false; sync.error = null;
   if (was !== !!ON) { const m = await kv.get(META(), {}); sync.last = m.at || null; sync.rev = m.rev ?? null; sync.devices = m.devices || {}; }
   bus.emit('sync');
 }
 export const nasPaused = () => !!ON && !!(sync.cfg && (sync.cfg.host || sync.cfg.url || sync.cfg.clientId));
 // Lesbare Fehlermeldung aus Supabase-Fehlern (manche haben nur einen HTTP-Status)
 const sbErr = e => e?.message && e.message !== '{}' ? e.message : (e?.status ?? e?.statusCode ?? e?.originalError?.status) ? 'HTTP ' + (e.status ?? e.statusCode ?? e.originalError.status) + (e.originalError?.statusText ? ' ' + e.originalError.statusText : '') : 'unbekannter Fehler';
+// Online-Speicher (Supabase). Ist der Tresor eingeschaltet, wird jede Datei vor dem Hochladen verschlüsselt und nach dem
+// Herunterladen entschlüsselt (siehe vault.js). Ohne Schlüssel auf diesem Gerät wird nichts unverschlüsselt hochgeladen.
+const typeOf = rel => /\.jpe?g$/.test(rel) ? 'image/jpeg' : /\.json$/.test(rel) ? 'application/json' : 'application/octet-stream';
+async function vaultReady() { if (vault.status === 'unknown') await loadVault(SBK); }
 const SBK = {
   p: rel => `${ON.uid}/sync/${rel}`.replace(/\/+$/, ''),
   async mkdir() { },
-  async put(rel, body, type) { const { error } = await ON.sb.storage.from('vault').upload(SBK.p(rel), body instanceof Blob ? body : new Blob([body], { type: type || 'application/octet-stream' }), { upsert: true, contentType: type || 'application/octet-stream' }); if (error) throw new Error('Online: ' + sbErr(error)); },
+  async put(rel, body, type) {
+    await vaultReady();
+    if (vault.status === 'locked') { const e = new Error('Online-Daten sind verschlüsselt: bitte unter Konto › Tresor das Tresor-Passwort eingeben.'); e.locked = true; throw e; }
+    if (vault.status === 'on') return SBK.putRaw(rel, new Blob([await encrypt(body instanceof Blob ? body : String(body))], { type: 'application/octet-stream' }), 'application/octet-stream');
+    return SBK.putRaw(rel, body, type);
+  },
+  async get(rel) {
+    await vaultReady();
+    const b = await SBK.getRaw(rel); if (!b) return null;
+    const u8 = new Uint8Array(await b.arrayBuffer());
+    if (!isEncrypted(u8)) return new Blob([u8], { type: typeOf(rel) });
+    return new Blob([await decrypt(u8)], { type: typeOf(rel) });
+  },
+  async delRaw(rel) { await ON.sb.storage.from('vault').remove([SBK.p(rel)]); },
+  async putRaw(rel, body, type) { const { error } = await ON.sb.storage.from('vault').upload(SBK.p(rel), body instanceof Blob ? body : new Blob([body], { type: type || 'application/octet-stream' }), { upsert: true, contentType: type || 'application/octet-stream' }); if (error) throw new Error('Online: ' + sbErr(error)); },
   // Fehlende Datei = null. Supabase meldet das je nach Version als 400/404 oder mit leerem Fehlerobjekt "{}".
-  async get(rel) { const { data, error } = await ON.sb.storage.from('vault').download(SBK.p(rel)); if (error) { const st = error.status ?? error.statusCode ?? error.originalError?.status; if ([400, 404].includes(+st) || /not.?found|Object not found|^\{\}$/i.test(error.message || '{}')) return null; throw new Error('Online: ' + sbErr(error)); } return data; },
+  async getRaw(rel) { const { data, error } = await ON.sb.storage.from('vault').download(SBK.p(rel)); if (error) { const st = error.status ?? error.statusCode ?? error.originalError?.status; if ([400, 404].includes(+st) || /not.?found|Object not found|^\{\}$/i.test(error.message || '{}')) return null; throw new Error('Online: ' + sbErr(error)); } return data; },
   async list(rel) {
     const out = []; for (let off = 0; ; off += 1000) { const { data, error } = await ON.sb.storage.from('vault').list(SBK.p(rel), { limit: 1000, offset: off }); if (error) throw new Error('Online: ' + sbErr(error)); out.push(...data.map(f => f.name).filter(n => n !== '.emptyFolderPlaceholder')); if (data.length < 1000) break; }
     return out;
   },
   async del(rel) { await ON.sb.storage.from('vault').remove([SBK.p(rel)]); },
 };
+/* ---------- Tresor verwalten (nur Online-Konto) ---------- */
+// Exklusiv (kein Abgleich parallel), Fehler gehen an den Aufrufer
+async function exclusive(fn) { for (let i = 0; i < 100 && sync.busy; i++) await new Promise(r => setTimeout(r, 200)); sync.busy = true; bus.emit('sync'); try { return await fn(); } finally { sync.busy = false; bus.emit('sync'); } }
+export async function vaultInfo() { if (!ON) return { status: 'off' }; await loadVault(SBK); return { status: vault.status, meta: vault.meta }; }
+// Alle vorhandenen Dateien im Online-Speicher ver- bzw. entschlüsseln (beim Ein- und Ausschalten)
+async function recodeAll(encryptNow, onStep) {
+  const files = ['state.json', 'live.json', ...(await SBK.list('rides/')).map(f => 'rides/' + f), ...(await SBK.list('shots/')).map(f => 'shots/' + f)];
+  let n = 0;
+  for (const f of files) {
+    const b = await SBK.getRaw(f); n++; onStep?.(n, files.length); if (!b) continue;
+    const u8 = new Uint8Array(await b.arrayBuffer()), enc = isEncrypted(u8);
+    if (encryptNow && !enc) await SBK.putRaw(f, new Blob([await encrypt(u8)]), 'application/octet-stream');
+    if (!encryptNow && enc) await SBK.putRaw(f, new Blob([await decrypt(u8)], { type: typeOf(f) }), typeOf(f));
+  }
+  return files.length;
+}
+export async function vaultEnable(pass, onStep) { if (!ON) throw new Error('Nur mit VeloVerse-Konto'); return exclusive(async () => { await enableVault(SBK, pass); return recodeAll(true, onStep); }); }
+export async function vaultUnlock(pass) { await loadVault(SBK); await unlockVault(pass); sync.error = null; bus.emit('sync'); }
+export async function vaultDisable(onStep) { if (!ON) return; return exclusive(async () => { await loadVault(SBK); if (vault.status !== 'on') throw new Error('Zum Ausschalten muss der Tresor auf diesem Gerät entsperrt sein'); const n = await recodeAll(false, onStep); await disableVaultMeta(SBK); return n; }); }
+
 // Was online landen darf (Einstellungen › Konto › Daten online)
-export const PREF_DEFAULT = { rides: 'full', hr: true, cad: true, power: true, gps: true, shots: false, leaderboard: true };
+export const PREF_DEFAULT = { rides: 'full', hr: false, cad: true, power: true, gps: true, shots: false, leaderboard: true };
 const prefs = async () => ({ ...PREF_DEFAULT, ...(await kv.get('onlinePrefs', {})) });
 async function filterRide(r) {
   const P = await prefs(); if (!ON) return r;
