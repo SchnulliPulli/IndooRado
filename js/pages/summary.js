@@ -77,7 +77,7 @@ export async function render(el, [id], query) {
   </section>
   <section class="card" id="galCard"><div class="row between"><h2>Bilder der Fahrt</h2><span class="row">${isConfigured() && shots.length ? `<span class="small muted">☁ mit der Fahrt in ${esc(providerName())} gespeichert</span>` : ''}<button class="btn sm" id="dlAll">⬇ Alle Bilder</button></span></div>
     <div class="gallery" id="gal"><button class="shot facts" data-i="0"><div class="pageload"><div class="spinner"></div></div><span>Fakten der Fahrt</span></button>${shots.map((x, i) => `<button class="shot" data-i="${i + 1}"><img src="${urls[i]}" alt="${esc(x.caption)}" loading="lazy"><span>${esc(x.caption)} · ${fmtKm(x.d)} km</span></button>`).join('')}</div>
-    <p class="small muted">Alle Bilder lassen sich herunterladen und z. B. auf Strava unter „Fotos hinzufügen“ zur Fahrt stellen.</p></section>
+    <p class="small muted">Alle Bilder lassen sich herunterladen und z. B. nach dem Hochladen auf Strava in der Aktivität unter „Bearbeiten“ hinzufügen.</p></section>
   <section class="card"><div class="row between"><h2>Verlauf</h2><div class="small muted num" id="hov">Fahre mit dem Finger über das Diagramm</div></div><canvas id="ch" class="chart-main"></canvas></section>
   <section class="grid2">
     <div class="card"><h2>Leistungskurve</h2><canvas id="curve" class="curvec"></canvas>
@@ -144,7 +144,7 @@ export async function render(el, [id], query) {
     let copied = false; try { await navigator.clipboard.writeText(title + '\n\n' + text); copied = true; } catch (e) { }
     await dialog({ title: 'Bei Strava hochladen', html: `
       <p>Gespeichert: die FIT-Datei, die virtuelle Strecke als GPX, ein Übersichtsbild der Strecke, das Fakten-Bild${bs ? ' und das beste Foto der Fahrt' : ''}.</p>
-      <ol class="tips small"><li>Auf Strava „Datei auswählen“ und die <b>.fit</b>-Datei wählen.</li><li>Den Titel einsetzen${copied ? ' (Titel und Beschreibung sind schon in der Zwischenablage)' : ''}.</li><li>Unter „Fotos hinzufügen“ die Bilder auswählen und speichern.</li><li>Die <b>.gpx</b>-Datei enthält die virtuelle Strecke, z. B. für Komoot, Karten-Apps oder den Radcomputer.</li></ol>
+      <ol class="tips small"><li>Auf Strava „Datei auswählen“ und die <b>.fit</b>-Datei wählen.</li><li>Den Titel einsetzen${copied ? ' (Titel und Beschreibung sind schon in der Zwischenablage)' : ''}.</li><li>Hochladen und speichern. Danach die Aktivität auf Strava öffnen, auf <b>„Bearbeiten“</b> bzw. das Kamera-Symbol gehen und dort die gespeicherten Bilder hinzufügen (die Upload-Seite selbst nimmt nur .fit/.tcx/.gpx).</li><li>Die <b>.gpx</b>-Datei enthält die virtuelle Strecke, z. B. für Komoot, Karten-Apps oder den Radcomputer.</li></ol>
       <p class="small muted">Titel:</p><input class="inp" readonly value="${esc(title)}" data-selectall>
       <p class="small muted">Beschreibung:</p><textarea class="inp" rows="5" readonly data-selectall>${esc(text)}</textarea>`, buttons: [{ label: 'Strava öffnen', value: true, cls: 'pri' }] });
     window.open('https://www.strava.com/upload/select', '_blank', 'noopener');

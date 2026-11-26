@@ -19,7 +19,7 @@ export async function pushRides() {
     id: r.id, user_id: online.user.id, started_at: r.start || r.date, route_id: r.routeId, route_name: r.routeName, title: r.title,
     distance_m: Math.round(r.sum?.dist || 0), duration_s: r.routePr?.time != null ? Math.round(r.routePr.time) : null, // nur ganze Strecken zählen für die Bestenliste
     ascent_m: Math.round(r.sum?.asc || 0), avg_w: P.power ? Math.round(r.sum?.avgP || 0) : null, np_w: P.power ? Math.round(r.sum?.np || 0) : null, tss: r.sum?.tss ?? null, xp: r.xp || 0,
-    summary: { dur: Math.round(r.sum?.dur || 0), avgHr: P.hr ? r.sum?.avgHr ?? null : null, workout: r.workoutName, loop: r.loop, finished: !!r.routePr },
+    summary: { dur: Math.round(r.sum?.dur || 0), workout: r.workoutName, loop: r.loop, finished: !!r.routePr }, // kein Puls: für die Bestenliste unnötig (Gesundheitsdaten)
   }));
   for (let i = 0; i < rows.length; i += 200) { const { error } = await sb.from('rides').upsert(rows.slice(i, i + 200)); if (error) throw error; }
   return rows.length;
