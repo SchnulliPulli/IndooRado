@@ -14,6 +14,7 @@ const PAGES = {
   progress: () => import('./pages/progress.js'), profile: () => import('./pages/profile.js'), devices: () => import('./pages/devices.js'), help: () => import('./pages/help.js'), editor: () => import('./pages/editor.js'), planner: () => import('./pages/planner.js'), ridesettings: () => import('./pages/ridesettings.js'), companion: () => import('./pages/companion.js'),
   // Einstellungen: gleiche Module, anderer Ausschnitt
   avatar: () => import('./pages/avatar.js'),
+  live: () => import('./pages/live.js'),
   lobby: () => import('./pages/online.js'), players: () => import('./pages/online.js').then(m => ({ ...m, render: el => m.render(el, ['players']) })), account: () => import('./pages/account.js'), admin: () => import('./pages/admin.js'),
   sound: () => import('./pages/ridesettings.js').then(m => ({ ...m, render: el => m.render(el, ['sound']) })),
   appsettings: () => import('./pages/profile.js').then(m => ({ ...m, render: el => m.render(el, ['app']) })),
@@ -21,7 +22,7 @@ const PAGES = {
 };
 // Hauptmenü: sechs Bereiche, Unterseiten als Reiter oben auf der Seite
 const NAV = [
-  { k: '', l: 'Start', i: 'home', also: ['companion'] },
+  { k: '', l: 'Start', i: 'home', also: ['companion', 'live'] },
   { k: 'workouts', l: 'Training', i: 'workout', tabs: [['workouts', 'Workouts'], ['plans', 'Trainingspläne']], also: ['editor', 'planner'] },
   { k: 'routes', l: 'Strecken', i: 'route' },
   { k: 'history', l: 'Aktivitäten', s: 'Fahrten', i: 'history', tabs: [['history', 'Verlauf'], ['progress', 'Fortschritt']], also: ['summary'] },

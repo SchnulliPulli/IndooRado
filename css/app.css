@@ -599,6 +599,7 @@ span.badge{display:inline-flex;padding:5px 10px;font-weight:600}span.badge svg{w
 .kpi{display:flex;flex-direction:column;gap:2px}.kpi b{font-size:34px}
 .anrow{padding:6px 0;border-bottom:1px solid var(--line)}
 .annbox{display:flex;flex-direction:column;gap:8px}
+.lvchart{width:100%;height:300px;display:block}.livedot.off{background:var(--soft);animation:none;box-shadow:none}
 .newsbar{position:relative;margin-bottom:14px;border-radius:16px;border:1px solid var(--line);overflow:hidden;background:var(--panel)}
 .nbtrack{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain}.nbtrack::-webkit-scrollbar{display:none}
 .nbslide{--nbc:#2fe6ff;flex:0 0 100%;scroll-snap-align:start;display:flex;align-items:center;gap:14px;padding:14px 18px;min-height:72px;box-sizing:border-box;background:linear-gradient(100deg,color-mix(in srgb,var(--nbc) 16%,transparent),transparent 55%)}

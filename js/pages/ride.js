@@ -10,7 +10,9 @@ import { profileChart } from '../charts.js';
 import { ICON } from '../components.js';
 import { saveRide } from '../ridesave.js';
 import { db } from '../db.js';
-import { putLive } from '../sync.js';
+import { putLive, getLive, syncReady, sync as syncState } from '../sync.js';
+// Kennung dieses Tabs: pro Konto darf nur ein Tab bzw. Gerät gleichzeitig fahren (Neuladen behält die Kennung)
+const TAB = (() => { try { let t = sessionStorage.getItem('vvTab'); if (!t) { t = Math.random().toString(36).slice(2, 10); sessionStorage.setItem('vvTab', t); } return t; } catch (e) { return 'x'; } })();
 import { makeField, stepField, gapOf, rotateNames } from '../npc.js';
 import { rideEggs } from '../eggs.js';
 import { daily, dailyTick, bellsSetup, bellsTick, ttSetup, ttTick } from '../modes.js';
@@ -131,7 +133,26 @@ export async function render(el) {
   await start(el);
 }
 
+// Läuft mit diesem Konto schon eine Fahrt auf einem anderen Gerät oder in einem anderen Tab?
+async function otherRide() {
+  if (!syncReady()) return null;
+  try { const L = await Promise.race([getLive(), new Promise(r => setTimeout(() => r(null), 4000))]); return L && L.state !== 'ended' && L.tab && L.tab !== TAB && Date.now() - L.ts < 20000 ? L : null; } catch (e) { return null; }
+}
+async function blocked(el, L) {
+  const tok = window.__routeTok;
+  el.innerHTML = `<section class="pagehead"><h1>Fahrt läuft schon</h1></section>
+    <section class="card form"><h2>🚴 Auf „${esc(L.devName || 'einem anderen Gerät')}“ läuft gerade eine Fahrt mit deinem Konto</h2>
+      <p class="muted">${esc(L.route || '')} · ${fmtT(L.t || 0)} gefahren. Pro Konto kann immer nur eine Fahrt gleichzeitig laufen, damit sich Fahrten und Fortschritt nicht in die Quere kommen.</p>
+      <div class="row"><a class="btn pri" href="#/live">📊 Live verfolgen</a><a class="btn" href="#/">Zur Startseite</a></div>
+      <p class="small muted" id="blkInfo">Sobald die andere Fahrt beendet ist, kannst du hier starten.</p></section>`;
+  // Nachsehen, ob die andere Fahrt inzwischen beendet ist
+  const iv = setInterval(async () => {
+    if (tok !== window.__routeTok) return clearInterval(iv);
+    if (!(await otherRide())) { clearInterval(iv); const i = el.querySelector('#blkInfo'); if (i) i.innerHTML = '✅ Die andere Fahrt ist beendet. <a class="btn sm pri" href="#/ride" id="blkGo">Jetzt hier fahren</a>'; el.querySelector('#blkGo')?.addEventListener('click', e => { e.preventDefault(); render(el); }); }
+  }, 5000);
+}
 async function start(el) {
+  { const L = await otherRide(); if (L) return blocked(el, L); }
   const route = await getRoute(sel.routeId);
   const wo = await getWorkout(sel.workoutId);
   const { World } = await import('../world.js');
@@ -584,12 +605,19 @@ function note(txt) { S.adapt.note = txt; S.adapt.noteT = performance.now(); if (
 /* ---------- Simulation (10 Hz, auch im Hintergrund) ---------- */
 // Live-Fahrt für die Companion-Ansicht (läuft im Simulationstakt, also auch bei verdecktem Fenster)
 function liveShare() {
-  if (profile.liveShare === false || S.state === 'ready' || S.parked || performance.now() - (S.liveT || 0) < 5000) return;
+  if (performance.now() - (S.liveT || 0) < 5000) return;
   S.liveT = performance.now();
+  const me = { dev: syncState.device?.id, devName: syncState.device?.name, tab: TAB };
+  // Verlauf für die Live-Ansicht: alle 15 s ein Punkt, höchstens eine Stunde
+  const H = S.liveHist ||= []; if (S.state === 'riding' && (!H.length || S.t - H.at(-1)[0] >= 15)) { const p3n = S.p3.length ? S.p3.reduce((a, b) => a + b, 0) / S.p3.length : 0; H.push([Math.round(S.t), Math.round(p3n), live.heart ?? null, live.cadence != null ? Math.round(live.cadence) : null, +(S.v * 3.6).toFixed(1)]); if (H.length > 240) H.shift(); }
+  // Ohne Teilen nur die Belegung melden (Sperre für andere Geräte), keine Werte
+  if (profile.liveShare === false) { putLive({ state: S.state, route: S.route.name, t: Math.round(S.t), ...me }); return; }
   const R = S.route, wi = S.wi, p3 = S.p3.length ? S.p3.reduce((a, b) => a + b, 0) / S.p3.length : 0, np = S.np.n ? Math.pow(S.np.s4 / S.np.n, .25) : p3;
   putLive({ state: S.state, route: R.name, routeId: R.id, total: R.total, loop: R.loop, pos: S.dist, odo: Math.round(S.odo), t: Math.round(S.t), p: Math.round(p3), hr: live.heart, cad: live.cadence != null ? Math.round(live.cadence) : null, v: +(S.v * 3.6).toFixed(1), asc: Math.round(S.asc), kj: Math.round(S.kj), np: Math.round(np), grade: +R.gradeAt(S.dist).toFixed(1),
     wo: S.wo ? { name: S.wo.name, i: wi && !wi.done ? wi.i + 1 : null, n: S.wo.segs.length, left: wi && !wi.done ? Math.round(wi.left) : 0, target: S.target ? Math.round(S.target) : null, done: Math.round(S.wT), total: woTotal(S.wo) } : null,
-    ghost: S.ghost ? Math.round(S.ghostGap) : null, place: S.npcOn ? S.field.filter(n => gapOf(R, n.d, S.dist) > 0).length + 1 : null });
+    ghost: S.ghost ? Math.round(S.ghostGap) : null, place: S.npcOn ? S.field.filter(n => gapOf(R, n.d, S.dist) > 0).length + 1 : null, hist: S.liveHist, ...me });
+  // Alle 20 s prüfen, ob trotzdem woanders eine Fahrt läuft (beide fast gleichzeitig gestartet)
+  if (!S.dupCheckAt || performance.now() > S.dupCheckAt) { S.dupCheckAt = performance.now() + 20000; setTimeout(async () => { const L = await getLive().catch(() => null); if (S?.alive && L && L.tab && L.tab !== TAB && L.state !== 'ended' && Date.now() - L.ts < 4000 && !S.dupWarned) { S.dupWarned = true; flash(`⚠️ Auf „${L.devName || 'einem anderen Gerät'}“ läuft ebenfalls eine Fahrt mit deinem Konto. Bitte eine davon beenden.`, 6000); } }, 2500); }
 }
 function tick() {
   if (!S?.alive) return;
