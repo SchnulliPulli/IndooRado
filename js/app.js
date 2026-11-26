@@ -25,14 +25,32 @@ const PAGES = {
   connect: () => import('./pages/profile.js').then(m => ({ ...m, render: el => m.render(el, ['connect']) })),
 };
 // Hauptmenü: sechs Bereiche, Unterseiten als Reiter oben auf der Seite
+// Zusammengelegte Seiten: mehrere Bereiche untereinander auf einer Seite (weniger Reiter)
+const combo = (...parts) => async () => {
+  const mods = await Promise.all(parts.map(([imp]) => imp()));
+  return {
+    async render(el, params, q) { el.innerHTML = parts.map(() => '<div class="combo"></div>').join(''); const kids = [...el.children]; for (let i = 0; i < parts.length; i++) await mods[i].render(kids[i], parts[i][1] ?? params, q); },
+    leave() { for (const m of new Set(mods)) try { m.leave?.(); } catch (e) { } },
+  };
+};
+const P_RS = () => import('./pages/ridesettings.js'), P_PR = () => import('./pages/profile.js'), P_ON = () => import('./pages/online.js'), P_CO = () => import('./pages/community.js');
+Object.assign(PAGES, {
+  ridesettings: combo([P_RS, []], [P_RS, ['sound']]),
+  appsettings: combo([P_PR, ['app']], [P_PR, ['connect']]),
+  friends: combo([() => import('./pages/friends.js'), []], [P_ON, ['players']]),
+  community: combo([P_CO, ['events']], [P_CO, ['clubs']]),
+  progress: combo([() => import('./pages/progress.js'), []], [() => import('./pages/season.js'), []]),
+});
+// Alte Adressen führen zum passenden Abschnitt der zusammengelegten Seite
+const ALIAS = { sound: ['ridesettings', 1], connect: ['appsettings', 1], players: ['friends', 1], events: ['community', 0], clubs: ['community', 1], season: ['progress', 1] };
 const NAV = [
   { k: '', l: 'Start', i: 'home', also: ['companion', 'live'] },
   { k: 'workouts', l: 'Training', i: 'workout', tabs: [['workouts', 'Workouts'], ['plans', 'Trainingspläne']], also: ['editor', 'planner'] },
   { k: 'routes', l: 'Strecken', i: 'route', also: ['builder'] },
-  { k: 'history', l: 'Aktivitäten', s: 'Fahrten', i: 'history', tabs: [['history', 'Verlauf'], ['progress', 'Fortschritt'], ['season', 'Saison']], also: ['summary'] },
+  { k: 'history', l: 'Aktivitäten', s: 'Fahrten', i: 'history', tabs: [['history', 'Verlauf'], ['progress', 'Fortschritt & Saison']], also: ['summary', 'season'] },
   { k: 'devices', l: 'Geräte', i: 'devices' },
-  { k: 'lobby', l: 'Online', i: 'online', tabs: [['lobby', 'Lobby'], ['players', 'Wer ist online'], ['events', 'Events'], ['clubs', 'Teams'], ['account', 'Konto'], ['admin', 'Admin']] },
-  { k: 'profile', l: 'Einstellungen', s: 'Optionen', i: 'profile', tabs: [['profile', 'Profil'], ['avatar', 'Avatar'], ['ridesettings', 'Fahransicht'], ['sound', 'Ton'], ['appsettings', 'App'], ['connect', 'Verbindungen'], ['help', 'Anleitung'], ['legal', 'Rechtliches']] },
+  { k: 'lobby', l: 'Online', i: 'online', tabs: [['lobby', 'Lobby'], ['friends', 'Freunde'], ['community', 'Events & Teams'], ['account', 'Konto'], ['admin', 'Admin']], also: ['players', 'events', 'clubs'] },
+  { k: 'profile', l: 'Einstellungen', s: 'Optionen', i: 'profile', tabs: [['profile', 'Profil'], ['avatar', 'Avatar'], ['ridesettings', 'Fahrt & Ton'], ['appsettings', 'App & Daten'], ['help', 'Hilfe']], also: ['sound', 'connect', 'legal'] },
 ];
 const groupOf = k => NAV.find(g => g.k === k || g.tabs?.some(t => t[0] === k) || g.also?.includes(k)) || null;
 let current = null, currentKey = null;
@@ -64,6 +82,8 @@ function nav() {
   // Anmelden-Knopf (nur wenn IndooRado Online eingerichtet ist); angemeldet zeigt er Initiale und Namen
   const lb = document.createElement('a'); lb.className = 'btn sm loginbtn'; lb.href = '#/account'; lb.hidden = true;
   document.querySelector('.ridebtn').before(lb);
+  // Schnellstart oben rechts: neue Fahrt beginnt sofort mit der zuletzt gewählten Strecke (eine geparkte Fahrt wird einfach fortgesetzt)
+  document.querySelector('.ridebtn').addEventListener('click', async e => { e.preventDefault(); try { const r = await import('./pages/ride.js'); if (!r.isRiding?.()) sessionStorage.setItem('quickStart', '1'); } catch (er) { } location.hash = '#/ride'; });
   const loginUpd = async () => {
     const O = await import('./online/client.js'); lb.__O = O;
     if (!O.configured()) { lb.hidden = true; return; }
@@ -121,7 +141,8 @@ async function route() {
   const raw = location.hash.replace(/^#\/?/, '');
   const [path, query] = raw.split('?');
   const [key, ...params] = path.split('/');
-  let k = key in PAGES ? key : '';
+  let k = key in PAGES ? key : '', jump = 0;
+  if (ALIAS[k]) { [k, jump] = ALIAS[k]; history.replaceState(null, '', '#/' + k); }
   // Handy-Ansicht: die Startseite ist dann die kompakte Ansicht (umschalten unter Einstellungen › App)
   if (k === '' && wantsPhoneView()) k = 'companion';
   // Laufende Fahrt beim Verlassen nicht verwerfen, sondern pausiert im Hintergrund parken
@@ -144,6 +165,7 @@ async function route() {
     current = mod; currentKey = k;
     el.innerHTML = '';
     await mod.render(el, params.map(decodeURIComponent), query);
+    if (jump) requestAnimationFrame(() => el.children[jump]?.scrollIntoView({ block: 'start' }));
     sessionStorage.removeItem('vvReloaded');
     if (k === 'lobby') announce(el);
     if (k === '' || k === 'companion') newsBar(el);
@@ -183,7 +205,7 @@ async function newsBar(el) {
   const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const seen = () => { try { return JSON.parse(localStorage.getItem('vvAnnSeen') || '[]'); } catch (e) { return []; } };
   let anns = []; try { anns = JSON.parse(localStorage.getItem('vvAnnCache') || '[]'); } catch (e) { }
-  let PR = null, live = false, evs = [];
+  let PR = null, live = false, evs = [], soc = { req: 0, unread: 0 };
   const box = document.createElement('section'); box.className = 'newsbar'; box.hidden = true;
   box.innerHTML = '<div class="nbtrack"></div><button class="nbarr l" data-step="-1" aria-label="Zurück">‹</button><button class="nbarr r" data-step="1" aria-label="Weiter">›</button><div class="nbdots"></div>';
   el.querySelector('.pagehead, .comphead')?.after(box) ?? el.prepend(box);
@@ -194,6 +216,9 @@ async function newsBar(el) {
   const items = () => {
     const S = seen(), out = [];
     for (const a of anns) if (!S.includes(a.id)) { const [ic, k] = LV[a.level] || LV.info; out.push({ key: 'a' + a.id, ...slide('nb-ann nb-lv-' + (LV[a.level] ? a.level : 'info'), ic, k, esc(a.title), esc(a.body), `<button class="nbx" data-hide="${a.id}" aria-label="Ausblenden">✕</button>`) }); }
+    // Freunde: neue Anfragen und ungelesene Nachrichten
+    if (soc.req) out.push({ key: 'fr' + soc.req, ...slide('nb-event', '👥', 'Freunde', soc.req === 1 ? 'Neue Freundschaftsanfrage' : soc.req + ' neue Freundschaftsanfragen', '', '<a class="btn sm pri" href="#/friends">Ansehen</a>') });
+    if (soc.unread) out.push({ key: 'msg' + soc.unread, ...slide('nb-event', '💬', 'Chat', soc.unread === 1 ? '1 ungelesene Nachricht' : soc.unread + ' ungelesene Nachrichten', '', '<a class="btn sm pri" href="#/friends">Lesen</a>') });
     // Geplante Events der nächsten 24 Stunden (angemeldete zuerst)
     for (const e of evs) { const ms = new Date(e.starts_at) - Date.now(); if (ms > 864e5 || ms < -e.duration_min * 60e3) continue; const now = ms < 10 * 60e3;
       out.push({ key: 'e' + e.id, ...slide('nb-event', '📅', `Event${e.me ? ' · du bist angemeldet' : ''} · ${now ? 'läuft jetzt' : min(ms).replace('startet ', '')}`, esc(e.title), `👥 ${e.riders} angemeldet`, `<a class="btn sm ${now ? 'pri' : ''}" href="#/events">${now ? 'Beitreten' : 'Ansehen'}</a>`) }); }
@@ -236,7 +261,7 @@ async function newsBar(el) {
   if (!O.online.ready) await new Promise(r => { const o = bus.on('online', () => { o(); r(); }); setTimeout(() => { o(); r(); }, 15000); });
   if (!document.body.contains(box)) return;
   if (!O.loggedIn() || O.needsMfa()) { anns = []; draw(); return; }
-  if (O.access().ok) { const loadEv = () => O.client().then(sb => sb.rpc('event_list')).then(({ data }) => { evs = (data || []).sort((a, b) => b.me - a.me); draw(); }).catch(() => { }); loadEv(); const et = setInterval(() => document.body.contains(box) ? loadEv() : clearInterval(et), 120e3);
+  if (O.access().ok) { const loadEv = () => { O.client().then(sb => sb.rpc('event_list')).then(({ data }) => { evs = (data || []).sort((a, b) => b.me - a.me); draw(); }).catch(() => { }); O.client().then(sb => sb.rpc('friend_list')).then(({ data }) => { if (!data) return; soc = { req: data.filter(f => f.status === 'pending' && f.incoming).length, unread: data.reduce((a, f) => a + (+f.unread || 0), 0) }; draw(); }).catch(() => { }); }; loadEv(); const et = setInterval(() => document.body.contains(box) ? loadEv() : clearInterval(et), 120e3);
     PR = await import('./online/presence.js'); live = true; off = bus.on('presence', draw); PR.joinPresence().catch(() => { }); draw(); }
   import('./online/sync.js').then(m => m.announcements()).then(a => { anns = a || []; try { localStorage.setItem('vvAnnCache', JSON.stringify(anns.map(x => ({ id: x.id, level: x.level, title: x.title, body: x.body })))); } catch (e) { } draw(); }).catch(() => { });
 }

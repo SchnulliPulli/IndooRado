@@ -4,7 +4,7 @@ const T = [
   ['start', '🚀', 'Erste Schritte', `<ol class="tips">
     <li><b>Profil</b> (Einstellungen › Profil): Name, <b>FTP</b> und Gewicht eintragen. Alle Workout-Watt und Zonen hängen an der FTP. FTP unbekannt? Fahr ein paar Mal – die App schätzt sie und schlägt sie auf der Startseite vor.</li>
     <li><b>Geräte</b> verbinden: Smart-Trainer, Pulsgurt, Trittfrequenz-Sensor, Click-Controller. Ohne Geräte probierst du alles mit den <b>Demo-Geräten</b> aus.</li>
-    <li>Auf der Startseite <b>⚡ Schnellstart</b> (letzte Strecke, sofort los) oder Strecke und Workout wählen und „Fahren“. Die Fahrt startet, sobald du trittst.</li>
+    <li>Oben rechts <b>⚡ Schnellstart</b> (letzte Strecke, sofort los) oder auf der Startseite Strecke und Workout wählen und „Fahren“. Die Fahrt startet, sobald du trittst.</li>
     <li>Am Ende <b>Beenden › Speichern</b>. Nur gespeicherte Fahrten zählen für Level, Saison, Missionen, Plan und Bestzeiten.</li>
   </ol><p class="small muted">Bluetooth gibt es in Chrome und Edge (Windows, macOS, Android, ChromeOS), nicht in Safari und nicht auf dem iPhone. Bei der ersten Fahrt erklärt eine kurze <b>Einführung</b> die Anzeigen (später wieder über Mehr › Einführung).</p>`],
   ['geraete', '📡', 'Geräte', `<ul class="tips">
@@ -42,27 +42,28 @@ const T = [
   ['fortschritt', '🏆', 'Level, Saison und Werkstatt', `<ul class="tips">
     <li><b>XP</b> gibt es für Kilometer, Zeit, Höhenmeter, Gipfel, Sprints, Zieltore, Überholen, Bestwerte, Missionen, Plan-Einheiten und Multiplayer. Level schalten Trikotfarben, Räder, Tiere und Extras im <b>Avatar</b> frei.</li>
     <li><b>Wochenmissionen</b> und <b>Serien</b> (mehrere Tage in Folge geben Bonus-XP).</li>
-    <li><b>Saison</b> (Aktivitäten › Saison): jedes Quartal ein Belohnungspfad mit 25 Stufen – Saisonfarben für den Avatar, Titel, XP und am Ende ein Pokal mit Gold-Lack.</li>
+    <li><b>Saison</b> (Aktivitäten › Fortschritt & Saison): jedes Quartal ein Belohnungspfad mit 25 Stufen – Saisonfarben für den Avatar, Titel, XP und am Ende ein Pokal mit Gold-Lack.</li>
     <li><b>Werkstatt</b>: jede dritte Saisonstufe bringt einen Teile-Gutschein 🔧 für bessere Laufräder, Rahmen, Reifen und Bekleidung. Sie machen dich ein wenig schneller; sobald echte Mitfahrer auf der Strecke sind, gelten für alle gleiche Bedingungen.</li></ul>`],
   ['online', '🌐', 'Online: Mitfahren, Events und Teams', `<ul class="tips">
     <li><b>Konto</b> (Online › Konto): Anmeldung mit Passwort oder <b>Code per E-Mail</b>, empfohlen mit <b>Zwei-Faktor</b> (Authenticator-App). Mehrere Konten lassen sich über das Avatar-Menü oben wechseln.</li>
-    <li><b>Wer ist online</b>: sieh, wer gerade fährt, <b>fahr mit</b> (du landest direkt hinter dem anderen) oder <b>lade ein</b>. Echte Spieler haben einen Pfeil und ein Leuchten über dem Kopf.</li>
+    <li><b>Freunde</b> (Online › Freunde): Spieler suchen, Anfrage schicken – erst wenn beide zustimmen, seht ihr Level, Wochen- und Gesamtstatistik und könnt <b>chatten</b>. Einzelne Fahrten sieht ein Freund nur, wenn du es erlaubst. Puls, Gewicht oder Alter sieht nie jemand. Freundschaft beenden und Blockieren geht jederzeit.</li>
+    <li><b>Wer gerade online ist</b> (ebenfalls unter Freunde): sieh, wer fährt, <b>fahr mit</b> (du landest direkt hinter dem anderen) oder <b>lade ein</b>. Echte Spieler haben einen Pfeil und ein Leuchten über dem Kopf.</li>
     <li><b>Lobby</b>: Gruppenfahrten und Rennen mit gemeinsamem Start, gleichem Wetter und optional einem gemeinsamen Workout oder Plan.</li>
-    <li><b>📅 Events</b>: geplante Gruppenfahrten. Anmelden, zur Startzeit „Jetzt beitreten“. Die Startseite erinnert dich.</li>
+    <li><b>📅 Events</b> (Online › Events & Teams): geplante Gruppenfahrten. Anmelden, zur Startzeit „Jetzt beitreten“. Die Startseite erinnert dich.</li>
     <li><b>🛡️ Teams</b>: gründen oder beitreten (ein Team pro Person) und gemeinsam Kilometer sammeln, gewertet über die letzten 7 Tage.</li>
     <li>Ride Ons gehen auch an echte Mitspieler; beim gemeinsamen Fahren zählt die gemeinsame Zeit, es gibt Duelle und Gruppenbonus.</li></ul>`],
   ['ton', '🎵', 'Ton, Musik und Sprachansagen', `<ul class="tips">
-    <li><b>Geräusche</b> (Einstellungen › Ton): Fahrtwind, Reifen, Kette, Natur, Countdown, Fanfaren – jedes mit eigenem Regler. Taste M schaltet alles stumm.</li>
+    <li><b>Geräusche</b> (Einstellungen › Fahrt & Ton): Fahrtwind, Reifen, Kette, Natur, Countdown, Fanfaren – jedes mit eigenem Regler. Taste M schaltet alles stumm.</li>
     <li><b>Musik</b>: zehn Stile (Chill, Lo-Fi, Ambient, Synthwave, House, Drive, Techno, Rock, Drum & Bass, 8-Bit) mit mehreren Stücken. Tempo nach Stil, fest oder <b>im Takt deiner Trittfrequenz</b>. Wird mit Leistung oder Puls intensiver. Nächstes Stück: Taste T oder Mehr › Nächstes Stück. Oder eigene Musikdateien.</li>
     <li><b>Sprachansagen</b>: eine Stimme sagt Intervalle, Anstiege, Gipfelzeiten, Bestleistungen, Runden und Zwischenstände (alle 1, 5 oder 10 km) an – ideal, wenn du nicht auf den Bildschirm schaust. Themen, Stimme und Tempo einstellbar.</li></ul>`],
   ['tasten', '⌨️', 'Tastenkürzel und Barrierefreiheit', `<table class="tbl keys"><tr><th>Taste</th><th>In der Fahrt</th></tr>${RIDE.map(([k, l]) => `<tr><td>${k.split(' / ').map(x => `<kbd>${x}</kbd>`).join(' / ')}</td><td>${l}</td></tr>`).join('')}</table>
     <ul class="tips"><li>Die Taste <kbd>?</kbd> zeigt die Übersicht überall in der App.</li>
-    <li><b>Barrierefreiheit</b> (Einstellungen › App): Schriftgröße bis 130 %, hoher Kontrast, weniger Bewegung (keine Kamerafahrten und Animationen). Alles ist per Tastatur bedienbar, Dialoge schließen mit Esc, Meldungen werden Bildschirmlesern vorgelesen.</li></ul>`],
+    <li><b>Barrierefreiheit</b> (Einstellungen › App & Daten): Schriftgröße bis 130 %, hoher Kontrast, weniger Bewegung (keine Kamerafahrten und Animationen). Alles ist per Tastatur bedienbar, Dialoge schließen mit Esc, Meldungen werden Bildschirmlesern vorgelesen.</li></ul>`],
   ['daten', '🔒', 'Daten, Tresor und Strava', `<ul class="tips">
     <li>Ohne Konto bleibt <b>alles im Browser</b> dieses Geräts; die App sendet dann nichts ins Internet. Unter Profil gibt es eine Sicherungsdatei zum Herunterladen und Einspielen.</li>
     <li><b>Online-Abgleich</b>: Mit Konto werden Einstellungen, Fahrten und Fotos zwischen deinen Geräten abgeglichen (verschlüsselt übertragen über HTTPS).</li>
     <li><b>🔐 Tresor</b> (Konto › Tresor, empfohlen): verschlüsselt deine Online-Daten schon im Browser mit einem eigenen Tresor-Passwort (AES-256). Dann kann sie auch der Server-Betreiber nicht lesen. Passwort gut aufheben – ohne es sind die Online-Daten nicht wiederherstellbar.</li>
-    <li>Alternativ Abgleich über <b>NAS (Synology)</b>, OneDrive, Google Drive oder Dropbox (Einstellungen › Verbindungen).</li>
+    <li>Alternativ Abgleich über <b>NAS (Synology)</b>, OneDrive, Google Drive oder Dropbox (Einstellungen › App & Daten).</li>
     <li><b>Strava</b>: „Zu Strava“ in der Auswertung speichert FIT-Datei und Bild und öffnet die Upload-Seite. Mit eigener Strava-API-App (braucht ein Strava-Abo) geht der Upload automatisch. Bisherige Fahrten übernimmst du unter Aktivitäten › Importieren (FIT, ZIP-Export oder Strava).</li>
     <li><b>Teilen</b>: „📤 Teilen“ erstellt ein schickes Bild mit Karte und Kennzahlen für soziale Netzwerke.</li></ul>`],
   ['handy', '📱', 'Handy und Tablet', `<ul class="tips">
@@ -70,7 +71,7 @@ const T = [
     <li>Als App installieren: im Browser-Menü „Zum Startbildschirm hinzufügen“.</li>
     <li><b>Live-Ansicht</b>: Läuft auf einem anderen Gerät deines Kontos eine Fahrt, siehst du sie live auf der Startseite. Pro Konto läuft immer nur eine Fahrt gleichzeitig.</li></ul>`],
   ['probleme', '🛠️', 'Wenn etwas nicht klappt', `<ul class="tips">
-    <li><b>Ruckelt die Fahrt?</b> Die App senkt die Auflösung selbst. Zusätzlich hilft Einstellungen › App › Grafik „Mittel“ oder „Niedrig“.</li>
+    <li><b>Ruckelt die Fahrt?</b> Die App senkt die Auflösung selbst. Zusätzlich hilft Einstellungen › App & Daten › Grafik „Mittel“ oder „Niedrig“.</li>
     <li><b>Gerät wird nicht gefunden?</b> Chrome oder Edge verwenden, Bluetooth am Gerät einschalten, andere Apps (z. B. auf dem Handy) vom Trainer trennen.</li>
     <li><b>Online-Probleme?</b> Online › Konto › Verbindungstest prüft Schritt für Schritt Anmeldung, Datenbank und Live-Verbindung.</li>
     <li><b>Neue Version?</b> Die App aktualisiert sich beim nächsten Öffnen. Die Versionsnummer steht unten links im Menü.</li></ul>`],
@@ -81,6 +82,7 @@ export async function render(el) {
   <div class="helpsearch"><input class="inp" id="hQ" type="search" placeholder="🔍 z. B. Geist, Tresor, Schalten, Musik …" aria-label="Anleitung durchsuchen"></div>
   <nav class="helptiles">${T.map(([id, i, t]) => `<a href="#" data-go="${id}"><span>${i}</span>${t}</a>`).join('')}</nav>
   <div class="helpbody">${T.map(([id, i, t, b], n) => `<details class="card help" id="h-${id}" ${n === 0 ? 'open' : ''}><summary><span>${i}</span> ${t}</summary><div class="helpin">${b}</div></details>`).join('')}</div>
+  <section class="card"><h2>⚖️ Rechtliches</h2><p class="small"><a href="#/legal/impressum">Impressum</a> · <a href="#/legal/datenschutz">Datenschutzerklärung</a> · <a href="#/legal/nutzung">Nutzungsbedingungen</a> · <a href="#/legal/lizenzen">Lizenzen</a></p></section>
   <p class="small muted" id="hNone" hidden>Nichts gefunden. Probier ein anderes Wort.</p>`;
   el.querySelector('.helptiles').onclick = e => { const a = e.target.closest('[data-go]'); if (!a) return; e.preventDefault(); const d = el.querySelector('#h-' + a.dataset.go); d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
   // Suche: passende Abschnitte öffnen, andere ausblenden, Treffer markieren

@@ -1,0 +1,104 @@
+// Freunde: suchen, Anfragen (gegenseitige Zustimmung), Profil mit Kennzahlen, einzelne Fahrten nur mit Erlaubnis, einfacher Chat.
+// Keine Gesundheitsdaten (Puls, Gewicht, Alter) – die Datenbank gibt sie gar nicht heraus.
+import { $, esc, toast, fmtKm, fmtDur, fmtDate, dialog } from '../util.js';
+import { avatarSvg } from '../components.js';
+import * as O from '../online/client.js';
+import { gate } from './online.js';
+
+const miss = e => /function|relation|does not exist|schema cache/i.test(e?.message || '') ? 'Freunde und Chat fehlen in der Datenbank: supabase/schema.sql im SQL-Editor erneut ausführen.' : e?.message;
+let timers = [], chatT = null;
+export function leave() { timers.forEach(clearInterval); timers = []; clearInterval(chatT); document.querySelector('.frdlg')?.closest('.modal')?.remove(); }
+
+export async function render(el) {
+  leave();
+  if (!(await gate(el))) return;
+  const sb = await O.client(), me = O.online.user.id;
+  el.innerHTML = `<section class="pagehead"><h1>👥 Freunde</h1><span class="small muted">Gegenseitig bestätigt · Profil und Chat nur unter Freunden</span></section>
+  <section class="grid2">
+    <div class="card"><h2>Freunde</h2><div id="frList"><div class="pageload"><div class="spinner"></div></div></div></div>
+    <div class="card form"><h2>Spieler suchen</h2><input class="inp" id="frQ" type="search" placeholder="Name (mind. 3 Buchstaben)" maxlength="40" autocomplete="off"><div id="frRes" class="frlist"></div>
+      <h3 class="sub">Privatsphäre</h3>
+      <label class="switch"><input type="checkbox" id="frShare" ${O.online.profile?.share_rides ? 'checked' : ''}><span></span> <div class="swt">Freunde dürfen meine einzelnen Fahrten sehen<small class="muted">Datum, Strecke, Distanz, Dauer, Höhenmeter, Ø Watt. Ohne diese Erlaubnis sehen Freunde nur Level und Summen. Puls, Gewicht und Alter sieht nie jemand.</small></div></label>
+      <label class="switch"><input type="checkbox" id="frFind" ${O.online.profile?.findable !== false ? 'checked' : ''}><span></span> <div class="swt">In der Suche auffindbar<small class="muted">Aus: Nur wer dich schon als Freund hat, sieht dich.</small></div></label>
+    </div>
+  </section>`;
+  let list = [];
+  const row = (f, extra = '') => `<div class="frrow" data-id="${esc(f.id)}">${avatarSvg(f.avatar || {}, 38)}<div class="frn"><b>${esc(f.display_name)}</b>${f.club_tag ? ` <span class="cltag sm">${esc(f.club_tag)}</span>` : ''}<div class="small muted">Level ${f.level}${f.last_seen ? ' · zuletzt ' + fmtDate(f.last_seen) : ''}</div></div>${extra}</div>`;
+  const draw = async () => {
+    const { data, error } = await sb.rpc('friend_list'); if (!el.isConnected) return;
+    if (error) { $('#frList', el).innerHTML = `<p class="muted">${esc(miss(error))}</p>`; return; }
+    list = data; const inc = data.filter(f => f.status === 'pending' && f.incoming), out = data.filter(f => f.status === 'pending' && !f.incoming), fr = data.filter(f => f.status === 'accepted'), bl = data.filter(f => f.status === 'blocked');
+    $('#frList', el).innerHTML = (inc.length ? `<h3 class="sub">📨 Anfragen an dich</h3><div class="frlist">${inc.map(f => row(f, `<span class="row"><button class="btn sm pri" data-acc="${f.id}">Annehmen</button><button class="btn sm ghost" data-dec="${f.id}">Ablehnen</button></span>`)).join('')}</div>` : '')
+      + (fr.length ? `<div class="frlist">${fr.map(f => row(f, `${f.unread ? `<span class="badge">${f.unread}</span>` : ''}<button class="btn sm" data-open="${f.id}">${f.unread ? '💬 Lesen' : 'Profil & Chat'}</button>`)).join('')}</div>` : '<p class="muted small">Noch keine Freunde. Suche rechts nach Namen und schicke eine Anfrage – sobald sie angenommen ist, seht ihr eure Profile und könnt chatten.</p>')
+      + (out.length ? `<h3 class="sub">⏳ Gesendete Anfragen</h3><div class="frlist">${out.map(f => row(f, `<button class="btn sm ghost" data-del="${f.id}">Zurückziehen</button>`)).join('')}</div>` : '')
+      + (bl.length ? `<details class="small"><summary>🚫 Blockiert (${bl.length})</summary><div class="frlist">${bl.map(f => row(f, `<button class="btn sm ghost" data-del="${f.id}">Freigeben</button>`)).join('')}</div></details>` : '');
+  };
+  let qT = null;
+  $('#frQ', el).oninput = e => { clearTimeout(qT); const q = e.target.value.trim(); if (q.length < 3) { $('#frRes', el).innerHTML = ''; return; }
+    qT = setTimeout(async () => { const { data, error } = await sb.rpc('user_search', { p_q: q }); if (error) { $('#frRes', el).innerHTML = `<p class="muted small">${esc(miss(error))}</p>`; return; }
+      $('#frRes', el).innerHTML = data.length ? data.map(u => row(u, { none: `<button class="btn sm pri" data-req="${u.id}">+ Anfrage</button>`, sent: '<span class="small muted">angefragt</span>', received: `<button class="btn sm pri" data-acc="${u.id}">Annehmen</button>`, friend: '<span class="small muted">✓ Freund</span>', blocked: '<span class="small muted">blockiert</span>' }[u.relation] || '')).join('') : '<p class="muted small">Niemand gefunden. Manche Spieler sind nicht auffindbar.</p>'; }, 350); };
+  const act = async (fn, args, msg) => { const { error } = await sb.rpc(fn, args); if (error) { toast(miss(error)); return false; } if (msg) toast(msg); draw(); $('#frQ', el).dispatchEvent(new Event('input')); return true; };
+  el.onclick = async e => {
+    const t = e.target.closest('button'); if (!t) return;
+    if (t.dataset.req) return act('friend_request', { p_to: t.dataset.req }, 'Anfrage gesendet');
+    if (t.dataset.acc) return act('friend_respond', { p_other: t.dataset.acc, p_accept: true }, '🎉 Ihr seid jetzt Freunde');
+    if (t.dataset.dec) return act('friend_respond', { p_other: t.dataset.dec, p_accept: false }, 'Abgelehnt');
+    if (t.dataset.del) return act('friend_remove', { p_other: t.dataset.del }, 'Erledigt');
+    if (t.dataset.open) return openFriend(sb, me, list.find(f => f.id === t.dataset.open), draw);
+  };
+  el.onchange = async e => {
+    const k = e.target.id === 'frShare' ? 'share_rides' : e.target.id === 'frFind' ? 'findable' : null; if (!k) return;
+    try { await O.updateProfile({ [k]: e.target.checked }); toast('Gespeichert', 900); } catch (er) { e.target.checked = !e.target.checked; toast(miss(er)); }
+  };
+  draw(); timers.push(setInterval(() => el.isConnected ? draw() : leave(), 30e3));
+}
+
+// Profil eines Freundes mit Chat
+async function openFriend(sb, me, f, redraw) {
+  if (!f) return;
+  const w = document.createElement('div'); w.className = 'modal on';
+  w.innerHTML = `<div class="card dlg frdlg" role="dialog" aria-modal="true" aria-label="${esc(f.display_name)}"><div class="row between"><div class="row">${avatarSvg(f.avatar || {}, 44)}<div><h2 style="margin:0">${esc(f.display_name)}</h2><div class="small muted" id="fpSub">Level ${f.level}</div></div></div><button class="btn sm ghost" data-x aria-label="Schließen">✕</button></div>
+    <div class="frtabs seg sm"><button aria-pressed="true" data-tab="chat">💬 Chat</button><button aria-pressed="false" data-tab="prof">📊 Profil</button></div>
+    <div data-pane="chat"><div class="chat" id="chLog"><div class="pageload"><div class="spinner"></div></div></div>
+      <form class="chatin" id="chForm"><input class="inp" id="chTxt" maxlength="1000" placeholder="Nachricht schreiben …" autocomplete="off"><button class="btn pri" type="submit">Senden</button></form></div>
+    <div data-pane="prof" hidden><div id="fpBody"><div class="pageload"><div class="spinner"></div></div></div>
+      <div class="row end" style="margin-top:12px"><button class="btn sm ghost" data-rm>Freundschaft beenden</button><button class="btn sm ghost danger" data-block>Blockieren</button></div></div></div>`;
+  document.body.appendChild(w);
+  const close = () => { clearInterval(chatT); w.remove(); document.removeEventListener('keydown', esck, true); redraw(); };
+  const esck = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  document.addEventListener('keydown', esck, true);
+  const log = w.querySelector('#chLog');
+  let last = '';
+  const loadChat = async () => {
+    const { data, error } = await sb.from('chat_messages').select('id,sender,body,created_at').or(`and(sender.eq.${me},recipient.eq.${f.id}),and(sender.eq.${f.id},recipient.eq.${me})`).order('created_at', { ascending: false }).limit(100);
+    if (!w.isConnected) return; if (error) { log.innerHTML = `<p class="muted small">${esc(miss(error))}</p>`; return; }
+    const key = data.map(m => m.id).join(); if (key === last) return; last = key;
+    const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+    log.innerHTML = data.length ? data.reverse().map(m => `<div class="msg ${m.sender === me ? 'me' : ''}"><span>${esc(m.body)}</span><small>${new Date(m.created_at).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</small></div>`).join('') : '<p class="muted small">Noch keine Nachrichten. Sag Hallo! 👋</p>';
+    if (atBottom || data.length) log.scrollTop = log.scrollHeight;
+    sb.rpc('chat_read', { p_other: f.id }).then(() => { });
+  };
+  w.querySelector('#chForm').onsubmit = async e => {
+    e.preventDefault(); const inp = w.querySelector('#chTxt'), body = inp.value.trim(); if (!body) return;
+    inp.disabled = true; const { error } = await sb.from('chat_messages').insert({ recipient: f.id, body }); inp.disabled = false;
+    if (error) return toast(/row-level security/i.test(error.message) ? 'Nicht gesendet (zu viele Nachrichten in kurzer Zeit oder keine Freundschaft mehr)' : miss(error));
+    inp.value = ''; inp.focus(); loadChat();
+  };
+  const loadProf = async () => {
+    const { data: p, error } = await sb.rpc('friend_profile', { p_other: f.id }); const box = w.querySelector('#fpBody');
+    if (error) { box.innerHTML = `<p class="muted">${esc(miss(error))}</p>`; return; }
+    w.querySelector('#fpSub').innerHTML = `Level ${p.level} · dabei seit ${fmtDate(p.since)}${p.club ? ` · <span class="cltag sm" style="background:${esc(p.club.color)}">${esc(p.club.tag)}</span> ${esc(p.club.name)}` : ''}`;
+    const tile = (v, l) => `<div class="kpi"><b class="num">${v}</b><span>${l}</span></div>`;
+    box.innerHTML = `<h3 class="sub">Diese Woche</h3><div class="kpis">${tile(p.week.rides, 'Fahrten')}${tile(String(p.week.km).replace('.', ','), 'km')}${tile(String(p.week.hours).replace('.', ','), 'Stunden')}</div>
+      <h3 class="sub">Insgesamt</h3><div class="kpis">${tile(p.total.rides, 'Fahrten')}${tile(p.total.km, 'km')}${tile(String(p.total.hours).replace('.', ','), 'Stunden')}${tile(p.total.hm, 'Höhenmeter')}</div>
+      <h3 class="sub">Letzte Fahrten</h3>${p.rides ? (p.rides.length ? `<div class="frrides">${p.rides.map(r => `<div class="frride"><b>${esc(r.title || r.route_name || 'Fahrt')}</b><span class="small muted">${fmtDate(r.started_at)}</span><span class="num small">${fmtKm(r.distance_m || 0)} km · ${fmtDur(r.duration_s || 0)}${r.ascent_m ? ' · ' + r.ascent_m + ' hm' : ''}${r.avg_w ? ' · Ø ' + r.avg_w + ' W' : ''}</span></div>`).join('')}</div>` : '<p class="muted small">Noch keine Fahrten online.</p>') : `<p class="muted small">🔒 ${esc(p.name)} teilt einzelne Fahrten nicht.</p>`}`;
+  };
+  w.addEventListener('click', async e => {
+    if (e.target === w || e.target.closest('[data-x]')) return close();
+    const tb = e.target.closest('[data-tab]'); if (tb) { w.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-pressed', String(b === tb))); w.querySelectorAll('[data-pane]').forEach(p => p.hidden = p.dataset.pane !== tb.dataset.tab); if (tb.dataset.tab === 'prof') loadProf(); return; }
+    if (e.target.closest('[data-rm]')) { if (await dialog({ title: `Freundschaft mit ${f.display_name} beenden?`, html: '<p class="muted">Ihr seht dann keine Profile mehr und könnt nicht mehr chatten. Bisherige Nachrichten bleiben bei euch beiden gespeichert, bis ihr sie löscht oder sie nach 12 Monaten entfernt werden.</p>', buttons: [{ label: 'Abbrechen', value: 0 }, { label: 'Beenden', value: 1, cls: 'danger' }] })) { await sb.rpc('friend_remove', { p_other: f.id }); close(); } return; }
+    if (e.target.closest('[data-block]')) { if (await dialog({ title: `${f.display_name} blockieren?`, html: '<p class="muted">Die Freundschaft endet, und ihr könnt euch keine Anfragen oder Nachrichten mehr schicken. Unter „Blockiert“ kannst du das rückgängig machen.</p>', buttons: [{ label: 'Abbrechen', value: 0 }, { label: 'Blockieren', value: 1, cls: 'danger' }] })) { await sb.rpc('friend_block', { p_other: f.id }); toast('Blockiert'); close(); } return; }
+  });
+  loadChat(); clearInterval(chatT); chatT = setInterval(() => w.isConnected ? loadChat() : clearInterval(chatT), 5000);
+  setTimeout(() => w.querySelector('#chTxt')?.focus(), 50);
+}

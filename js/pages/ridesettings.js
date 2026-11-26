@@ -15,6 +15,7 @@ const RNG = (o, k, label, min, max, step, d, fmt) => `<label class="f">${label}:
 const FMT = {
   voiceRate: v => `${Math.round(v * 100)} %`,
   musicBpm: v => `${v} BPM`,
+  volMusic: v => Math.round(v * 100) + ' %',
   hudOpacity: v => Math.round(v * 100) + ' %', npcStrength: v => (v > 0 ? '+' : '') + (+v).toFixed(1).replace('.', ',') + ' W/kg', gearDiff: v => v + ' %', simDiff: v => v + ' %',
   volMaster: v => Math.round(v * 100) + ' %', volAmb: v => Math.round(v * 100) + ' %', volFx: v => Math.round(v * 100) + ' %', drinkEvery: v => v + ' min', shotEvery: v => v + ' min',
 };
@@ -44,7 +45,7 @@ export async function render(el, params = []) {
       ${RNG('p', 'musicBpm', 'Festes Tempo', 60, 180, 2, profile.musicBpm ?? 120, FMT.musicBpm)}
       ${SW('p', 'musicDrums', 'Schlagzeug', 'Aus = nur Flächen und Bass')}
       ${SW('p', 'musicLead', 'Melodie und Arpeggios')}
-      ${RNG('p', 'volMusic', 'Lautstärke Musik', 0, 1, .05, profile.volMusic ?? .35, FMT.volMaster)}
+      ${RNG('p', 'volMusic', 'Lautstärke Musik', 0, 1, .05, profile.volMusic ?? .35, FMT.volMusic)}
       <p class="small muted">Die erzeugte Musik passt sich deiner Intensität an: Bei harten Intervallen kommen Hi-Hats und Arpeggios dazu, in Pausen wird sie leiser. „Eigene Musikdateien“ spielt deine Dateien in zufälliger Reihenfolge, sie bleiben nur in diesem Browser.</p>
       <div class="row"><button class="btn sm" id="rsMusTest">Musik probehören</button><label class="btn sm">Eigene Musik hinzufügen<input type="file" id="rsMusFiles" accept="audio/*" multiple hidden></label></div>
       <div class="small" id="rsMusList"></div>
@@ -139,7 +140,14 @@ export async function render(el, params = []) {
   </section>`);
   const Q = id => $(id, el) || {}; // Elemente gibt es nur im jeweiligen Abschnitt
   // Speichern bei jeder Änderung
-  const store = (o, k, v) => { (o === 's' ? sel : profile)[k] = v; o === 's' ? saveSel() : saveProfile(); sound.apply(); };
+  const store = (o, k, v) => {
+    (o === 's' ? sel : profile)[k] = v;
+    // Festes Tempo einstellen = Tempo-Modus „fest“ (sonst hätte der Regler keine Wirkung)
+    if (k === 'musicBpm' && profile.musicTempo !== 'fixed') { profile.musicTempo = 'fixed'; const t = el.querySelector('[data-k="musicTempo"]'); if (t) t.value = 'fixed'; }
+    o === 's' ? saveSel() : saveProfile(); sound.apply();
+    // Laufende Musik sofort umstellen (Stil wechseln = neu starten, alles andere liest die Musik laufend)
+    if (k === 'music' && music.playing) music.start();
+  };
   el.onchange = e => {
     const t = e.target, o = t.dataset.o, k = t.dataset.k; if (!o || !k) return;
     if (t.type === 'checkbox') store(o, k, t.checked);
@@ -147,7 +155,7 @@ export async function render(el, params = []) {
     else { const n = +t.value; store(o, k, t.value !== '' && !isNaN(n) && !['hudStyle', 'quality', 'time', 'weather', 'mode', 'npcCount', 'music', 'musicFollow', 'musicTrack', 'musicTempo', 'voiceName'].includes(k) ? n : (k === 'npcCount' && t.value !== 'auto' ? n : t.value)); }
     toast('Gespeichert', 900);
   };
-  el.oninput = e => { const t = e.target; if (t.type === 'range' && t.dataset.k) { const k = t.dataset.k; $(`[data-v="${k}"]`, el).textContent = FMT[k](+t.value); store(t.dataset.o, k, +t.value); } };
+  el.oninput = e => { const t = e.target; if (t.type === 'range' && t.dataset.k) { const k = t.dataset.k, f = FMT[k] || (v => Math.round(v * 100) + ' %'); $(`[data-v="${k}"]`, el).textContent = f(+t.value); store(t.dataset.o, k, +t.value); } };
   const setAcc = c => { profile.hudAccent = c; saveProfile(); for (const b of el.querySelectorAll('#rsAcc [data-c]')) b.setAttribute('aria-pressed', String(b.dataset.c === c)); };
   Q('#rsAcc').onclick = e => { const b = e.target.closest('[data-c]'); if (b) setAcc(b.dataset.c); };
   Q('#rsAccC').oninput = e => { e.stopPropagation(); setAcc(e.target.value); };

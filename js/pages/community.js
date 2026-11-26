@@ -13,7 +13,7 @@ const missing = e => /function|relation|does not exist|schema cache/i.test(e?.me
 let timer = null;
 export function leave() { clearInterval(timer); }
 export async function render(el, params = []) {
-  leave();
+  if (params[0] !== 'clubs') leave(); // auf der gemeinsamen Seite nicht den Events-Takt stoppen
   if (!(await gate(el))) return;
   return params[0] === 'clubs' ? clubs(el) : events(el);
 }

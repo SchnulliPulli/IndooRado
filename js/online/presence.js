@@ -94,6 +94,14 @@ setInterval(async () => {
   try { (await client()).removeChannel(old); } catch (e) { }
   joinPresence().catch(() => { });
 }, 5000);
+// Sofort neu verbinden, wenn der Tab wieder sichtbar wird oder das Internet zurück ist (statt auf den nächsten Durchlauf zu warten)
+const revive = async () => {
+  if (!P.ch || P.ch === 'pending' || P.ch.state === 'joined' || P.ch.state === 'joining' || !loggedIn() || !access().ok) return;
+  const old = P.ch; P.ch = null; P.ready = false;
+  try { (await client()).removeChannel(old); } catch (e) { }
+  joinPresence().catch(() => { });
+};
+if (typeof document !== 'undefined') { document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(revive, 300); }); addEventListener('online', () => setTimeout(revive, 1000)); }
 export async function leavePresence() { try { if (P.ch && P.ch !== 'pending' && P.ready) P.ch.send({ type: 'broadcast', event: 'meta', payload: { from: sid, meta: null } }); } catch (e) { } const c = P.ch; P.ch = null; if (c && c !== 'pending') { try { await c.untrack(); (await client()).removeChannel(c); } catch (e) { } } P.ready = false; P.peers.clear(); bus.emit('presence'); }
 // Eigene Meldung senden; schlägt sie fehl (Zeitüberschreitung, Ratenlimit), bis zu 5-mal mit wachsender Pause wiederholen
 let pushTry = 0, pushTimer = null;

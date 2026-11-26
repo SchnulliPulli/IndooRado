@@ -10,7 +10,7 @@ export function missionCard(ms) {
 }
 
 export const ICON = {
-  online: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3Z"/></svg>',
+  online: '<svg viewBox="0 0 24 24"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.6 9.2 4.7 4.7 0 0 0 7 18.5Z"/></svg>',
   trainer: '<svg viewBox="0 0 24 24"><circle cx="7" cy="16" r="4"/><path d="M7 16 12 7h5M12 7l4 9M15 4h3"/><path d="M14 16h6l1 4H11z"/></svg>',
   hr: '<svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-9-9a4.8 4.8 0 0 1 9-3 4.8 4.8 0 0 1 9 3c-2 4.6-9 9-9 9Z"/><path d="M5 12h3l2-3 3 6 2-3h4"/></svg>',
   cad: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 12 17 7M12 12v-3"/><circle cx="12" cy="12" r="1.5"/></svg>',

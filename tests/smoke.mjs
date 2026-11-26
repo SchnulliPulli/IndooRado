@@ -3,7 +3,7 @@
 import { createRequire } from 'node:module';
 const { chromium } = createRequire(import.meta.url)('playwright'); // lokal oder global installiert
 const BASE = process.env.BASE || 'http://localhost:8765/';
-const PAGES = ['', 'workouts', 'plans', 'routes', 'builder', 'history', 'progress', 'season', 'devices', 'lobby', 'events', 'clubs', 'profile', 'avatar', 'ridesettings', 'sound', 'appsettings', 'connect', 'help', 'legal/impressum', 'legal/datenschutz'];
+const PAGES = ['', 'workouts', 'plans', 'routes', 'builder', 'history', 'progress', 'devices', 'lobby', 'friends', 'community', 'profile', 'avatar', 'ridesettings', 'appsettings', 'help', 'legal/impressum', 'legal/datenschutz'];
 const fails = [];
 const check = (ok, what) => { console.log((ok ? '✓ ' : '✗ ') + what); if (!ok) fails.push(what); };
 const b = await chromium.launch();
@@ -14,7 +14,9 @@ for (const vp of [{ width: 1280, height: 800, n: 'Desktop' }, { width: 390, heig
   await p.goto(BASE + '#/'); await p.waitForTimeout(1500);
   await p.evaluate(() => document.querySelectorAll('.modal').forEach(m => m.remove()));
   for (const k of PAGES) {
-    await p.goto(BASE + '#/' + k); await p.waitForTimeout(700);
+    await p.goto(BASE + '#/' + k);
+    // Warten, bis die Seite Inhalt hat (auf langsamen Test-Rechnern dauert das Laden länger)
+    await p.waitForFunction(() => (document.querySelector('#view')?.textContent || '').trim().length > 20 && !document.querySelector('#view .pageload'), null, { timeout: 10000 }).catch(() => { });
     const txt = (await p.textContent('#view')).trim();
     check(txt.length > 20, `${vp.n}: Seite #/${k} zeigt Inhalt`);
   }
