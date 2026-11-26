@@ -96,11 +96,17 @@ export function levelBar() {
   return `<div class="level"><div class="lvbadge">${L.lv}</div><div style="flex:1"><div class="row between small"><span>Level ${L.lv} · <b>${titleOf(L.lv)}</b></span><span class="muted">${progress.xp - L.lo} / ${L.hi - L.lo} XP</span></div><div class="bar"><i style="width:${(L.frac * 100).toFixed(1)}%"></i></div></div></div>`;
 }
 
+// Eine Fahrt als Zeile: Symbol (Farbe nach Intensität), Titel mit Merkmalen, Kennzahlen in festen Spalten, Löschen
 export function rideRow(r) {
+  const s = r.sum || {}, ifv = s.IF || (s.np && r.ftpUsed ? s.np / r.ftpUsed : 0);
+  const col = ifv >= 1.05 ? '#ef4458' : ifv >= .9 ? '#ff8a3d' : ifv >= .75 ? '#f5c542' : ifv >= .55 ? '#4fd18b' : '#3fa7f5';
+  const ico = r.imported ? '⬇' : r.race ? '🏁' : r.workoutName ? '🏋️' : '🚴';
+  const tags = [r.workoutDone ? '<i class="rtag ok">✓ Workout</i>' : '', r.race ? `<i class="rtag">Platz ${r.race.place}</i>` : '', r.stravaId ? '<i class="rtag st">Strava</i>' : '', r.demoDevices ? '<i class="rtag">🧪 Demo</i>' : '', r.imported ? '<i class="rtag">übernommen</i>' : '', r.mp?.riders?.length ? '<i class="rtag">🌐 zusammen</i>' : ''].join('');
   return `<a class="riderow" href="#/summary/${esc(r.id)}" data-rid="${esc(r.id)}">
     <label class="rsel" hidden><input type="checkbox" data-sel="${esc(r.id)}"></label>
-    <div><div class="t">${esc(r.title)}</div><div class="small muted">${fmtDate(r.date)}${r.imported ? ' · übernommen' : ''}</div></div>
-    <div class="riderow-stats num"><span>${fmtKm(r.sum.dist)} km</span><span>${fmtDur(r.sum.dur)}</span><span>${r.sum.avgP} W</span><span>${r.sum.tss} TSS</span></div>
+    <span class="ricon" style="--rc:${col}">${ico}</span>
+    <div class="rmain"><div class="t">${esc(r.title)}</div><div class="small muted">${fmtDate(r.date)}${tags ? ' ' + tags : ''}</div></div>
+    <div class="riderow-stats num"><span><b>${fmtKm(s.dist || 0)}</b> km</span><span>${fmtDur(s.dur || 0)}</span><span>${s.avgP ?? '–'} W</span><span>${s.tss ?? '–'} TSS</span></div>
     <button class="rdel" data-delride="${esc(r.id)}" title="Fahrt löschen" aria-label="Fahrt löschen">🗑</button></a>`;
 }
 // Löschen aus jeder Fahrtenliste (Verlauf, Startseite, Übersicht): Papierkorb an der Zeile

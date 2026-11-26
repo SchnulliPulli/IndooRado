@@ -10,12 +10,20 @@ export async function render(el) {
   const rides = (await db.all('rides')).sort((a, b) => b.date.localeCompare(a.date));
   const months = new Map();
   for (const r of rides) { const k = r.date.slice(0, 7); if (!months.has(k)) months.set(k, []); months.get(k).push(r); }
-  el.innerHTML = `<section class="pagehead"><h1>Verlauf</h1><span class="row"><input class="inp" id="q" placeholder="Suchen nach Strecke oder Workout" style="max-width:260px"><button class="btn sm ghost" id="selMode">Auswählen</button><label class="btn sm">FIT-Dateien importieren<input type="file" id="fitIn" accept=".fit,.gz,.zip" multiple hidden></label><button class="btn sm" id="stravaIn">Aus Strava übernehmen</button></span></section>
-  <p class="small muted">Bisherige Fahrten, z. B. aus anderen Trainings-Apps, fließen so in Fitness, Form, Leistungskurve und Summen ein (ohne XP). Viele Apps übertragen Fahrten zu Strava oder bieten sie als .fit zum Herunterladen an; alle Strava-Fahrten gibt es im Strava-Kontoexport (ZIP).</p>
+  const tot = rides.reduce((a, r) => ({ d: a.d + (r.sum?.dist || 0), t: a.t + (r.sum?.dur || 0) }), { d: 0, t: 0 });
+  el.innerHTML = `<section class="pagehead"><div><h1>Verlauf</h1><div class="small muted num">${rides.length} Fahrten · ${fmtKm(tot.d)} km · ${fmtDur(tot.t)}</div></div>
+    <span class="row histbtns"><button class="btn sm ghost" id="selMode">☑ Auswählen</button><span class="importwrap"><button class="btn sm" id="impBtn" aria-expanded="false">⬇ Importieren ▾</button>
+      <div class="impmenu" id="impMenu" hidden><label class="impitem">📄 FIT-Dateien<small>.fit, .fit.gz oder ZIP (z. B. Strava-Kontoexport)</small><input type="file" id="fitIn" accept=".fit,.gz,.zip" multiple hidden></label><button class="impitem" id="stravaIn">🟠 Aus Strava übernehmen<small>braucht eine Strava-Verbindung</small></button>
+      <p class="small muted">Übernommene Fahrten zählen für Fitness, Form, Leistungskurve und Summen, bringen aber keine XP.</p></div></span></span></section>
+  <div class="histsearch"><input class="inp" id="q" type="search" placeholder="🔍 Suchen nach Strecke, Workout oder Datum"></div>
   ${rides.length ? [...months].map(([m, list]) => {
     const d = list.reduce((a, r) => a + r.sum.dist, 0), t = list.reduce((a, r) => a + r.sum.dur, 0), tss = list.reduce((a, r) => a + r.sum.tss, 0);
     return `<section class="card month"><div class="row between"><h2>${new Date(m + '-15').toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}</h2><span class="small muted num">${list.length} Fahrten · ${fmtKm(d)} km · ${fmtDur(t)} · ${tss} TSS</span></div>${list.map(rideRow).join('')}</section>`;
   }).join('') : '<div class="card"><p class="muted">Noch keine Fahrten. Starte auf der Startseite deine erste Fahrt.</p><a class="btn pri" href="#/">Zur Startseite</a></div>'}`;
+  // Import-Menü
+  const im = $('#impMenu', el), ib = $('#impBtn', el);
+  ib.onclick = e => { e.stopPropagation(); im.hidden = !im.hidden; ib.setAttribute('aria-expanded', String(!im.hidden)); };
+  document.addEventListener('click', e => { if (!e.target.closest?.('.importwrap')) { im.hidden = true; ib.setAttribute('aria-expanded', 'false'); } });
   $('#fitIn', el).onchange = async e => {
     const t = document.createElement('div'); t.className = 'toast show'; $('#toasts').appendChild(t);
     try { const r = await importFitFiles([...e.target.files], m => t.textContent = 'Importiere ' + m); toast(`${r.n} Fahrten übernommen${r.skip ? `, ${r.skip} schon vorhanden` : ''}${r.err ? `, ${r.err} nicht lesbar` : ''}`, 5000); render(el); }

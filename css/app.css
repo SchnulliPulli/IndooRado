@@ -826,3 +826,23 @@ body:not(.is-admin) .admintab:not(.on){display:none}
 @media (orientation:portrait) and (max-width:560px){
   .msgstack:not([data-user]){top:190px}
 }
+/* ---------- Fahrtenliste (Verlauf, Startseite) ---------- */
+.riderow{display:grid!important;grid-template-columns:auto auto minmax(0,1fr) auto auto;grid-template-areas:"s i m st d";align-items:center;gap:6px 0;padding:10px 8px;border-radius:10px;flex-wrap:nowrap}
+.riderow .rsel{grid-area:s;margin-right:10px}.riderow .ricon{grid-area:i;margin-right:14px}.riderow .rmain{grid-area:m;margin-right:14px}.riderow .riderow-stats{grid-area:st}.riderow .rdel{grid-area:d;margin-left:10px}
+.riderow .rsel[hidden]{display:none}
+.ricon{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-size:17px;background:color-mix(in srgb,var(--rc) 22%,var(--panel2));box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--rc) 70%,transparent)}
+.rmain{min-width:0}.rmain .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rtag{font-style:normal;font-size:11px;padding:1px 7px;border-radius:999px;background:var(--panel3);color:var(--soft);margin-left:4px;white-space:nowrap}.rtag.ok{color:#4fd18b}.rtag.st{color:#fc5200}
+.riderow-stats{display:grid!important;grid-template-columns:76px 66px 56px 66px;gap:8px;font-size:15px;text-align:right}.riderow-stats b{font-weight:700;color:var(--ink)}
+.rdel{justify-self:end}
+@media(max-width:700px){
+  .riderow{grid-template-columns:auto auto minmax(0,1fr) auto auto;grid-template-areas:"s i m m d" "s i st st st"}
+  .riderow .rsel{grid-area:s}.ricon{grid-area:i;align-self:start;margin-top:2px}.rmain{grid-area:m}.rdel{grid-area:d;opacity:.55!important}
+  .riderow-stats{grid-area:st;grid-template-columns:repeat(4,auto);justify-content:start;gap:12px;font-size:14px;text-align:left}
+}
+/* Kopf der Verlaufsseite */
+.histbtns{flex-wrap:wrap;justify-content:flex-end}.importwrap{position:relative}
+.impmenu{position:absolute;right:0;top:calc(100% + 6px);z-index:30;width:300px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 34px rgba(0,0,0,.35);padding:6px;display:flex;flex-direction:column;gap:2px}
+.impmenu[hidden]{display:none}.impitem{display:flex;flex-direction:column;gap:1px;text-align:left;padding:9px 10px;border-radius:9px;border:0;background:none;color:var(--ink);font:inherit;cursor:pointer}.impitem:hover{background:var(--panel2)}.impitem small{color:var(--soft);font-size:12px}
+.impmenu p{margin:4px 10px 6px}
+.histsearch{margin:-4px 0 14px}.histsearch .inp{width:100%}
