@@ -1,5 +1,7 @@
 # Indoorado
 
+**Online: [indoorado.de](https://indoorado.de)**
+
 Indoor-Radtraining im Browser: Smart-Trainer per Bluetooth verbinden und durch eine 3D-Welt fahren, mit Workouts, Trainingsplänen, Fortschritt und auf Wunsch gemeinsam mit anderen.
 
 Indoorado ist eine rein statische Web-App (HTML, CSS, JavaScript-Module). Es gibt keinen eigenen Server und keinen Build-Schritt. Ohne Anmeldung bleibt alles im Browser, es gibt dann keine Verbindung ins Internet.
