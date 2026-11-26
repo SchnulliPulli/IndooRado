@@ -36,12 +36,14 @@ function roadTexture() {
 }
 // Wege abseits der Straße: Schotter, Feldweg, Waldpfad, Mondstaub (ohne Markierungen)
 function pathTexture(kind) {
-  const C = { gravel: ['#a69a86', [150, 140, 122], [95, 88, 78]], dirt: ['#8a6a4a', [120, 92, 64], [70, 52, 36]], trail: ['#5e4630', [88, 66, 44], [40, 30, 20]], moon: ['#8f9195', [170, 172, 176], [90, 92, 96]], cosmic: ['#1a1030', [120, 90, 255], [255, 80, 220]], sand: ['#c9b48a', [215, 200, 160], [160, 140, 105]], candy: ['#ff9ccf', [255, 255, 255], [255, 210, 80]] }[kind] || ['#4b5056', [80, 80, 84], [40, 40, 44]];
+  const C = { gravel: ['#a69a86', [150, 140, 122], [95, 88, 78]], dirt: ['#8a6a4a', [120, 92, 64], [70, 52, 36]], trail: ['#5e4630', [88, 66, 44], [40, 30, 20]], moon: ['#8f9195', [170, 172, 176], [90, 92, 96]], cosmic: ['#1a1030', [120, 90, 255], [255, 80, 220]], sand: ['#c9b48a', [215, 200, 160], [160, 140, 105]], candy: ['#ff9ccf', [255, 255, 255], [255, 210, 80]], rainbow: ['#ffffff', [255, 255, 255], [240, 240, 255]] }[kind] || ['#4b5056', [80, 80, 84], [40, 40, 44]];
   return canvasTex(256, 512, (x, w, h) => {
     x.fillStyle = C[0]; x.fillRect(0, 0, w, h); const r = rng(7);
     for (let i = 0; i < 7000; i++) { const c = r() < .5 ? C[1] : C[2], s = kind === 'gravel' ? 1 + r() * 4 : 1 + r() * 2.5; x.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${.3 + r() * .5})`; x.beginPath(); x.arc(r() * w, r() * h, s / 2, 0, 7); x.fill(); }
     if (kind === 'dirt' || kind === 'gravel') for (const u of [.3, .7]) { const g = x.createLinearGradient(w * (u - .1), 0, w * (u + .1), 0); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(.5, 'rgba(30,20,10,.28)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(w * (u - .1), 0, w * .2, h); }
     if (kind === 'trail') { x.strokeStyle = 'rgba(70,45,25,.8)'; x.lineWidth = 6; for (let i = 0; i < 9; i++) { const y = r() * h; x.beginPath(); x.moveTo(0, y); x.bezierCurveTo(w * .3, y + 20 * (r() - .5), w * .7, y + 30 * (r() - .5), w, y + 15 * (r() - .5)); x.stroke(); } }
+    // Regenbogen: farbige Längsstreifen über die ganze Breite
+    if (kind === 'rainbow') { const cs = ['#ff4d4d', '#ff9f43', '#ffd93d', '#6bd66b', '#4dabff', '#7a6cff', '#c77dff']; cs.forEach((c, i) => { x.globalAlpha = .9; x.fillStyle = c; x.fillRect(i * w / cs.length, 0, w / cs.length + 1, h); }); x.globalAlpha = 1; }
     if (kind === 'moon') { for (let i = 0; i < 40; i++) { const cx = r() * w, cy = r() * h, rr = 4 + r() * 14; x.strokeStyle = 'rgba(60,62,66,.5)'; x.lineWidth = 2; x.beginPath(); x.arc(cx, cy, rr, 0, 7); x.stroke(); } }
   });
 }

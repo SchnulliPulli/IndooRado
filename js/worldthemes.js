@@ -122,6 +122,15 @@ export function buildThemeExtras(world, R, H) {
     // Ein paar Giraffen laufen gemächlich neben der Piste mit
     for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(gg, world.vcMat); m.castShadow = true; scene.add(m); X.walkers.push({ m, d: R.total * (i + .4) / 3, off: (i % 2 ? 1 : -1) * (16 + i * 5), v: 1.1 + r() * .4 }); }
   }
+  // Riesenpilze (Fliegenpilze) neben dem Weg
+  if (th.mushrooms) {
+    const r = rng(64), stem = H.colored(new THREE.CylinderGeometry(.9, 1.3, 6, 10).translate(0, 3, 0), '#f3ead8');
+    const cap = H.colored(new THREE.SphereGeometry(4, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, .62, 1).translate(0, 5.8, 0), '#d9262c');
+    const dots = []; for (let i = 0; i < 14; i++) { const a = i * 2.4, rr = 1 + (i % 3) * 1.05, yy = 5.8 + Math.sqrt(Math.max(0, 16 - rr * rr)) * .62; dots.push(H.colored(new THREE.SphereGeometry(.42, 8, 6).scale(1, .45, 1).translate(Math.cos(a) * rr, yy, Math.sin(a) * rr), '#ffffff')); }
+    const g = H.merge([stem, cap, ...dots]), n = Math.min(260, Math.floor(R.total / 35)), im = new THREE.InstancedMesh(g, world.vcMat, n);
+    for (let i = 0; i < n; i++) { const d = r() * R.total, p = beside(R, d, (r() < .5 ? -1 : 1) * (R.roadW / 2 + 5 + r() * 35), -.1); q.setFromAxisAngle(up, r() * 6.28); const sc = 1 + r() * 1.6; m4.compose(p, q, new THREE.Vector3(sc, sc, sc)); im.setMatrixAt(i, m4); }
+    im.castShadow = true; scene.add(im);
+  }
   if (th.landmark === 'fuji') {
     const d = R.total * .4, p = beside(R, d, -1600), base = p.y - 30;
     const cone = new THREE.Mesh(new THREE.CylinderGeometry(40, 900, 1100, 28, 1), new THREE.MeshLambertMaterial({ color: 0x5a6478, flatShading: true })); cone.position.set(p.x, base + 550, p.z); scene.add(cone);
