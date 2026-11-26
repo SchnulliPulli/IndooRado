@@ -55,6 +55,13 @@ export async function joinPresence() {
   if (P.ch !== 'pending') return;
   P.ch = sb.channel('lobby', { config: { private: true, presence: { key: sid } } });
   P.ch.on('presence', { event: 'sync' }, sync);
+  // Einladungen anderer Spieler an mich (Lobby oder Mitfahren), streng geprüft
+  P.ch.on('broadcast', { event: 'invite' }, ({ payload: m }) => {
+    if (!m || m.to !== sid || typeof m.from !== 'string' || m.from.length > 40 || !['lobby', 'ride'].includes(m.kind)) return;
+    const inv = { kind: m.kind, from: m.from, name: txt(m.name, 30) || 'Fahrer', lobby: txt(m.lobby, 24), title: txt(m.title, 40), route: txt(m.route, 40), routeName: txt(m.routeName, 40), startAt: Number(m.startAt) || 0 };
+    const peer = P.peers.get(m.from); if (!peer) return; // nur von Spielern, die gerade online sind
+    bus.emit('invite', { ...inv, look: peer.look });
+  });
   const c = P.ch;
   c.subscribe(async st => {
     if (c !== P.ch) return;
@@ -89,6 +96,25 @@ async function push() {
   if (++pushTry <= 5) pushTimer = setTimeout(() => push().catch(() => { }), 500 * pushTry);
 }
 export function setStatus(patch) { Object.assign(P.me, patch); for (const k in P.me) if (P.me[k] == null) delete P.me[k]; push().catch(() => { }); }
+
+/* ---------- Einladungen ---------- */
+// Was kann ich gerade anbieten? Eigene bzw. beigetretene Lobby, sonst meine laufende Fahrt
+export function inviteOffer() {
+  const l = P.me.joined && lobbies().find(x => x.id === P.me.joined);
+  if (l) return { kind: 'lobby', lobby: l.id, title: l.title, route: l.route, routeName: l.routeName, startAt: l.startAt };
+  if (P.me.where === 'ride' && P.me.route) return { kind: 'ride', route: P.me.route, routeName: P.me.routeName };
+  return null;
+}
+const lastInv = new Map();
+export async function invite(toSid) {
+  const o = inviteOffer(); if (!o) throw new Error('Leg zuerst eine Gruppenfahrt in der Lobby an oder starte eine Fahrt, dann kannst du einladen.');
+  if (!P.ch || P.ch === 'pending' || !P.ready) throw new Error('Keine Verbindung zur Lobby');
+  if (Date.now() - (lastInv.get(toSid) || 0) < 20e3) throw new Error('Gerade erst eingeladen, bitte kurz warten');
+  lastInv.set(toSid, Date.now());
+  const r = await P.ch.send({ type: 'broadcast', event: 'invite', payload: { to: toSid, from: sid, name: online.profile?.display_name || 'Fahrer', ...o } });
+  if (r !== 'ok') throw new Error('Einladung konnte nicht gesendet werden');
+  return o;
+}
 
 /* ---------- Lobby ---------- */
 export const lobbies = () => {

@@ -220,6 +220,25 @@ async function newsBar(el) {
   if (O.access().ok) { PR = await import('./online/presence.js'); live = true; off = bus.on('presence', draw); PR.joinPresence().catch(() => { }); draw(); }
   import('./online/sync.js').then(m => m.announcements()).then(a => { anns = a || []; try { localStorage.setItem('vvAnnCache', JSON.stringify(anns.map(x => ({ id: x.id, level: x.level, title: x.title, body: x.body })))); } catch (e) { } draw(); }).catch(() => { });
 }
+// Einladung eines anderen Spielers: Karte unten rechts auf jeder Seite, mit Beitreten bzw. Mitfahren
+bus.on('invite', async inv => {
+  const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const box = document.querySelector('.invstack') || document.body.appendChild(Object.assign(document.createElement('div'), { className: 'invstack' }));
+  const c = document.createElement('div'); c.className = 'card invcard';
+  const min = ms => ms <= 0 ? 'startet jetzt' : ms < 60e3 ? `startet in ${Math.ceil(ms / 1000)} s` : `startet in ${Math.ceil(ms / 60e3)} min`;
+  c.innerHTML = `<div class="nbico">${avatarSvg(inv.look || {}, 40)}</div><div class="nbtxt"><small>📨 Einladung</small><b>${esc(inv.name)} ${inv.kind === 'lobby' ? 'lädt dich zur Gruppenfahrt ein' : 'möchte, dass du mitfährst'}</b><span>${inv.kind === 'lobby' ? `„${esc(inv.title)}“ · ${esc(inv.routeName)} · ${min(inv.startAt - Date.now())}` : esc(inv.routeName)}</span><div class="row"><button class="btn sm pri" data-ok>${inv.kind === 'lobby' ? 'Beitreten' : 'Mitfahren'}</button><button class="btn sm ghost" data-no>Später</button></div></div>`;
+  box.appendChild(c);
+  try { (await import('./sound.js')).sound?.pass?.(); } catch (e) { }
+  const t = setTimeout(() => c.remove(), 90e3);
+  c.onclick = async e => {
+    if (e.target.closest('[data-no]')) { clearTimeout(t); c.remove(); return; }
+    if (!e.target.closest('[data-ok]')) return;
+    clearTimeout(t); c.remove();
+    const PR = await import('./online/presence.js'), { sel, saveSel } = await import('./state.js');
+    if (inv.kind === 'lobby') { PR.joinLobby(inv.lobby); toast('Beigetreten, die Fahrt startet automatisch'); location.hash = '#/lobby'; }
+    else { sel.routeId = inv.route; saveSel(); sessionStorage.setItem('joinRider', JSON.stringify({ sid: inv.from, name: inv.name })); location.hash = '#/ride'; }
+  };
+});
 async function announce(el) {
   const O = await import('./online/client.js'); if (!O.configured()) return;
   // Beim App-Start läuft die Anmeldung noch: einmal auf das Ergebnis warten statt die Ankündigungen zu verpassen

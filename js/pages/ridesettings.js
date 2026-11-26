@@ -1,3 +1,4 @@
+import { GEAR_RANGES } from '../physics.js';
 // Einstellungen der Fahransicht: Anzeige, Kamera, Mitfahrer, Workout und Spiel, Umgebung, Ton, Fahrgefühl
 import { $, esc, toast } from '../util.js';
 import { profile, sel, saveProfile, saveSel } from '../state.js';
@@ -103,6 +104,8 @@ export async function render(el, params = []) {
   <section class="grid2">
     <div class="card form"><h2>Fahrgefühl</h2>
       ${SEL('s', 'mode', 'Widerstand bei freier Fahrt', [['gear', 'Virtuelle Gänge'], ['sim', 'Steigung an den Trainer'], ['erg', 'ERG, feste Wattzahl'], ['hr', 'Puls-Ziel']], 'gear')}
+      ${SEL('p', 'gearRange', 'Schaltbereich der virtuellen Gänge', Object.entries(GEAR_RANGES).map(([k, r]) => [k, r.l]), 'strong')}
+      ${SEL('p', 'gearDownhill', 'Treten bergab', [['real', 'Wie draußen (bergab kaum Widerstand)'], ['-2', 'Leichter Widerstand bergab'], ['-1', 'Spürbarer Widerstand bergab'], ['0', 'Bergab wie in der Ebene']], '-1')}
       ${RNG('p', 'gearDiff', 'Steigungsgefühl bei virtuellen Gängen', 25, 100, 5, profile.gearDiff, FMT.gearDiff)}
       ${RNG('p', 'simDiff', 'Steigungsgefühl im Steigungsmodus', 10, 100, 5, profile.simDiff, FMT.simDiff)}
       ${SW('p', 'autoPause', 'Automatische Pause, wenn du aufhörst zu treten')}

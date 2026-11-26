@@ -39,12 +39,19 @@ export async function render(el) {
       <td><span class="stbadge ${c}">${st}</span></td>
       <td><select class="inp sm" data-role ${me ? 'disabled' : ''}>${['user', 'admin', 'banned'].map(r => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${{ user: 'Nutzer', admin: 'Admin', banned: 'Gesperrt' }[r]}</option>`).join('')}</select></td>
       <td class="n">${u.level}</td><td>${u.last_seen ? fmtDate(u.last_seen) : '–'}</td><td>${fmtDate(u.created_at)}</td>
-      <td class="actcell"><div class="row" style="flex-wrap:nowrap;justify-content:flex-end">${u.role === 'user' ? (u.approved ? `<button class="btn xs ghost" data-appr="0" ${me ? 'disabled' : ''}>Freischaltung entziehen</button>` : `<button class="btn xs pri" data-appr="1">Freischalten</button><button class="btn xs ghost" data-trial>+7 Tage Test</button>`) : ''}<button class="btn xs ghost danger" data-wipe ${me ? 'disabled' : ''}>Daten löschen</button></div></td></tr>`; }).join('');
+      <td class="actcell"><div class="row" style="flex-wrap:nowrap;justify-content:flex-end">${u.role === 'user' ? (u.approved ? `<button class="btn xs ghost" data-appr="0" ${me ? 'disabled' : ''}>Freischaltung entziehen</button>` : `<button class="btn xs pri" data-appr="1">Freischalten</button><button class="btn xs ghost" data-trial>+7 Tage Test</button>`) : ''}<button class="btn xs ghost danger" data-wipe ${me ? 'disabled' : ''}>Daten löschen</button><button class="btn xs danger" data-delacc ${me ? 'disabled title="Eigenes Konto unter Konto löschen"' : ''}>Konto löschen</button></div></td></tr>`; }).join('');
   };
   const loadUsers = async () => { const { data, error } = await sb.from('profiles').select('*').order('created_at', { ascending: false }).limit(500); if (error) return toast(error.message, 5000); users = data; list(); };
   const anns = async () => {
     const { data } = await sb.from('announcements').select('*').order('created_at', { ascending: false }).limit(30);
     $('#anList', el).innerHTML = (data || []).map(a => `<div class="row between anrow"><span><b>${esc(a.title)}</b> <span class="muted">${{ info: 'Info', event: 'Event', warn: 'Warnung' }[a.level]} · ${fmtDate(a.created_at)}${a.visible_until ? ' bis ' + fmtDate(a.visible_until) : ''}</span></span><button class="btn xs ghost danger" data-and="${a.id}">✕</button></div>`).join('') || '<span class="muted">Keine</span>';
+  };
+  // Alle Dateien eines Nutzers im Datenpaket (Ordner <id>/…) entfernen; braucht die Admin-Regeln aus schema.sql
+  const wipeFiles = async uid => {
+    const st = sb.storage.from('vault'), files = [];
+    const walk = async dir => { const { data, error } = await st.list(dir, { limit: 1000 }); if (error) throw error; for (const f of data || []) { const p = dir + '/' + f.name; if (f.id) files.push(p); else await walk(p); } };
+    await walk(uid);
+    for (let i = 0; i < files.length; i += 100) { const { error } = await st.remove(files.slice(i, i + 100)); if (error) throw error; }
   };
   $('#adQ', el).oninput = list; $('#adPend', el).onchange = list;
   $('#adUsers', el).onchange = async e => {
@@ -59,6 +66,28 @@ export async function render(el) {
       const patch = ap.dataset.trial != null ? { trial_until: new Date(Math.max(Date.now(), +new Date(u.trial_until || 0)) + 7 * 864e5).toISOString() } : { approved: ap.dataset.appr === '1' };
       const { error } = await sb.from('profiles').update(patch).eq('id', id); if (error) return toast(error.message, 5000);
       Object.assign(u, patch); list(); kpis(); toast(patch.approved ? esc(u.display_name) + ' freigeschaltet ✅' : patch.trial_until ? 'Testphase verlängert' : 'Freischaltung entzogen'); return;
+    }
+    const del = e.target.closest('[data-delacc]');
+    if (del) {
+      const id = del.closest('tr').dataset.id, u = users.find(x => x.id === id);
+      // Bestätigung: Name eintippen (der Dialog ist beim Auflösen schon entfernt, darum Eingabe mitlesen)
+      let typed = ''; const onIn = e => { if (e.target.id === 'delName') typed = e.target.value.trim(); };
+      document.addEventListener('input', onIn);
+      const ok = await dialog({ title: 'Konto von ' + u.display_name + ' endgültig löschen?', html: `<p class="muted">Gelöscht werden Login, Profil, alle hochgeladenen Fahrten und das Online-Datenpaket. Das lässt sich nicht rückgängig machen.${u.role === 'admin' ? ' <b>Achtung: Das ist ein Admin-Konto.</b>' : ''}</p><label class="f">Zur Bestätigung den Namen „${esc(u.display_name)}“ eingeben<input class="inp" id="delName" autocomplete="off"></label>`, buttons: [{ label: 'Abbrechen', value: false }, { label: 'Konto löschen', value: true, cls: 'danger' }] });
+      document.removeEventListener('input', onIn);
+      if (!ok) return;
+      if (typed !== u.display_name.trim()) return toast('Name stimmt nicht überein, nichts gelöscht', 4000);
+      del.disabled = true; del.textContent = 'Wird gelöscht …';
+      try {
+        await wipeFiles(id);
+        const { error } = await sb.rpc('admin_delete_user', { p_user: id });
+        if (error) throw error;
+        users = users.filter(x => x.id !== id); list(); kpis(); toast(esc(u.display_name) + ' gelöscht');
+      } catch (err) {
+        del.disabled = false; del.textContent = 'Konto löschen';
+        toast(/admin_delete_user|function/i.test(err.message) ? 'Die Funktion fehlt in der Datenbank: supabase/schema.sql im SQL-Editor erneut ausführen.' : err.message, 7000);
+      }
+      return;
     }
     const b = e.target.closest('[data-wipe]'); if (!b) return; const id = b.closest('tr').dataset.id, u = users.find(x => x.id === id);
     if (!(await dialog({ title: 'Daten von ' + esc(u.display_name) + ' löschen?', html: '<p class="muted">Fahrten und das Online-Datenpaket werden gelöscht. Das Konto selbst bleibt bestehen (Löschen des Kontos im Supabase-Dashboard).</p>', buttons: [{ label: 'Abbrechen', value: false }, { label: 'Löschen', value: true, cls: 'danger' }] }))) return;

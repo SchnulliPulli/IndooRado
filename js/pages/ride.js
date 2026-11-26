@@ -2,7 +2,7 @@
 import { $, esc, fmtT, fmtKm, clamp, bus, toast, dialog, fitCanvas, zoneColor, ZONES, HRZONES } from '../util.js';
 import { profile, sel, live, progress, saveSel, levelOf } from '../state.js';
 import { setPower, setGrade, control, trainer, status, demo, click, setDemo } from '../ble.js';
-import { GEARS, gearPower, integrate, steadySpeed, setSurface } from '../physics.js';
+import { GEARS, gearPower, integrate, steadySpeed, setSurface, setGears, gearGrade } from '../physics.js';
 import { getRoute, clearRouteCache } from '../routes.js';
 import { getWorkout, at as woAt, drawWorkout, total as woTotal } from '../workouts.js';
 import { getPlan } from '../plans.js';
@@ -161,7 +161,7 @@ async function start(el) {
   try { world = new World(canvas, route, profile); }
   catch (e) { $('#loadTxt').textContent = 'WebGL konnte nicht gestartet werden: ' + e.message; return; }
   S = {
-    el, route, wo, world, state: 'ready', t: 0, dist: 0, v: 0, crank: 0, gear: sel.gear ?? 11, mode: sel.mode, ergW: sel.ergW, wOff: 0, wT: 0,
+    el, route, wo, world, state: 'ready', t: 0, dist: 0, v: 0, crank: 0, gear: clamp(sel.gear ?? 13, 0, setGears().length - 1), mode: sel.mode, ergW: sel.ergW, wOff: 0, wT: 0,
     samples: [], shots: [], kj: 0, asc: 0, lastE: null, lap: 0, startWall: null, idle: 0, curP: 0, lastSend: 0, p3: [],
     climbs: route.climbs.map(c => ({ ...c, state: 'pending' })), climbLog: [], sprints: route.sprints.map(c => ({ ...c, state: 'pending' })), sprintLog: [],
     lastShotT: 0, lastSeg: -1, woDone: false, finished: false, overtakes: 0, gates: 0, draft: 0, wheel: null, rideOnsGot: 0, rideOnsGiven: 0, lapT0: 0, nextRideOn: 60 + Math.random() * 120,
@@ -692,7 +692,12 @@ function step(dt, first) {
     if (hr && S.hrAcc >= 5 && running) { S.hrAcc = 0; S.hrW = clamp(S.hrW + clamp(((sel.hrTarget || 140) - hr) * .7, -12, 12), 40, Math.min(profile.maxW, profile.ftp * 1.1)); }
     target = S.hrW;
   }
-  if (target == null && S.mode === 'gear') { gearMode = true; const gp = gearPower(cad, S.gear, grade * profile.gearDiff / 100) * (1 - S.draft * .8); S.curP += (gp - S.curP) * Math.min(1, dt * 2.5); target = S.curP; }
+  if (target == null && S.mode === 'gear') { gearMode = true; const gp = gearPower(cad, S.gear, gearGrade(grade) * profile.gearDiff / 100) * (1 - S.draft * .8); S.curP += (gp - S.curP) * Math.min(1, dt * 2.5); target = S.curP; 
+    // Hinweise, wenn der Widerstand nicht ankommt: Grenze aus dem Profil oder der Trainer schafft es nicht
+    if (gp > profile.maxW && !S.maxWHint) { S.maxWHint = true; flash(`Virtuelle Gänge: begrenzt auf deine Max. Trainerleistung von ${profile.maxW} W (Profil › Gerät)`, 4500); }
+    if (first && live.fresh && (cad || 0) > 60 && target > 150 && live.power < target * .8) S.gearWeak = (S.gearWeak || 0) + dt; else S.gearWeak = Math.max(0, (S.gearWeak || 0) - dt);
+    if (S.gearWeak > 15 && !S.gearWeakHint) { S.gearWeakHint = true; flash(`Der Trainer erreicht ${Math.round(target)} W gerade nicht (nur ${Math.round(live.power)} W). Etwas höhere Trittfrequenz hilft vielen Trainern.`, 5000); }
+  }
   S.target = target; S.wi = wi; if (target != null) S.lastTarget = target;
   // an Trainer senden (oder Demo)
   if (first && now - S.lastSend > 500 && S.state !== 'paused') {
