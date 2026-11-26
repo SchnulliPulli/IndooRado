@@ -896,3 +896,8 @@ html.calm *, html.calm *::before, html.calm *::after { animation-duration: .01ms
 .swatches .seasoncol { box-shadow: 0 0 0 2px #fff6, 0 0 10px 2px color-mix(in srgb, currentColor 30%, transparent); }
 .seasonsum { margin: 6px 0; }
 .seasonlink { display: block; margin-top: 6px; text-decoration: none; opacity: .85; }
+/* Freunde-Geister */
+.ghostdlg { max-width: 560px; } .gcode { font: 12px/1.4 ui-monospace, monospace; word-break: break-all; width: 100%; }
+.ghlist { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; max-height: 40vh; overflow: auto; }
+.ghrow { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 12px; background: color-mix(in srgb, currentColor 5%, transparent); }
+.rrow.fg { opacity: .9; font-style: italic; }

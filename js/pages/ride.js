@@ -23,6 +23,7 @@ import { mpInit, mpTick, mpOnMsg, mpRideOn, mpHtml } from '../multiplayer.js';
 import { makeBuddy, buddyStep, buddyDraft } from '../buddy.js';
 import { sound, music } from '../sound.js';
 import { say, hush } from '../voice.js';
+import { ghostsFor, track } from '../ghosts.js';
 import { tipFor, cadRange } from '../coach.js';
 import { saveProfile } from '../state.js';
 import { rng, toggleFullscreen, smooth } from '../util.js';
@@ -186,6 +187,8 @@ async function start(el) {
     const best = progress.routeBest[route.id] && cand.find(r => r.id === progress.routeBest[route.id].rideId) || cand.sort((a, b) => b.sum.avgV - a.sum.avgV)[0];
     if (best) { S.ghost = { d: Float32Array.from(best.samples, s => s.d), date: best.date }; world.setGhost(true); }
   }
+  // Freunde-Geister dieser Strecke (bis zu 5)
+  { const fg = (await ghostsFor(route.id)).slice(0, 5); if (fg.length) { S.fg = fg.map((g, i) => ({ g, tr: track(g), name: g.name, lat: [.9, 2.1, 3, 1.4, 2.6][i], d: 0, v: 0, crank: 0, gap: 0, lead: null })); world.setFriendGhosts(S.fg.map(f => ({ ...f.g.look, name: '👻 ' + f.name }))); } }
   world.setPacer(!!S.pacer, S.pacer?.buddy ? BUDDY_LOOK : null, S.pacer?.name);
   world.view = clamp(profile.camView ?? 0, 0, 4); world.showNames = profile.npcNames !== false;
   if (profile.fsOnRide && !document.fullscreenElement) toggleFullscreen();
@@ -264,7 +267,8 @@ async function start(el) {
     if (S.npcOn) npcs = S.field.map(n => { const d = smoothD(n, 'rd', n.d, n.v); n.rc = (n.rc || 0) + (moving ? n.cadence / 60 * Math.PI * 2 * dt : 0); n.rl = n.rl == null ? n.lat : n.rl + (n.lat - n.rl) * Math.min(1, dt * 5); n.rv = n.rv == null ? n.v : n.rv + (n.v - n.rv) * Math.min(1, dt * 4); return { d, lat: n.rl, v: n.rv, crank: n.rc }; });
     const pd = S.pacer ? smoothD(S.pacer, 'rd', S.pacer.d, S.pacer.v) : null;
     const ghostDist = S.ghost && S.ghostPos != null ? smoothD(S, 'rghost', S.ghostPos, S.v) : null;
-    world.update({ dist, lat: S.lat ?? 1.5, ghostDist, v: S.v, crank: S.rcrank, pacerDist: pd, pacerV: S.pacer?.v, pacerCrank: S.pacer?.crank, npcs }, dt);
+    const fghosts = S.fg?.map(f => ({ d: f.d, lat: f.lat, crank: f.crank, v: f.v, show: !S.world.photo })) || null;
+    world.update({ fghosts, dist, lat: S.lat ?? 1.5, ghostDist, v: S.v, crank: S.rcrank, pacerDist: pd, pacerV: S.pacer?.v, pacerCrank: S.pacer?.crank, npcs }, dt);
     if (now - S.lastHud > 200) { S.lastHud = now; hud(); }
   };
   S.raf = requestAnimationFrame(frame);
@@ -605,7 +609,7 @@ async function beam(d) {
   S.world.clearTraffic?.(); S.world.camInit = false; S.world.preload(d); setTimeout(() => S?.live?.sendNow(), 50);
   $('#load', S.el).hidden = true; flash('Gebeamt nach km ' + fmtKm(d), 1800);
 }
-function updNpcBtn() { $('#tNpcL', S.el).textContent = S.npcOn ? 'Feld an' : 'Feld aus'; $('#riders', S.el).hidden = !S.npcOn; }
+function updNpcBtn() { $('#tNpcL', S.el).textContent = S.npcOn ? 'Feld an' : 'Feld aus'; $('#riders', S.el).hidden = !S.npcOn && !S.fg?.length; }
 function togglePause() {
   if (S.state === 'riding' || S.state === 'auto') { S.state = 'paused'; flash('Pause'); }
   else if (S.state === 'paused') { S.state = 'riding'; flash('Weiter'); }
@@ -752,6 +756,16 @@ function step(dt, first) {
   S.v = integrate(S.v, pw * md.power, grade, dt, md.draft);
   const prev = S.dist;
   S.dist += S.v * dt; S.odo += S.v * dt; S.t += dt; S.kj += pw * dt / 1000;
+  if (S.fg && running) for (const f of S.fg) {
+    const T = f.tr, n = T.length; if (!n) continue;
+    const i = Math.min(n - 1, Math.floor(S.t)), j = Math.min(n - 1, i + 1), gd = T[i] + (T[j] - T[i]) * (S.t - Math.floor(S.t));
+    f.v = i < n - 1 ? T[j] - T[i] : 0; f.crank += f.v > .5 ? 88 / 60 * Math.PI * 2 * dt : 0;
+    f.gap = gd - S.odo; f.d = R.loop ? gd % R.total : Math.min(gd, R.total);
+    if (S.t > 20) { const ahead = f.gap < -3, behind = f.gap > 3;
+      if (ahead && f.lead !== 'me') { if (f.lead) { flash(`👻 Du hast ${f.name} überholt!`, 1800); say(`Du hast ${f.name} überholt`, 'mp'); } f.lead = 'me'; }
+      else if (behind && f.lead !== 'them') { if (f.lead) flash(`👻 ${f.name} zieht vorbei`, 1800); f.lead = 'them'; } }
+    if (!f.fin && i >= n - 1 && S.t > 5) { f.fin = true; flash(`👻 ${f.name} ist fertig: ${fmtKm(f.g.dist)} km in ${fmtT(f.g.dur)}`, 2600); }
+  }
   if (S.ghost) {
     const G = S.ghost.d, i = Math.min(G.length - 1, Math.floor(S.t)), j = Math.min(G.length - 1, i + 1), gd = G[i] + (G[j] - G[i]) * (S.t - Math.floor(S.t));
     S.ghostGap = gd - S.odo; S.ghostPos = R.loop ? gd % R.total : Math.min(gd, R.total);
@@ -871,7 +885,7 @@ function hud() {
   }
   plusHud(S, p3, c);
   if (S.pacer) { const gap = S.pacer.buddy ? gapOf(S.route, S.pacer.d, S.dist) : (S.pacer.d - S.dist); $('#hPacer', el).textContent = (gap >= 0 ? '+' : '−') + Math.abs(Math.round(gap)) + ' m' + (S.pacer.buddy ? ' · ' + Math.round(S.pacer.w) + ' W' : ''); }
-  if (S.npcOn && (S.rlN = (S.rlN || 0) + 1) % 3 === 0) riderList(el);
+  if ((S.npcOn || S.fg) && (S.rlN = (S.rlN || 0) + 1) % 3 === 0) riderList(el);
   if ((S.lyN = (S.lyN || 0) + 1) % 5 === 0) arrange($('#rw', el));
   // Zusatz-Widgets
   if ($('.xlayer', el).childElementCount) {
@@ -943,9 +957,10 @@ function woHud(el, f) {
 }
 function riderList(el) {
   const R = S.route;
-  const rows = S.field.map(n => ({ n, name: n.name, remote: !!n.remote, gap: gapOf(R, n.d, S.dist), wkg: n.remote ? n.wkg : n.wkg * clamp(1 + R.gradeAt(n.d) * .025, .55, 1.25), c: n.look.jersey, v: n.v }));
+  const rows = (S.npcOn ? S.field : []).map(n => ({ n, name: n.name, remote: !!n.remote, gap: gapOf(R, n.d, S.dist), wkg: n.remote ? n.wkg : n.wkg * clamp(1 + R.gradeAt(n.d) * .025, .55, 1.25), c: n.look.jersey, v: n.v }));
   const p3 = S.p3.length ? S.p3.reduce((a, b) => a + b, 0) / S.p3.length : 0;
   rows.push({ me: true, name: profile.name, gap: 0, wkg: p3 / profile.kg, c: profile.jersey });
+  for (const f of S.fg || []) rows.push({ fg: true, name: '👻 ' + f.name, gap: f.gap, v: f.v, c: '#8b6cf0' });
   if (S.pacer?.buddy) rows.push({ name: '🤝 ' + S.pacer.name, gap: gapOf(R, S.pacer.d, S.dist), wkg: S.pacer.w / profile.kg, c: '#7b4fd6' });
   rows.sort((a, b) => b.gap - a.gap);
   const mi = rows.findIndex(r => r.me), from = clamp(mi - 3, 0, Math.max(0, rows.length - 7));
@@ -957,6 +972,7 @@ function riderList(el) {
   const tr = n => (n.trend || 0) > .25 ? '<b class="up" title="wird schneller">▲</b>' : (n.trend || 0) < -.25 ? '<b class="dn" title="wird langsamer">▼</b>' : '';
   const row = r => {
     if (r.remote) { const [ic, t] = st(r.n); return `<div class="rrow remote" title="Echter Fahrer · ${t} · ${Math.round(r.v * 3.6)} km/h"><i style="background:${r.c}"></i><span class="nm">🌐 ${esc(r.name)} <span class="rst">${ic}${tr(r.n)}</span></span><span class="num">${Math.round(r.v * 3.6)}<small> km/h</small></span><span class="num gap">${gapTxt(r)}</span></div>`; }
+    if (r.fg) return `<div class="rrow fg" title="Geist von ${esc(r.name)}"><i style="background:${r.c}"></i><span class="nm">${esc(r.name)}</span><span class="num">${Math.round(r.v * 3.6)}<small> km/h</small></span><span class="num gap">${gapTxt(r)}</span></div>`;
     return `<div class="rrow ${r.me ? 'me' : ''} ${S.wheel && r.name === S.wheel.name ? 'wheel' : ''}"><i style="background:${r.c}"></i><span class="nm">${esc(r.name)}</span><span class="num">${r.wkg.toFixed(1).replace('.', ',')}</span><span class="num gap">${gapTxt(r)}</span></div>`;
   };
   $('#riders', el).innerHTML = shown.map(row).join('') + (extra.length ? '<div class="rsep"></div>' + extra.map(row).join('') : '');

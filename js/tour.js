@@ -32,11 +32,11 @@ export function startTour(root = document, { onEnd } = {}) {
     tip.style.top = below ? r.bottom + 14 + 'px' : ''; tip.style.bottom = below ? '' : innerHeight - r.top + 14 + 'px';
     box.querySelector('[data-tour="next"]').focus();
   };
-  const end = () => { box.remove(); document.removeEventListener('keydown', key, true); removeEventListener('resize', show); active = null; profile.tourDone = true; saveProfile(); onEnd?.(); };
+  const end = () => { box.remove(); document.removeEventListener('keydown', key, true); removeEventListener('resize', show); removeEventListener('hashchange', end); active = null; profile.tourDone = true; saveProfile(); onEnd?.(); };
   const next = () => { if (++i >= steps.length) end(); else show(); };
   const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); end(); } else if (e.key === 'Enter' || e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); next(); } else if (e.key === 'ArrowLeft' && i > 0) { e.preventDefault(); e.stopPropagation(); i--; show(); } else if (e.key !== 'Tab') e.stopPropagation(); };
   box.addEventListener('click', e => { const b = e.target.closest('[data-tour]'); if (b?.dataset.tour === 'skip') end(); else next(); });
-  document.addEventListener('keydown', key, true); addEventListener('resize', show);
+  document.addEventListener('keydown', key, true); addEventListener('resize', show); addEventListener('hashchange', end);
   active = box; show();
 }
 export const tourWanted = () => !profile.tourDone;

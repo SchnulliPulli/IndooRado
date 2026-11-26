@@ -867,6 +867,16 @@ export class World {
     }
     if (!on && this.ghost) { this.scene.remove(this.ghost.root); this.ghost = null; }
   }
+  // Freunde-Geister: halbdurchsichtig in ihren eigenen Farben, mit Namensschild
+  setFriendGhosts(list = []) {
+    for (const g of this.fghosts || []) this.scene.remove(g.root);
+    this.fghosts = list.map(c => {
+      const r = new Rider({ ...c, jersey: c.jersey || '#c9b6ff' });
+      r.root.traverse(o => { if (o.material) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = .55; o.material.depthWrite = false; o.material.emissive?.set('#3b2a6f'); } o.castShadow = false; });
+      const lab = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex(c.name, { w: 256, h: 56, size: 34, bg: '#6b4fd6', fg: '#fff' }), depthWrite: false, transparent: true, opacity: .95 }));
+      lab.scale.set(1.1, .24, 1); lab.position.set(0, 2.05, 0); r.root.add(lab); this.scene.add(r.root); return r;
+    });
+  }
   setColors(p) { this.rider.setColors(p); }
   // Power-ups: schwebende, leuchtende Symbole über der Fahrspur
   setPickups(list) {
@@ -917,6 +927,7 @@ export class World {
     const L = st.lat ?? 1.5; this.place(this.rider.root, d, L); this.rider.root.visible = this.view !== 4;
     this.rider.update(st.crank, st.v, dt, R.gradeAt(d));
     if (this.pacer && st.pacerDist != null) { this.place(this.pacer.root, st.pacerDist, .6); this.pacer.update(st.pacerCrank, st.pacerV, dt, R.gradeAt(st.pacerDist)); }
+    if (this.fghosts && st.fghosts) this.fghosts.forEach((g, i) => { const f = st.fghosts[i]; if (!f) return; g.root.visible = f.show; if (f.show) { this.place(g.root, f.d, f.lat); g.update(f.crank, f.v, dt, R.gradeAt(f.d)); } });
     if (this.ghost && st.ghostDist != null) { this.place(this.ghost.root, st.ghostDist, 2.4); this.ghost.update(st.crank * 1.02, st.v, dt, R.gradeAt(st.ghostDist)); }
     // Dynamische Auflösung: bei Rucklern Pixeldichte senken, bei Luft wieder anheben
     this.frameAvg = (this.frameAvg ?? 16) * .95 + dt * 1000 * .05; this.frameN = (this.frameN || 0) + 1;

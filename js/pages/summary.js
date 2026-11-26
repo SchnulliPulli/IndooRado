@@ -68,7 +68,7 @@ export async function render(el, [id], query) {
       <div class="actmap"><canvas id="map"></canvas></div>
     </div>
     <div class="row actbtns">
-      <button class="btn sm pri" id="eStrava" title="FIT-Datei speichern und Strava-Upload öffnen">Zu Strava</button><button class="btn sm" id="eShare">📤 Teilen</button><button class="btn sm" id="eFit">FIT</button><button class="btn sm" id="eTcx">TCX</button>${hasTrack(ride) ? '<button class="btn sm" id="eGpx" title="Gefahrene virtuelle Strecke als GPX">GPX</button>' : ''}<button class="btn sm ghost" id="eRen">Umbenennen</button><button class="btn sm ghost danger" id="eDel">Löschen</button>
+      <button class="btn sm pri" id="eStrava" title="FIT-Datei speichern und Strava-Upload öffnen">Zu Strava</button><button class="btn sm" id="eShare">📤 Teilen</button><button class="btn sm" id="eGhost" title="Freunde fahren gegen diese Fahrt">👻 Als Geist</button><button class="btn sm" id="eFit">FIT</button><button class="btn sm" id="eTcx">TCX</button>${hasTrack(ride) ? '<button class="btn sm" id="eGpx" title="Gefahrene virtuelle Strecke als GPX">GPX</button>' : ''}<button class="btn sm ghost" id="eRen">Umbenennen</button><button class="btn sm ghost danger" id="eDel">Löschen</button>
     </div>
   </section>
   ${ride.test ? `<section class="card testbox"><h2>${esc(ride.test.type)}: neue FTP ${ride.test.ftp} W</h2><p class="muted">${esc(ride.test.basis)}. Aktuell eingetragen: ${profile.ftp} W.</p>${ride.test.ftp !== profile.ftp ? '<button class="btn pri" id="ftpApply">FTP übernehmen</button>' : '<p>Bereits übernommen.</p>'}</section>` : ''}
@@ -151,6 +151,7 @@ export async function render(el, [id], query) {
     window.open('https://www.strava.com/upload/select', '_blank', 'noopener');
   };
   $('#eShare', el).onclick = () => shareDialog(ride, shots);
+  $('#eGhost', el).onclick = () => import('../ghostui.js').then(m => m.shareGhost(ride, ride.routeName));
   const gpx = () => { if (hasTrack(ride)) download(fileBase(ride) + '.gpx', toGpx(ride), 'application/gpx+xml'); };
   if ($('#eGpx', el)) $('#eGpx', el).onclick = gpx;
   $('#eTcx', el).onclick = () => download(fileBase(ride) + '.tcx', toTcx(ride), 'application/vnd.garmin.tcx+xml');
