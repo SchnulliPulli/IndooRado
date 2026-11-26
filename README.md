@@ -56,6 +56,16 @@ Niemals den `service_role`- bzw. Secret-Key in die App oder ins Repository legen
 | `vendor/` | three.js und supabase-js als lokale Kopien |
 | `sw.js` | Offline-Cache |
 
+## Tests
+
+Bei jedem Push laufen auf GitHub automatisch drei Prüfungen (`.github/workflows/tests.yml`):
+
+- **Syntax**: alle JavaScript-Module (`tests/syntax.sh`)
+- **Datenbank**: `supabase/schema.sql` in einem echten Postgres zweimal hintereinander, danach Rechte-Tests (fremde Daten unsichtbar, keine Rollen-Eskalation, Admin nur mit 2FA, Teams, Events) (`tests/sql/`)
+- **Browser**: alle Seiten auf Desktop- und Handygröße, eine Demo-Fahrt, Baukasten, Saison und Geister (`tests/smoke.mjs`)
+
+Lokal: `python3 -m http.server 8765` im Projektordner, dann `node tests/smoke.mjs` (Playwright nötig).
+
 ## Hinweise
 
 - Fahrten, Einstellungen und Fortschritt hängen an der Adresse, unter der die App läuft. Unter einer anderen Adresse liegen andere Daten.

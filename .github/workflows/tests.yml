@@ -1,0 +1,62 @@
+# Automatische Tests bei jedem Push und Pull Request:
+# 1) Syntax aller JavaScript-Module, 2) Datenbankschema (zweimal ausführbar, Rechte, Teams, Events), 3) Browser-Rauchtest
+name: Tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: bash tests/syntax.sh
+
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Supabase-Ersatz anlegen
+        run: psql -q -v ON_ERROR_STOP=1 -f tests/sql/supabase-mock.sql
+      - name: schema.sql ausführen (erster Lauf)
+        run: psql -q -v ON_ERROR_STOP=1 -f supabase/schema.sql
+      - name: schema.sql erneut ausführen (muss wiederholbar sein)
+        run: psql -q -v ON_ERROR_STOP=1 -f supabase/schema.sql
+      - name: Rechte und Funktionen prüfen
+        run: psql -q -v ON_ERROR_STOP=1 -f tests/sql/behaviour.sql | tee out.txt && grep -q "ALLE SQL-TESTS OK" out.txt
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Playwright installieren
+        run: npm install --no-save --no-package-lock playwright@1.49.1 && npx playwright install --with-deps chromium
+      - name: Webserver starten
+        run: (python3 -m http.server 8765 >/dev/null 2>&1 &) && sleep 2 && curl -sf http://localhost:8765/ >/dev/null
+      - name: Rauchtest
+        run: node tests/smoke.mjs
