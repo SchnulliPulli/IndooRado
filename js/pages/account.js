@@ -149,7 +149,7 @@ function renderAuth(el, mode = 'in') {
         <p class="small muted">Konto für <b>${esc(st.mail)}</b> · <button class="linkbtn" id="aBack">ändern</button></p>
         ${pwField('aPass', 'Passwort', 'new-password')}${meter()}
         ${pwField('aPass2', 'Passwort wiederholen', 'new-password')}<small class="fieldhint" id="matchHint"></small>
-        <details class="small"><summary>Hinweis zu Datenschutz und Nutzung lesen</summary>${NOTICE}</details>
+        <details class="small"><summary>Hinweis zu Datenschutz und Nutzung lesen</summary>${NOTICE}<p><a href="#/legal/datenschutz" target="_blank">Vollständige Datenschutzerklärung</a> · <a href="#/legal/nutzung" target="_blank">Nutzungshinweise</a></p></details>
         <label class="switch"><input type="checkbox" id="aOk"><span></span> <div class="swt">Ich habe den Hinweis gelesen und nutze VeloVerse Online freiwillig und auf eigene Verantwortung</div></label>
         <label class="switch"><input type="checkbox" id="aHr"><span></span> <div class="swt">Ich willige ein, dass meine Herzfrequenz mit meinen Fahrten in meinem Konto gespeichert wird <small class="muted">Puls zählt als Gesundheitsdatum (Art. 9 DSGVO). Freiwillig und jederzeit unter Konto › Was online gespeichert wird widerrufbar. Ohne Einwilligung bleibt der Puls nur auf deinen Geräten. Tipp: Mit der Tresor-Verschlüsselung kann auch Supabase ihn nicht lesen.</small></div></label>
         ${keepHtml}

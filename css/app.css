@@ -622,6 +622,10 @@ span.badge{display:inline-flex;padding:5px 10px;font-weight:600}span.badge svg{w
 .shbtns{flex-wrap:wrap}
 .codeinp{font:700 34px "Barlow Condensed",Barlow,monospace;letter-spacing:.45em;text-align:center;max-width:280px;margin:6px auto;display:block}
 .pwlogin summary{cursor:pointer;color:var(--soft);font-size:14px;margin:4px 0}.pwlogin[open]{display:flex;flex-direction:column;gap:10px}
+.navfoot{margin-top:auto;padding:10px 12px 4px;font-size:12px;color:var(--soft);line-height:1.6}.navfoot a{display:inline!important;padding:0!important;color:var(--soft);font-weight:400}.navfoot a:hover{color:var(--ink)}.navver{font-size:11px;opacity:.7;word-break:break-word}
+@media(max-width:900px){.navfoot{display:none}}
+.legaltabs{display:flex;flex-wrap:wrap;margin-bottom:12px}.legaltabs a{padding:6px 12px}.legaltabs a.on{background:var(--panel3);border-radius:8px;color:var(--ink)}
+.legal{max-width:860px;line-height:1.6}.legal h3{margin:18px 0 4px;font-size:16px}.legal ul{padding-left:20px;display:flex;flex-direction:column;gap:6px}.legal p{margin:6px 0}
 .newsbar{position:relative;margin-bottom:14px;border-radius:16px;border:1px solid var(--line);overflow:hidden;background:var(--panel)}
 .nbtrack{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain}.nbtrack::-webkit-scrollbar{display:none}
 .nbslide{--nbc:#2fe6ff;flex:0 0 100%;scroll-snap-align:start;display:flex;align-items:center;gap:14px;padding:14px 18px;min-height:72px;box-sizing:border-box;background:linear-gradient(100deg,color-mix(in srgb,var(--nbc) 16%,transparent),transparent 55%)}

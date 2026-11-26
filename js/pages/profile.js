@@ -182,7 +182,8 @@ function loginDialog() {
   });
 }
 
-export const APP_VERSION = '2026.11';
+export { APP_VERSION } from '../version.js';
+import { APP_VERSION } from '../version.js';
 // App-Thema und Akzentfarbe sofort anwenden, für den nächsten Start auch in localStorage merken
 export function applyAppTheme() {
   const t = profile.appTheme || 'dark', acc = profile.appAccent || '#ff6a3d';
@@ -239,7 +240,7 @@ export async function render(el, params = []) {
   </section>
   <section class="card form"><h2>Technik</h2>
     <label class="switch"><input type="checkbox" id="saveDemo" ${profile.saveDemo ? 'checked' : ''}><span></span> <div class="swt">Fahrten mit Demo-Geräten speichern<small class="muted">Zum Testen, z. B. des Strava-Uploads. Solche Fahrten zählen dann wie echte Fahrten (XP, Rekorde, Trainingsplan) und sind in der Zusammenfassung als Demo markiert. Danach am besten wieder ausschalten.</small></div></label>
-    <p class="small muted">Version ${esc(APP_VERSION)} · ${navigator.bluetooth ? 'Bluetooth verfügbar' : 'Kein Web-Bluetooth in diesem Browser (Chrome oder Edge nötig)'} · ${location.protocol === 'https:' ? 'Offline-Betrieb aktiv' : 'Offline-Betrieb nur über https'}</p>
+    <p class="small muted"><span id="buildInfo">Version ${esc(APP_VERSION)}</span> · ${navigator.bluetooth ? 'Bluetooth verfügbar' : 'Kein Web-Bluetooth in diesem Browser (Chrome oder Edge nötig)'} · ${location.protocol === 'https:' ? 'Offline-Betrieb aktiv' : 'Offline-Betrieb nur über https'}</p>
     <div class="row"><button class="btn sm" id="onbAgain">Einrichtung erneut starten</button><button class="btn sm" id="appReload" title="Zwischengespeicherte App-Dateien verwerfen und neu laden, Daten bleiben erhalten">App aktualisieren</button></div>
   </section>`,
   connect: `
@@ -258,6 +259,8 @@ export async function render(el, params = []) {
   for (const k of ['name', ...num]) on('#' + k, 'onchange', e => { const v = num.includes(k) ? parseFloat(e.target.value) : e.target.value.trim(); if (num.includes(k) && isNaN(v)) return; if (k === 'ftp' && v !== profile.ftp) profile.ftpHistory = [...(profile.ftpHistory || []), { date: new Date().toISOString(), ftp: v, source: 'manuell' }]; profile[k] = v; saveProfile(); toast('Gespeichert', 1200); });
   on('#appReload', 'onclick', async () => { try { for (const k of await caches.keys()) await caches.delete(k); for (const r of await navigator.serviceWorker?.getRegistrations?.() || []) await r.update(); } catch (e) { } location.reload(); });
   on('#cda', 'onchange', e => { profile.cda = +e.target.value; saveProfile(); });
+  // Version mit Commit und Build (aus build.json)
+  if ($('#buildInfo', el)) import('../version.js').then(async V => { const i = await V.buildInfo(), u = V.commitUrl(i), b = $('#buildInfo', el); if (!b) return; b.innerHTML = 'Version ' + esc(V.buildText(i)) + (u ? ` · <a href="${esc(u)}" target="_blank" rel="noopener">Commit ansehen</a>` : ''); b.title = i.message || ''; });
   on('#saveDemo', 'onchange', e => { profile.saveDemo = e.target.checked; saveProfile(); toast(e.target.checked ? 'Demo-Fahrten werden gespeichert' : 'Demo-Fahrten werden nicht mehr gespeichert', 2000); });
   on('#quality', 'onchange', e => { profile.quality = e.target.value; saveProfile(); toast('Gilt ab der nächsten Fahrt', 1500); });
   on('#phoneView', 'onchange', e => { profile.phoneView = e.target.value; saveProfile(); toast('Gespeichert', 900); });

@@ -1,0 +1,34 @@
+# GitHub Pages über Actions veröffentlichen und dabei build.json (Commit, Datum, Build-Nummer) erzeugen,
+# damit die App anzeigen kann, welcher Stand läuft.
+# Einmalig einschalten: Settings › Pages › Source = "GitHub Actions" und unter Settings › Variables die Variable PAGES_ACTIONS = on.
+name: Seite veröffentlichen
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    if: ${{ vars.PAGES_ACTIONS == 'on' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: build.json erzeugen
+        run: |
+          jq -n --arg c "$GITHUB_SHA" --arg d "$(git log -1 --format=%cI)" --arg m "$(git log -1 --format=%s | head -c 120)" --arg r "$GITHUB_RUN_NUMBER" \
+            '{commit: $c, short: $c[0:7], date: $d, message: $m, build: ($r | tonumber), repo: "SchnulliPulli/VeloVerse"}' > build.json
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4
