@@ -2,7 +2,8 @@
 import { $, esc, fmtT, fmtKm, clamp, bus, toast, dialog, fitCanvas, zoneColor, ZONES, HRZONES } from '../util.js';
 import { profile, sel, live, progress, saveSel, levelOf } from '../state.js';
 import { setPower, setGrade, control, trainer, status, demo, click, setDemo } from '../ble.js';
-import { GEARS, gearPower, integrate, steadySpeed, setSurface, setGears, gearGrade } from '../physics.js';
+import { GEARS, gearPower, integrate, steadySpeed, setSurface, setGears, gearGrade, setUpgrades } from '../physics.js';
+import { upgradeEffect } from '../season.js';
 import { getRoute, clearRouteCache } from '../routes.js';
 import { getWorkout, at as woAt, drawWorkout, total as woTotal } from '../workouts.js';
 import { getPlan } from '../plans.js';
@@ -174,6 +175,7 @@ async function start(el) {
     np: { buf: [], bs: 0, s4: 0, n: 0 }, field: [], npcOn: sel.npcs !== false, odo: 0, beamed: false, lastBeep: -1, nextDrink: (profile.drinkEvery || 15) * 60,
   };
   setSurface(route); // Belag und Schwerkraft der Strecke
+  setUpgrades(profile.upgradesOn !== false ? upgradeEffect() : null); // Werkstatt-Teile (bei echten Mitfahrern wieder neutral, siehe unten)
   // Gruppenfahrt: alle übernehmen die Einstellungen des Gastgebers (nur für diese Fahrt, eigene Einstellungen bleiben)
   S.group = (() => { try { return JSON.parse(sessionStorage.getItem('groupRide') || 'null'); } catch (e) { return null; } })(); sessionStorage.removeItem('groupRide');
   if (S.group) { const G = S.group.settings || {}; S.npcOn = G.npcs !== false; }
@@ -283,6 +285,7 @@ function syncRemote() {
   const pos = p => { const g = gapOf(R, p.d || 0, S.dist), a = Math.abs(g); return a < 30 ? 'direkt bei dir' : (a < 1000 ? Math.round(a) + ' m' : (a / 1000).toFixed(1).replace('.', ',') + ' km') + (g > 0 ? ' vor dir' : ' hinter dir'); };
   // Kurz weg und wieder da (Verbindung, gedrosselter Hintergrund-Tab): leise melden statt erneut „beigetreten“ mit Ton
   const gone = S.peerGone ||= new Map();
+  setUpgrades(peers.size || profile.upgradesOn === false ? null : upgradeEffect()); // mit echten Mitfahrern: gleiche Bedingungen für alle
   for (const [id, p] of peers) if (!was.has(id)) { if (performance.now() - (gone.get(id) || -1e9) < 120e3) flash(`🌐 ${p.name} ist wieder da`, 1500); else { flash(`🌐 ${p.name} ist deiner Fahrt beigetreten · ${pos(p)}`, 3500); sound.pass(); say(p.name + ' fährt jetzt mit', 'mp'); } }
   for (const [id, name] of was) if (!now.has(id)) { gone.set(id, performance.now()); flash(`👋 ${name} hat die Strecke verlassen`, 2500); }
   S.peerNames = now;

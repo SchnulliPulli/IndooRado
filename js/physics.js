@@ -18,29 +18,32 @@ export function setGears(key = profile.gearRange) {
 setGears('strong');
 // Bergab: Mindest-Steigung für das Trittgefühl (sonst tritt man bei Abfahrten ins Leere); die Geschwindigkeit folgt weiter der echten Steigung
 export const gearGrade = g => { const m = profile.gearDownhill ?? -1; return m === 'real' ? g : Math.max(g, +m); };
-export const mass = () => profile.kg + profile.bike + 1.5;
+export const mass = (u = null) => profile.kg + profile.bike + 1.5 + (u?.kg || 0);
+// Rad-Upgrades aus der Werkstatt: wirken nur auf die eigene Fahrt (gesetzt beim Fahrtstart, im Multiplayer neutral)
+export const upg = { cda: 1, crr: 1, kg: 0 };
+export const setUpgrades = e => Object.assign(upg, e || { cda: 1, crr: 1, kg: 0 });
 
 // Je Strecke: Belag (Rollwiderstand) und Schwerkraft (Mond!). Wird beim Fahrtstart gesetzt.
 export const env = { g: G, crr: CRR };
 const CRR_OF = { asphalt: .004, gravel: .0075, dirt: .009, trail: .013, moon: .012, cosmic: .004, sand: .011, candy: .006, rainbow: .0045 };
 export function setSurface(R) { env.crr = CRR_OF[R?.surface] ?? CRR; env.g = R?.theme?.gravity ?? G; }
-export function resist(v, gradePct, draft = 0) {
-  const th = Math.atan(gradePct / 100), m = mass();
-  return m * env.g * (env.crr * Math.cos(th) + Math.sin(th)) + 0.5 * RHO * profile.cda * (1 - draft) * v * v;
+export function resist(v, gradePct, draft = 0, u = null) {
+  const th = Math.atan(gradePct / 100), m = mass(u);
+  return m * env.g * (env.crr * (u?.crr || 1) * Math.cos(th) + Math.sin(th)) + 0.5 * RHO * profile.cda * (u?.cda || 1) * (1 - draft) * v * v;
 }
 // Leistung, die bei gegebener Trittfrequenz, Gang und Steigung auf der Straße nötig wäre
 export function gearPower(cad, gear, gradePct) {
   if (!cad || cad < 15) return 0;
   const v = cad / 60 * GEARS[gear] * profile.circ / 1000;
-  return Math.max(0, resist(v, gradePct) * v / ETA);
+  return Math.max(0, resist(v, gradePct, 0, upg) * v / ETA);
 }
 export const gearSpeed = (cad, gear) => (cad || 0) / 60 * GEARS[gear] * profile.circ / 1000;
 
 // Geschwindigkeit integrieren (mit Trägheit)
 export function integrate(v, power, gradePct, dt, draft = 0) {
-  const m = mass() * 1.04;
+  const m = mass(upg) * 1.04;
   const vv = Math.max(v, 0.6);
-  const a = (power * ETA / vv - resist(v, gradePct, draft)) / m;
+  const a = (power * ETA / vv - resist(v, gradePct, draft, upg)) / m;
   let nv = v + a * dt;
   if (power < 5 && nv < 0.3 && gradePct >= 0) nv = 0;
   return Math.min(Math.max(nv, 0), 30);

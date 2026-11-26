@@ -35,6 +35,7 @@ export async function render(el, [id], query) {
       <div style="flex:1">${ride.lvAfter > ride.lvBefore ? `<div class="lvup">Level ${ride.lvAfter} erreicht!</div>` : ''}${levelBar()}
       ${ride.newBadges.length ? `<div class="badges-new">${ride.newBadges.map(b => { const B = BADGES.find(x => x.id === b); return `<span class="badge on">${ICON.trophy}${esc(B.name)}</span>`; }).join('')}</div>` : ''}
       ${ride.prs.length || ride.climbs.some(c => c.pr) ? `<div class="small" style="margin-top:6px">Neue Bestwerte: ${[...ride.prs.map(curveLabel), ...ride.climbs.filter(c => c.pr).map(c => c.name)].map(esc).join(', ')}</div>` : ''}
+      ${ride.season ? `<div class="small seasonsum">${'🗓️ ' + esc(ride.season.name)}: Stufe ${ride.season.from} → <b>${ride.season.to}</b>${ride.season.got?.length ? ' · neu: ' + ride.season.got.map(esc).join(', ') : ''} · <a href="#/season">Belohnungspfad</a></div>` : ''}
       ${ride.xpParts?.length > 1 ? `<div class="xpparts small">${ride.xpParts.map(([l, v]) => `<span>${esc(l)} <b class="num">+${v}</b></span>`).join('')}</div>` : ''}
       ${ride.plan ? `<div class="small" style="margin-top:6px">📅 Trainingsplan ${esc(ride.plan.name)}: ${ride.plan.finished ? '<b>komplett abgeschlossen!</b>' : 'Einheit abgehakt.'} <a href="#/plans">Zum Plan</a></div>` : ''}
       ${ride.overtakes ? `<div class="small muted" style="margin-top:4px">${ride.overtakes} Fahrer überholt</div>` : ''}

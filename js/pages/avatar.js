@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { $, esc, toast } from '../util.js';
 import { profile, saveProfile, progress, levelOf } from '../state.js';
 import { UNLOCKS } from '../game.js';
+import { seasonColors } from '../season.js';
 import { Rider, AV_DEFAULT } from '../world.js';
 
 const SKINS = ['#f6d5bd', '#f1c7a5', '#e3b18c', '#c99272', '#9a6a4b', '#6b4532', '#4a2f22'];
@@ -27,7 +28,7 @@ export async function render(el) {
   const ok = need => typeof need === 'number' ? lv >= need : !!eggs[need.slice(4)];
   const lockTxt = need => typeof need === 'number' ? `ab Level ${need}` : need === 'egg:roof' ? 'Im Himalaya über 5100 m fahren' : 'geheim';
   const colorRow = (k, label, list, cur) => `<div class="f">${label}<div class="swatches" data-k="${k}">${list.map(c => `<button style="background:${c}" data-c="${c}" aria-pressed="${cur === c}" aria-label="${c}"></button>`).join('')}<input type="color" value="${cur}" title="Eigene Farbe"></div></div>`;
-  const unlockRow = (k, label) => `<div class="f">${label}<div class="swatches" data-k="${k}">${UNLOCKS.map(u => u.lv <= lv ? `<button style="background:${u.c}" data-c="${u.c}" aria-pressed="${profile[k] === u.c}" aria-label="${u.name || u.c}" title="${u.name || ''}"></button>` : `<button class="locked" style="background:${u.c}" disabled title="ab Level ${u.lv}"></button>`).join('')}</div></div>`;
+  const unlockRow = (k, label) => `<div class="f">${label}<div class="swatches" data-k="${k}">${UNLOCKS.map(u => u.lv <= lv ? `<button style="background:${u.c}" data-c="${u.c}" aria-pressed="${profile[k] === u.c}" aria-label="${u.name || u.c}" title="${u.name || ''}"></button>` : `<button class="locked" style="background:${u.c}" disabled title="ab Level ${u.lv}"></button>`).join('')}${seasonColors().map(c => `<button class="seasoncol" style="background:${c}" data-c="${c}" aria-pressed="${profile[k] === c}" title="Saison-Farbe" aria-label="Saison-Farbe ${c}"></button>`).join('')}</div></div>`;
   const chips = k => `<div class="chips-row" data-opt="${k}">${OPTS[k].map(([v, l, need]) => `<button class="chipbtn ${av[k] === v ? 'on' : ''}" data-v="${v}" ${ok(need) ? '' : 'disabled'} title="${ok(need) ? '' : lockTxt(need)}">${ok(need) ? '' : '🔒 '}${l}</button>`).join('')}</div>`;
   const sw = (k, l) => `<label class="switch"><input type="checkbox" data-b="${k}" ${av[k] ? 'checked' : ''}><span></span> ${l}</label>`;
   el.innerHTML = `

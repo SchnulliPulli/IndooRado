@@ -878,3 +878,21 @@ html.calm *, html.calm *::before, html.calm *::after { animation-duration: .01ms
 .tour-tip { position: fixed; background: var(--card, #1b2129); color: var(--text, #fff); border-radius: 14px; padding: 14px 16px; box-shadow: 0 10px 40px rgba(0,0,0,.5); cursor: default; transition: top .3s, left .3s, bottom .3s; }
 .tour-tip p { margin: 6px 0 12px; line-height: 1.45; }
 .tour-tip .tour-t { font-size: 1.1rem; }
+/* Saison und Werkstatt */
+.seasonhead .stier { font-size: 44px; font-weight: 800; line-height: 1; } .seasonhead .stier small { font-size: 18px; opacity: .6; }
+.seasonhead .sxp { flex: 1; max-width: 560px; margin-left: 20px; } .seasonhead .bar { height: 12px; border-radius: 8px; background: color-mix(in srgb, currentColor 12%, transparent); overflow: hidden; margin-top: 6px; }
+.seasonhead .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--acc), var(--acc2, var(--acc))); border-radius: 8px; }
+.spath { display: flex; gap: 10px; overflow-x: auto; padding: 6px 2px 12px; scroll-snap-type: x proximity; }
+.stile { flex: 0 0 132px; min-height: 108px; border-radius: 14px; padding: 10px; background: color-mix(in srgb, currentColor 6%, transparent); position: relative; display: flex; flex-direction: column; gap: 6px; scroll-snap-align: center; opacity: .65; }
+.stile.got { opacity: 1; background: color-mix(in srgb, var(--acc) 18%, transparent); } .stile.next { opacity: 1; outline: 2px solid var(--acc); }
+.stile .sn { font-weight: 800; font-size: 13px; opacity: .7; } .stile .sr { font-size: 13px; line-height: 1.3; } .stile .sok { position: absolute; right: 10px; top: 8px; color: #3ecf8e; font-weight: 800; }
+.stile .sw { display: block; width: 26px; height: 26px; border-radius: 50%; margin-bottom: 4px; border: 2px solid rgba(255,255,255,.4); }
+.stile.k-trophy { background: linear-gradient(135deg, #6b5310, #d4af37); color: #fff; opacity: 1; }
+.tok { font-weight: 800; padding: 4px 10px; border-radius: 99px; background: color-mix(in srgb, var(--acc) 20%, transparent); }
+.parts { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; margin-top: 10px; }
+.part { display: flex; gap: 12px; padding: 12px; border-radius: 14px; background: color-mix(in srgb, currentColor 5%, transparent); } .part .pi { font-size: 30px; } .part .pb { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.plv { display: flex; gap: 4px; } .plv i { width: 22px; height: 6px; border-radius: 4px; background: color-mix(in srgb, currentColor 18%, transparent); } .plv i.on { background: var(--acc); }
+@media (max-width: 640px) { .seasonhead .sxp { margin-left: 0; margin-top: 10px; max-width: none; } .seasonhead > .row { flex-direction: column; align-items: stretch; } }
+.swatches .seasoncol { box-shadow: 0 0 0 2px #fff6, 0 0 10px 2px color-mix(in srgb, currentColor 30%, transparent); }
+.seasonsum { margin: 6px 0; }
+.seasonlink { display: block; margin-top: 6px; text-decoration: none; opacity: .85; }

@@ -1,3 +1,4 @@
+import { seasonAdd, seasonState, seasonOf } from './season.js';
 // Fahrt auswerten und dauerhaft speichern, Fortschritt fortschreiben
 import { db, kv } from './db.js';
 import { bus } from './util.js';
@@ -76,6 +77,9 @@ export async function saveRide(S) {
   for (const m of ms) if (m.done && !got[m.id]) { got[m.id] = true; xp += m.xp; xpParts.push(['Mission: ' + m.text, m.xp]); ride.missionsDone.push(m.text); }
   for (const k of Object.keys(progress.missions).sort().slice(0, -12)) delete progress.missions[k];
   progress.xp += xp;
+  // Saison-Belohnungspfad
+  const sBefore = seasonState().tier, sGot = seasonAdd(xp, new Date(start));
+  ride.season = { name: seasonOf(new Date(start)).name, from: sBefore, to: seasonState(seasonOf(new Date(start))).tier, got: sGot.map(r => r.label) };
   Object.assign(ride, { xp, xpParts, lvBefore, lvAfter: levelOf(progress.xp).lv, plan: planInfo ? { name: planInfo.plan.name, finished: planInfo.finished } : null });
 
   const x = { workoutDone, testDone: !!test && !test.auto, planFinished: planInfo?.finished ? planInfo.plan.id : false, overtakes: S.overtakes, sprints: S.sprintLog?.length || 0, allMissions: ms.every(m => m.done), hour: new Date(S.startWall).getHours(), mpRiders: S.mp?.met.size || 0, mpWon: S.mp?.won || 0, mpGoal: !!S.mp?.goalDone, mpRo: S.mp?.roGot || 0, mpTogether: S.mp?.together || 0 };

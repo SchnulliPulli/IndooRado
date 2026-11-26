@@ -7,6 +7,7 @@ import { listWorkouts, stats as wStats, drawWorkout, getWorkout } from '../worko
 import { db } from '../db.js';
 import { totals, fitness, estimateFtp } from '../analysis.js';
 import { saveProfile } from '../state.js';
+import { seasonOf, seasonState, tokensFree } from '../season.js';
 import { missionState, streakBonus } from '../game.js';
 import { planProgress } from '../plans.js';
 import { daily, dailyState, dailyStreak } from '../modes.js';
@@ -88,8 +89,8 @@ export async function render(el) {
   const cats = [...new Set(wos.map(w => w.cat))];
   el.innerHTML = `
   <section class="hero">
-    <div><h1>Hallo ${esc(profile.name)}</h1><p class="muted">FTP ${profile.ftp} W · ${String(profile.kg).replace('.', ',')} kg · ${(profile.ftp / profile.kg).toFixed(2).replace('.', ',')} W/kg</p></div>
-    <div class="hero-lv">${levelBar()}</div>
+    <div><h1>Hallo ${esc(profile.name)}${profile.title ? ` <span class="prtag">🏷️ ${esc(profile.title)}</span>` : ''}</h1><p class="muted">FTP ${profile.ftp} W · ${String(profile.kg).replace('.', ',')} kg · ${(profile.ftp / profile.kg).toFixed(2).replace('.', ',')} W/kg</p></div>
+    <div class="hero-lv">${levelBar()}<a class="small seasonlink" href="#/season">${(() => { const z = seasonOf(), st = seasonState(z); return `${z.emoji} ${esc(z.name)} · Stufe ${st.tier}/25${tokensFree() > 0 ? ` · 🔧 ${tokensFree()} Gutschein${tokensFree() === 1 ? '' : 'e'} frei` : ''}`; })()}</a></div>
     <div class="quick"><button class="btn pri big" data-quick title="Sofort losfahren: zuletzt gewählte Strecke und Einstellungen">⚡ Schnellstart</button><span class="small muted">${esc((routes.find(r => r.id === sel.routeId) || routes[0])?.name || '')}${sel.workoutId ? ' · mit Workout' : ' · freie Fahrt'}</span></div>
   </section>
   ${(() => { const e = estimateFtp(rides); if (!e || Math.abs(e.ftp - profile.ftp) < Math.max(8, profile.ftp * .04) || profile.ftpHintOff === e.ftp) return ''; const up = e.ftp > profile.ftp;
