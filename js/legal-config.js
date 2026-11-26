@@ -7,7 +7,7 @@ export const LEGAL = {
   street: '[Straße und Hausnummer]',
   city: '[PLZ und Ort]',
   country: 'Deutschland',
-  email: '[E-Mail-Adresse für Anfragen]',
+  email: 'info@indoorado.de',
   phone: '',                                   // optional
   // Datenschutz-Aufsichtsbehörde deines Bundeslandes (z. B. „Bayerisches Landesamt für Datenschutzaufsicht (BayLDA)“)
   authority: '[zuständige Datenschutz-Aufsichtsbehörde]',
