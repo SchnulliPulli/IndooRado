@@ -58,6 +58,53 @@ export async function overviewImage(ride, ftp) {
   }
   return new Promise(res => c.toBlob(res, 'image/jpeg', .9));
 }
+// Fakten-Bild 1600×900 (wie die Fahrtfotos): Hintergrund ein Foto der Fahrt, darüber alle Kennzahlen und Höhepunkte
+export async function factsImage(ride, ftp, bgBlob, opt = {}) {
+  try { await document.fonts?.ready; } catch (e) { }
+  const W = 1600, H = 900, c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d'), s = ride.sum;
+  // Hintergrund: Foto (abgedunkelt) oder Farbverlauf
+  let img = null; if (bgBlob) try { img = await createImageBitmap(bgBlob); } catch (e) { }
+  if (img) { const k = Math.max(W / img.width, H / img.height); x.drawImage(img, (W - img.width * k) / 2, (H - img.height * k) / 2, img.width * k, img.height * k); }
+  else { const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#1b2633'); g.addColorStop(1, '#2b1d24'); x.fillStyle = g; x.fillRect(0, 0, W, H); }
+  let g = x.createLinearGradient(0, 0, W, 0); g.addColorStop(0, 'rgba(8,10,14,.92)'); g.addColorStop(.62, 'rgba(8,10,14,.72)'); g.addColorStop(1, 'rgba(8,10,14,.35)'); x.fillStyle = g; x.fillRect(0, 0, W, H);
+  // Kopf
+  x.fillStyle = '#ff6a3d'; x.font = '700 26px Barlow, Arial'; x.fillText('VELOVERSE', 64, 72);
+  x.fillStyle = '#fff'; x.font = '700 58px "Barlow Condensed", Barlow, Arial'; x.fillText(trim(x, ride.title, W - 128), 64, 136);
+  x.fillStyle = '#b8c3cc'; x.font = '500 24px Barlow, Arial'; x.fillText(new Date(ride.date).toLocaleString('de-DE', { dateStyle: 'full', timeStyle: 'short' }) + (ride.workoutDone ? '  ·  ✅ Workout geschafft' : ''), 64, 176);
+  // Große Werte
+  const big = [[fmtKm(s.dist), 'km'], [fmtDur(s.dur), 'Fahrzeit'], [s.avgP + ' W', 'Ø Leistung'], [s.asc + ' m', 'Höhenmeter']];
+  big.forEach(([v, l], i) => { const cx = 64 + i * 230; x.fillStyle = '#fff'; x.font = '700 76px "Barlow Condensed", Barlow, Arial'; x.fillText(v, cx, 300); x.fillStyle = '#9fb0bd'; x.font = '600 22px Barlow, Arial'; x.fillText(l.toUpperCase(), cx, 334); });
+  // Weitere Werte als Kacheln
+  const kj = s.kj ?? Math.round(s.avgP * s.dur / 1000);
+  const small = [[s.np + ' W', 'NP'], [String(s.tss ?? '–'), 'TSS'], [s.avgHr ? s.avgHr + ' bpm' : '–', 'Ø Puls'], [s.maxHr ? s.maxHr + ' bpm' : '–', 'max. Puls'], [((s.avgV || 0) * 3.6).toFixed(1).replace('.', ',') + ' km/h', 'Ø Tempo'], [s.avgCad ? s.avgCad + ' U/min' : '–', 'Ø Trittfrequenz'], [kj + ' kJ', 'Arbeit'], [(ride.xp ?? '–') + ' XP', 'Erfahrung']];
+  small.forEach(([v, l], i) => { const cx = 64 + (i % 4) * 230, cy = 380 + Math.floor(i / 4) * 116; x.fillStyle = 'rgba(255,255,255,.08)'; rr(x, cx, cy, 214, 100, 16); x.fill(); x.fillStyle = '#fff'; x.font = '700 40px "Barlow Condensed", Barlow, Arial'; x.fillText(v, cx + 18, cy + 52); x.fillStyle = '#9fb0bd'; x.font = '500 19px Barlow, Arial'; x.fillText(l, cx + 18, cy + 82); });
+  // Höhepunkte rechts
+  const facts = [];
+  for (const k of (ride.prs || []).filter(k => [5, 60, 300, 1200, 3600].includes(+k)).slice(0, 3)) facts.push(['🏆', `Bestwert ${k < 60 ? k + ' s' : k / 60 + ' min'}: ${s.curve?.[k]} W`]);
+  for (const cl of (ride.climbs || []).slice(0, 3)) facts.push(['⛰', `${cl.name}: ${Math.floor(cl.time / 60)}:${String(Math.round(cl.time % 60)).padStart(2, '0')}${cl.pr ? ' (Bestzeit)' : ''}`]);
+  if (ride.routeBadge) facts.push(['🏅', 'Routen-Abzeichen ' + ride.routeBadge]);
+  for (const b of (ride.newBadges || []).slice(0, 2)) { const B = BADGES.find(z => z.id === b); if (B) facts.push(['🎖', 'Abzeichen: ' + B.name]); }
+  if (ride.race) facts.push(['🏁', `Rennen: Platz ${ride.race.place} von ${ride.race.of}`]);
+  if (ride.mp?.riders?.length) facts.push(['🌐', 'Mit ' + ride.mp.riders.slice(0, 3).join(', ') + (ride.mp.won ? ` · ${ride.mp.won} Duell${ride.mp.won > 1 ? 'e' : ''} gewonnen` : '')]);
+  if (ride.overtakes) facts.push(['💨', ride.overtakes + ' Fahrer überholt']);
+  if (ride.rideOns?.got) facts.push(['👍', ride.rideOns.got + ' Ride Ons bekommen']);
+  if (s.maxP) facts.push(['⚡', 'Spitzenleistung ' + s.maxP + ' W']);
+  if (opt.extra) facts.push(...opt.extra);
+  const fx = 1040, fy = 230;
+  if (facts.length) {
+    x.fillStyle = 'rgba(8,10,14,.55)'; rr(x, fx - 24, fy - 54, W - fx - 40, Math.min(facts.length, 9) * 58 + 74, 20); x.fill();
+    x.fillStyle = '#ff6a3d'; x.font = '700 22px Barlow, Arial'; x.fillText('HÖHEPUNKTE', fx, fy - 14);
+    facts.slice(0, 9).forEach(([ic, t], i) => { x.font = '30px Barlow, Arial'; x.fillStyle = '#fff'; x.fillText(ic, fx, fy + 40 + i * 58); x.font = '600 25px Barlow, Arial'; x.fillText(trim(x, t, W - fx - 110), fx + 48, fy + 38 + i * 58); });
+  }
+  // Höhenprofil unten, eingefärbt nach Leistung
+  const E = ride.samples.map(q => q.e), D = ride.samples.map(q => q.d), py0 = 680, ph = 150, px0 = 64, pw = W - 128;
+  if (E.length > 1) {
+    let lo = Math.min(...E), hi = Math.max(...E); if (hi - lo < 30) hi = lo + 30; const Dm = D[D.length - 1] || 1, st = Math.max(1, Math.floor(E.length / 600));
+    for (let i = st; i < E.length; i += st) { const x0 = px0 + D[i - st] / Dm * pw, x1 = px0 + D[i] / Dm * pw, y1 = py0 + ph - (E[i] - lo) / (hi - lo) * ph; x.fillStyle = zoneColor((ride.samples[i].p || 0) / ftp); x.globalAlpha = .85; x.fillRect(x0, y1, Math.max(1, x1 - x0 + .6), py0 + ph - y1); }
+    x.globalAlpha = 1;
+  }
+  return new Promise(res => c.toBlob(res, 'image/jpeg', .9));
+}
 function rr(x, a, b, w, h, r) { x.beginPath(); x.moveTo(a + r, b); x.arcTo(a + w, b, a + w, b + h, r); x.arcTo(a + w, b + h, a, b + h, r); x.arcTo(a, b + h, a, b, r); x.arcTo(a, b, a + w, b, r); x.closePath(); }
 function trim(x, t, max) { if (x.measureText(t).width <= max) return t; while (t.length > 3 && x.measureText(t + '…').width > max) t = t.slice(0, -1); return t + '…'; }
 

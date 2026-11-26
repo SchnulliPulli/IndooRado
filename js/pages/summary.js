@@ -10,7 +10,7 @@ import { statTiles, levelBar, ICON } from '../components.js';
 import { drawWorkout } from '../workouts.js';
 import { sound } from '../sound.js';
 import { sync, syncReady, fetchShots, loadSync, isConfigured, providerName } from '../sync.js';
-import { stravaTitle, stravaText, overviewImage, bestShot } from '../share.js';
+import { stravaTitle, stravaText, overviewImage, bestShot, factsImage } from '../share.js';
 import { strava, connected as stravaConnected, uploadRide, activityUrl } from '../strava.js';
 
 let urls = [];
@@ -75,7 +75,9 @@ export async function render(el, [id], query) {
     <div class="card"><h2>Bestleistungen</h2><div class="efforts">${[[5, 'Sprint 5 s'], [60, '1 Minute'], [300, '5 Minuten'], [1200, '20 Minuten'], [3600, '60 Minuten']].filter(([k]) => s.curve?.[k]).map(([k, l]) => { const rk = rankOf(s.curve[k], all, k); return `<div class="effort ${rk === 1 ? 'gold' : rk === 2 ? 'silver' : rk === 3 ? 'bronze' : ''}"><span class="medal">${rk === 1 ? '🏆' : rk <= 3 ? '🏅' : '·'}</span><span>${l}</span><b class="num">${s.curve[k]} W</b><small class="muted">${fmtNum(s.curve[k] / (s.kg || profile.kg), 1)} W/kg · ${rk === 1 ? 'Bestwert' : rk + '. bester Wert'}</small></div>`; }).join('') || '<p class="muted">Zu kurz für Bestleistungen.</p>'}</div></div>
     <div class="card"><h2>Abschnitte <span class="small muted">je ${sp.step / 1000} km</span></h2><div class="scroll"><table class="tbl small"><tr><th>km</th><th class="n">Zeit</th><th class="n">km/h</th><th class="n">Watt</th><th class="n">Puls</th><th class="n">Höhe</th></tr>${sp.rows.map(r => `<tr><td>${fmtKm(r.k * sp.step)}</td><td class="n">${fmtT(r.time)}</td><td class="n ${r.v >= fastest ? 'pr' : ''}">${fmtNum(r.v, 1)}</td><td class="n">${r.p}</td><td class="n">${r.hr ?? '–'}</td><td class="n">${r.de > 0 ? '+' : ''}${r.de} m</td></tr>`).join('')}</table></div></div>
   </section>
-  ${shots.length ? `<section class="card"><div class="row between"><h2>Fotos der Fahrt</h2>${isConfigured() ? `<span class="small muted">☁ mit der Fahrt in ${esc(providerName())} gespeichert</span>` : ''}</div><div class="gallery">${shots.map((x, i) => `<button class="shot" data-i="${i}"><img src="${urls[i]}" alt="${esc(x.caption)}" loading="lazy"><span>${esc(x.caption)} · ${fmtKm(x.d)} km</span></button>`).join('')}</div></section>` : ''}
+  <section class="card" id="galCard"><div class="row between"><h2>Bilder der Fahrt</h2><span class="row">${isConfigured() && shots.length ? `<span class="small muted">☁ mit der Fahrt in ${esc(providerName())} gespeichert</span>` : ''}<button class="btn sm" id="dlAll">⬇ Alle Bilder</button></span></div>
+    <div class="gallery" id="gal"><button class="shot facts" data-i="0"><div class="pageload"><div class="spinner"></div></div><span>Fakten der Fahrt</span></button>${shots.map((x, i) => `<button class="shot" data-i="${i + 1}"><img src="${urls[i]}" alt="${esc(x.caption)}" loading="lazy"><span>${esc(x.caption)} · ${fmtKm(x.d)} km</span></button>`).join('')}</div>
+    <p class="small muted">Alle Bilder lassen sich herunterladen und z. B. auf Strava unter „Fotos hinzufügen“ zur Fahrt stellen.</p></section>
   <section class="card"><div class="row between"><h2>Verlauf</h2><div class="small muted num" id="hov">Fahre mit dem Finger über das Diagramm</div></div><canvas id="ch" class="chart-main"></canvas></section>
   <section class="grid2">
     <div class="card"><h2>Leistungskurve</h2><canvas id="curve" class="curvec"></canvas>
@@ -125,7 +127,7 @@ export async function render(el, [id], query) {
       ride.stravaId = r.id; await db.put('rides', ride);
       b.textContent = 'Auf Strava ansehen'; b.disabled = false; b.onclick = () => window.open(activityUrl(r.id), '_blank', 'noopener');
       toast(r.duplicate ? 'Diese Fahrt ist schon auf Strava' : 'Auf Strava hochgeladen ✅');
-      if (manual) { gpx(); const base = fileBase(ride), ov = await overviewImage(ride, ride.ftpUsed || profile.ftp); if (ov) download(base + '-strecke.jpg', ov); const bs = bestShot(shots); if (bs) setTimeout(() => download(base + '-foto.jpg', bs.blob), 500); }
+      if (manual) { gpx(); const base = fileBase(ride), ov = await overviewImage(ride, ride.ftpUsed || profile.ftp); if (ov) download(base + '-strecke.jpg', ov); const bs = bestShot(shots); if (bs) setTimeout(() => download(base + '-foto.jpg', bs.blob), 500); const fb = await factsP(ride, ride.ftpUsed || profile.ftp, shots); if (fb) setTimeout(() => download(base + '-fakten.jpg', fb), 900); toast('Strava erlaubt Apps kein Hochladen von Fotos: die Bilder sind gespeichert, bitte auf Strava unter „Fotos hinzufügen“ ergänzen.', 7000); }
     } catch (e) { b.disabled = false; b.textContent = 'Zu Strava'; toast('Strava: ' + e.message, 6000); }
   };
   if (ride.stravaId) { $('#eStrava', el).textContent = 'Auf Strava ansehen'; }
@@ -138,10 +140,11 @@ export async function render(el, [id], query) {
     setTimeout(gpx, 200);
     const ov = await overviewImage(ride, ride.ftpUsed || profile.ftp); if (ov) setTimeout(() => download(base + '-strecke.jpg', ov), 400);
     const bs = bestShot(shots); if (bs) setTimeout(() => download(base + '-foto.jpg', bs.blob), 800);
+    const fb = await factsP(ride, ride.ftpUsed || profile.ftp, shots); if (fb) setTimeout(() => download(base + '-fakten.jpg', fb), 1200);
     let copied = false; try { await navigator.clipboard.writeText(title + '\n\n' + text); copied = true; } catch (e) { }
     await dialog({ title: 'Bei Strava hochladen', html: `
-      <p>Gespeichert: die FIT-Datei, die virtuelle Strecke als GPX, ein Übersichtsbild der Strecke${bs ? ' und das beste Foto der Fahrt' : ''}.</p>
-      <ol class="tips small"><li>Auf Strava „Datei auswählen“ und die <b>.fit</b>-Datei wählen.</li><li>Den Titel einsetzen${copied ? ' (Titel und Beschreibung sind schon in der Zwischenablage)' : ''}.</li><li>Unter „Fotos hinzufügen“ die beiden Bilder auswählen und speichern.</li><li>Die <b>.gpx</b>-Datei enthält die virtuelle Strecke, z. B. für Komoot, Karten-Apps oder den Radcomputer.</li></ol>
+      <p>Gespeichert: die FIT-Datei, die virtuelle Strecke als GPX, ein Übersichtsbild der Strecke, das Fakten-Bild${bs ? ' und das beste Foto der Fahrt' : ''}.</p>
+      <ol class="tips small"><li>Auf Strava „Datei auswählen“ und die <b>.fit</b>-Datei wählen.</li><li>Den Titel einsetzen${copied ? ' (Titel und Beschreibung sind schon in der Zwischenablage)' : ''}.</li><li>Unter „Fotos hinzufügen“ die Bilder auswählen und speichern.</li><li>Die <b>.gpx</b>-Datei enthält die virtuelle Strecke, z. B. für Komoot, Karten-Apps oder den Radcomputer.</li></ol>
       <p class="small muted">Titel:</p><input class="inp" readonly value="${esc(title)}" data-selectall>
       <p class="small muted">Beschreibung:</p><textarea class="inp" rows="5" readonly data-selectall>${esc(text)}</textarea>`, buttons: [{ label: 'Strava öffnen', value: true, cls: 'pri' }] });
     window.open('https://www.strava.com/upload/select', '_blank', 'noopener');
@@ -164,14 +167,28 @@ export async function render(el, [id], query) {
     if (await dialog({ title: 'Fahrt löschen?', html: '<p class="muted">Fahrt und Fotos werden entfernt. Erfahrungspunkte und Abzeichen bleiben erhalten.</p>', buttons: [{ label: 'Abbrechen', value: false }, { label: 'Löschen', value: true, cls: 'danger' }] })) { await deleteRide(id); toast('Fahrt gelöscht'); location.hash = '#/history'; }
   };
   $('#ftpApply', el)?.addEventListener('click', async () => { await applyFtp(ride.test.ftp, ride.test.type); toast('FTP auf ' + ride.test.ftp + ' W gesetzt'); render(el, [id]); });
-  // Galerie
+  // Galerie: zuerst das Fakten-Bild (wird hier erzeugt), dann die Fotos der Fahrt
+  const tok = window.__routeTok, ftp = ride.ftpUsed || profile.ftp;
+  const pics = [{ caption: 'Fakten der Fahrt', blob: null, d: s.dist, t: s.dur, name: 'fakten' }, ...shots.map((x, i) => ({ ...x, name: String(i + 1) }))], purl = [null, ...urls];
+  factsP(ride, ftp, shots).then(b => { if (!b || tok !== window.__routeTok) return; pics[0].blob = b; purl[0] = URL.createObjectURL(b); const f = el.querySelector('.shot.facts'); if (f) f.innerHTML = `<img src="${purl[0]}" alt="Fakten der Fahrt"><span>Fakten der Fahrt</span>`; });
   let cur = 0; const lb = $('#lb', el);
-  const show = i => { cur = (i + shots.length) % shots.length; $('#lbImg', el).src = urls[cur]; $('#lbCap', el).textContent = shots[cur].caption + ' · ' + fmtKm(shots[cur].d) + ' km · ' + fmtT(shots[cur].t); lb.hidden = false; };
+  const show = i => { cur = (i + pics.length) % pics.length; if (!purl[cur]) return; $('#lbImg', el).src = purl[cur]; $('#lbCap', el).textContent = pics[cur].caption + (cur ? ' · ' + fmtKm(pics[cur].d) + ' km · ' + fmtT(pics[cur].t) : ''); lb.hidden = false; };
   el.querySelector('.gallery')?.addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (b) show(+b.dataset.i); });
   $('#lbPrev', el).onclick = () => show(cur - 1); $('#lbNext', el).onclick = () => show(cur + 1);
   $('#lbX', el).onclick = () => lb.hidden = true; lb.onclick = e => { if (e.target === lb) lb.hidden = true; };
-  $('#lbDl', el).onclick = () => download(fileBase(ride) + '-' + (cur + 1) + '.jpg', shots[cur].blob);
+  $('#lbDl', el).onclick = () => pics[cur].blob && download(fileBase(ride) + '-' + pics[cur].name + '.jpg', pics[cur].blob);
+  // Alle Bilder auf einmal (Fakten, Streckenübersicht, Fotos); kurze Abstände, sonst blockiert der Browser mehrere Downloads
+  $('#dlAll', el).onclick = async () => {
+    const base = fileBase(ride), list = [[base + '-fakten.jpg', pics[0].blob || await factsP(ride, ftp, shots)]];
+    const ov = await overviewImage(ride, ftp); if (ov) list.push([base + '-strecke.jpg', ov]);
+    shots.forEach((x, i) => list.push([base + '-' + (i + 1) + '.jpg', x.blob]));
+    list.forEach(([n, b], i) => setTimeout(() => b && download(n, b), i * 350));
+    toast(list.length + ' Bilder werden gespeichert');
+  };
 }
+// Fakten-Bild einmal je Fahrt erzeugen (Hintergrund: bestes Foto der Fahrt)
+const factsCache = new Map();
+function factsP(ride, ftp, shots) { if (!factsCache.has(ride.id)) factsCache.set(ride.id, factsImage(ride, ftp, bestShot(shots)?.blob).catch(() => null)); return factsCache.get(ride.id); }
 // Anstrengung als Ring wie bei Strava
 function effBox(e) {
   const v = e.score, frac = v == null ? 0 : Math.min(1, v / 250), col = v == null ? '#56606a' : v < 25 ? '#3fa7f5' : v < 60 ? '#4fd18b' : v < 120 ? '#f5c542' : v < 200 ? '#ff8a3d' : '#ef4458';
