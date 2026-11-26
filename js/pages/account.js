@@ -109,17 +109,25 @@ function renderAuth(el, mode = 'in') {
   if (mode === 'in') {
     body.innerHTML = `${oauthHtml}
       <label class="f">E-Mail<input class="inp" id="aMail" type="email" autocomplete="username email" value="${esc(localStorage.getItem('vvLastEmail') || '')}"></label>
-      ${pwField('aPass', 'Passwort', 'current-password')}
       ${keepHtml}
-      <div class="row"><button class="btn pri" id="aGo">Anmelden</button><button class="btn ghost" id="aMagic" title="Anmeldelink per E-Mail, ohne Passwort">Link per E-Mail</button></div>
-      <button class="linkbtn small" id="aForgot">Passwort vergessen?</button>`;
+      <div class="row"><button class="btn pri" id="aCode">✉️ Anmeldecode per E-Mail</button></div>
+      <p class="small muted">Ohne Passwort: Du bekommst einen 6-stelligen Code, den du hier eingibst. Das klappt auch, wenn du die Mail auf dem Handy liest.</p>
+      <details class="pwlogin" id="aPwBox"><summary>Lieber mit Passwort anmelden</summary>
+        ${pwField('aPass', 'Passwort', 'current-password')}
+        <div class="row"><button class="btn" id="aGo">Mit Passwort anmelden</button><button class="linkbtn small" id="aForgot">Passwort vergessen?</button></div>
+      </details>`;
     wirePw(el); wireOauth();
     const mail = () => $('#aMail', el).value.trim();
     const go = async () => { const pass = $('#aPass', el).value; if (!mailOk(mail()) || !pass) return toast('E-Mail und Passwort eingeben', 2500); keep(); $('#aGo', el).disabled = true; try { await O.signIn(mail(), pass); toast('Angemeldet ✅', 1500); window.__loginUpd?.(); render(el); } catch (e) { err(e); $('#aGo', el).disabled = false; } };
     $('#aGo', el).onclick = go; $('#aPass', el).onkeydown = e => { if (e.key === 'Enter') go(); };
-    $('#aMagic', el).onclick = async () => { if (!mailOk(mail())) return toast('Erst eine gültige E-Mail eintragen', 2500); keep(); try { await O.magicLink(mail()); sent(el, mail(), 'Ein Anmeldelink'); } catch (e) { err(e); } };
+    $('#aCode', el).onclick = async e => {
+      if (!mailOk(mail())) return toast('Erst eine gültige E-Mail eintragen', 2500); keep(); const b = e.target; b.disabled = true; b.innerHTML = '<span class="spinner sm"></span> Sende …';
+      try { await O.withTimeout(O.emailCode(mail()), 25000, 'Mailversand'); codeEntry(el, mail()); }
+      catch (er) { b.disabled = false; b.textContent = '✉️ Anmeldecode per E-Mail'; if (/Zeitüberschreitung/.test(er.message)) codeEntry(el, mail(), true); else toast(/signups not allowed|user not found|not.*registered/i.test(er.message) ? 'Zu dieser E-Mail gibt es noch kein Konto. Bitte zuerst registrieren.' : errText(er), 6000); }
+    };
+    $('#aMail', el).onkeydown = e => { if (e.key === 'Enter' && !$('#aPwBox', el).open) $('#aCode', el).click(); };
     $('#aForgot', el).onclick = async () => { if (!mailOk(mail())) return toast('Erst die E-Mail oben eintragen', 2500); try { await O.resetPassword(mail()); sent(el, mail(), 'Ein Link zum Zurücksetzen'); } catch (e) { err(e); } };
-    (mail() ? $('#aPass', el) : $('#aMail', el)).focus();
+    $('#aMail', el).focus();
     return;
   }
   // Registrieren in drei Schritten
@@ -180,6 +188,29 @@ function renderAuth(el, mode = 'in') {
     }
   };
   draw();
+}
+// Code aus der Mail eingeben (6 Ziffern; Einfügen und Autofill des Geräts funktionieren)
+function codeEntry(el, mail, slow = false) {
+  $('#aBody', el).innerHTML = `<div class="sentbox"><div class="big">✉️</div><h2>Code eingeben</h2>
+    <p>Wir haben einen Anmeldecode an <b>${esc(mail)}</b> geschickt.${slow ? ' <span class="small" style="color:var(--warn)">(Der Versand dauerte ungewöhnlich lange, die Mail kommt vermutlich trotzdem.)</span>' : ''}</p>
+    <input class="inp codeinp" id="cCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="••••••" aria-label="Anmeldecode">
+    <div class="row" style="justify-content:center"><button class="btn pri" id="cGo" disabled>Anmelden</button></div>
+    <p class="small muted">Der Code gilt etwa eine Stunde. Alternativ den Link in der Mail auf diesem Gerät öffnen. Nichts angekommen? Spam-Ordner prüfen.</p>
+    <div class="row" style="justify-content:center"><button class="btn sm" id="cResend" disabled>Neuen Code senden (60)</button><button class="btn sm ghost" id="cBack">Andere E-Mail</button></div></div>`;
+  const inp = $('#cCode', el), go = $('#cGo', el);
+  cooldown($('#cResend', el), 60, 'Neuen Code senden');
+  const verify = async () => {
+    const code = inp.value.replace(/\D/g, ''); if (code.length < 6) return;
+    go.disabled = true; inp.disabled = true; go.innerHTML = '<span class="spinner sm"></span> Prüfe …';
+    try { await O.verifyCode(mail, code); localStorage.setItem('vvLastEmail', mail); toast('Angemeldet ✅', 1500); window.__loginUpd?.(); render(el); }
+    catch (e) { inp.disabled = false; go.textContent = 'Anmelden'; go.disabled = false; inp.select(); toast(/expired|invalid|token/i.test(e.message) ? 'Code falsch oder abgelaufen' : errText(e), 5000); }
+  };
+  inp.oninput = () => { inp.value = inp.value.replace(/\D/g, '').slice(0, 10); go.disabled = inp.value.length < 6; if (inp.value.length === 6) verify(); };
+  inp.onkeydown = e => { if (e.key === 'Enter') verify(); };
+  go.onclick = verify;
+  $('#cResend', el).onclick = async e => { try { await O.emailCode(mail); toast('Neuer Code gesendet'); cooldown(e.target, 60, 'Neuen Code senden'); } catch (er) { toast(errText(er), 5000); } };
+  $('#cBack', el).onclick = () => renderAuth(el, 'in');
+  inp.focus();
 }
 function cooldown(b, s, label) { b.disabled = true; const t = setInterval(() => { s--; b.textContent = `${label} (${s})`; if (s <= 0) { clearInterval(t); b.disabled = false; b.textContent = label; } }, 1000); }
 function sent(el, mail, what) {

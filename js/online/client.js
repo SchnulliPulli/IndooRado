@@ -144,6 +144,12 @@ const mark = () => localStorage.setItem('vvOnlineReturn', String(Date.now()));
 export const expectingReturn = () => Date.now() - (+localStorage.getItem('vvOnlineReturn') || 0) < 30 * 60e3;
 export async function signUp(email, password, name) { mark(); const { error } = await (await client()).auth.signUp({ email, password, options: { data: { name }, emailRedirectTo: back() } }); if (error) throw error; }
 export async function signIn(email, password) { const { data, error } = await (await client()).auth.signInWithPassword({ email, password }); if (error) throw error; online.session = data.session; online.user = data.user || data.session?.user || null; await refresh(); }
+// Passwortfrei: Einmal-Code (und Link) per E-Mail. Nur für bestehende Konten (neue Konten über die Registrierung).
+export async function emailCode(email) { mark(); const { error } = await (await client()).auth.signInWithOtp({ email, options: { shouldCreateUser: false, emailRedirectTo: back() } }); if (error) throw error; }
+export async function verifyCode(email, token) {
+  const { data, error } = await withTimeout((await client()).auth.verifyOtp({ email, token, type: 'email' }), 15000, 'Code-Prüfung'); if (error) throw error;
+  online.session = data.session; online.user = data.user; await refresh(); bus.emit('online', 'code'); return data;
+}
 export async function magicLink(email) { mark(); const { error } = await (await client()).auth.signInWithOtp({ email, options: { emailRedirectTo: back() } }); if (error) throw error; }
 export async function oauth(provider) { mark(); const { error } = await (await client()).auth.signInWithOAuth({ provider, options: { redirectTo: back() } }); if (error) throw error; }
 export async function resetPassword(email) { mark(); const { error } = await (await client()).auth.resetPasswordForEmail(email, { redirectTo: back() }); if (error) throw error; }
