@@ -116,6 +116,7 @@ function nav() {
   document.addEventListener('click', e => { if (!e.target.closest('#tbx')) close(); });
   addEventListener('hashchange', close);
 }
+window.__route = () => route();
 async function route() {
   const raw = location.hash.replace(/^#\/?/, '');
   const [path, query] = raw.split('?');
@@ -359,3 +360,22 @@ async function init() {
 // Lesefelder mit Text (z. B. Strava-Titel): Antippen markiert alles (statt Inline-onclick, wegen Content Security Policy)
 document.addEventListener('click', e => { const f = e.target.closest?.('[data-selectall]'); if (f) f.select(); });
 init();
+
+// Hinweis bei fehlender Internetverbindung und bei abgerissener Server-Verbindung (Online-Bereiche)
+{
+  const nb = document.createElement('div'); nb.className = 'netbar'; nb.setAttribute('role', 'status'); nb.setAttribute('aria-live', 'polite'); nb.hidden = true; document.body.appendChild(nb);
+  let lost = 0, lostT = null;
+  const show = (txt, kind) => { nb.innerHTML = txt; nb.className = 'netbar ' + kind; nb.hidden = false; };
+  const hide = () => { nb.hidden = true; };
+  const offline = () => show('📡 <b>Keine Internetverbindung</b> · Fahrten und Daten bleiben auf dem Gerät, Online-Funktionen pausieren', 'off');
+  addEventListener('offline', offline);
+  addEventListener('online', () => { if (!nb.hidden) { hide(); toast('✓ Wieder online', 2500); } });
+  if (!navigator.onLine) offline();
+  // Server: Anwesenheitskanal war verbunden und ist länger als 8 s weg (bei bestehendem Internet)
+  bus.on('presence', async () => {
+    const PR = await import('./online/presence.js');
+    if (PR.P.ready) { clearTimeout(lostT); lostT = null; if (lost && !nb.hidden && nb.classList.contains('srv')) { hide(); toast('✓ Verbindung zum Server wiederhergestellt', 2500); } lost = 0; window.__wasReady = true; return; }
+    if (!window.__wasReady || !navigator.onLine || lostT) return;
+    lostT = setTimeout(() => { lostT = null; if (PR.P.ready || !navigator.onLine || !PR.P.ch) return; lost = Date.now(); show('⚠️ <b>Verbindung zum Server unterbrochen</b> · wird neu aufgebaut …', 'srv'); }, 8000);
+  });
+}

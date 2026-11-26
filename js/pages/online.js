@@ -21,6 +21,10 @@ export async function gate(el) {
   await O.refreshProfile().catch(() => { }); if (gone()) return false; // Rolle und Freischaltung frisch vom Server (z. B. nach Änderung im Dashboard)
   document.body.classList.toggle('is-admin', O.isAdmin() && !O.needsMfa());
   const A = O.access();
+  if (A.mfa) {
+    el.innerHTML = `<section class="pagehead"><h1>Online</h1></section><section class="card accbox warn"><b>🔐 Anmeldung noch nicht abgeschlossen</b><p class="small muted">Dein Konto ist mit Zwei-Faktor-Schutz gesichert. Gib den 6-stelligen Code aus deiner Authenticator-App ein – erst danach werden Lobby, Mitfahren, Events, Teams und der Online-Abgleich freigeschaltet.</p><div class="row"><a class="btn pri" href="#/account">Code eingeben</a></div></section>`;
+    const off = bus.on('online', () => { if (!el.isConnected) return off(); if (!O.access().mfa) { off(); window.__route?.(); } }); return false;
+  }
   if (!A.ok) {
     const why = A.noProfile ? 'Zu deinem Login gibt es in der Datenbank kein Profil. Das passiert, wenn das Konto angelegt wurde, bevor <code>supabase/schema.sql</code> ausgeführt war. Das Skript erneut ausführen legt fehlende Profile an.' : A.banned ? 'Dein Konto ist gesperrt.' : 'Deine Testphase ist abgelaufen. Ein Admin muss dein Konto freischalten.';
     el.innerHTML = `<section class="pagehead"><h1>Online</h1></section><section class="card accbox bad"><b>⏳ Kein Online-Zugang</b><p class="small muted">${why}</p><div class="row"><a class="btn sm" href="#/account">Zum Konto (dort: Verbindungstest)</a><button class="btn sm ghost" id="oRetry">Erneut prüfen</button></div>${O.online.profileError ? `<p class="small" style="color:var(--hr)">Fehler beim Laden des Profils: ${esc(O.online.profileError)}</p>` : ''}</section>`;

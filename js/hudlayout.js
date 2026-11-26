@@ -143,6 +143,9 @@ const ZMIN = .4, ZMAX = 2.5;
 const limOf = el => LIMITS[el.dataset.drag] || (el.classList.contains('xgraph') ? LIMITS.graph : { w: [80, .9], h: [40, .8] });
 const HANDLES = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 export function editMode(root, on, onDone) {
+  // Positionen vor dem Umschalten messen (die Klasse „hudedit“ verändert Ränder und Abstände)
+  const vis0 = on ? [...root.querySelectorAll('[data-drag]')].filter(el => !el.classList.contains('w-hidden') && el.getClientRects().length) : [];
+  const rects0 = vis0.map(el => el.getBoundingClientRect());
   root.classList.toggle('hudedit', on);
   root.querySelectorAll('.rh,.rzl,.wzoom').forEach(h => h.remove());
   root.querySelectorAll('[data-drag].sel').forEach(el => el.classList.remove('sel'));
@@ -150,6 +153,9 @@ export function editMode(root, on, onDone) {
   root.onpointerdown = null; root.ontouchstart = null;
   if (root._wheel) { root.removeEventListener('wheel', root._wheel); root._wheel = null; }
   if (!on) return;
+  // Alle sichtbaren Widgets genau dort festhalten, wo sie gerade stehen (inkl. automatischer Ausweich-Verschiebung):
+  // sonst springen sie beim Einschalten zurück oder rutschen nach, wenn ein Nachbar aus seinem Container gezogen wird
+  vis0.forEach((el, i) => place(el, rects0[i].left, rects0[i].top));
   for (const el of root.querySelectorAll('[data-drag]')) {
     el.style.translate = ''; el.style.setProperty('--inv', String(1 / scaleOf(el)));
     for (const h of HANDLES) { const i = document.createElement('i'); i.className = 'rh ' + (h.length === 1 ? 'edge' : 'corner'); i.dataset.h = h; i.title = 'Größe ändern'; el.appendChild(i); }
@@ -180,6 +186,8 @@ export function editMode(root, on, onDone) {
     const q = el.getBoundingClientRect(), key = el.dataset.drag, p = L.w[key] ||= {};
     // Beim ersten Verschieben auf einem Bildschirm mit anderem Seitenverhältnis: die übrigen (automatisch platzierten) Widgets an ihrer jetzigen Stelle festhalten
     if (!posValid(L)) for (const o of root.querySelectorAll('[data-drag]')) { if (o === el || o.classList.contains('w-hidden') || !o.getClientRects().length) continue; const r = o.getBoundingClientRect(), po = L.w[o.dataset.drag] ||= {}; po.x = r.left / innerWidth; po.y = r.top / innerHeight; }
+    // Die übrigen (festgehaltenen) Widgets mit ihrer sichtbaren Position speichern, damit sie nach dem Anordnen nicht woanders landen
+    for (const o of root.querySelectorAll('[data-drag]')) { if (o === el || !o.dataset.user || o.classList.contains('w-hidden') || !o.getClientRects().length) continue; const r = o.getBoundingClientRect(), po = L.w[o.dataset.drag] ||= {}; po.x = r.left / innerWidth; po.y = r.top / innerHeight; }
     L.ar = Math.round(ar() * 100) / 100;
     p.x = q.left / innerWidth; p.y = q.top / innerHeight;
     if (kindOf(el) === 'size') { p.w = parseFloat(el.style.width) / innerWidth; p.h = parseFloat(el.style.height) / innerHeight; } else p.z = Math.round(scaleOf(el) / fitFactor() * 100) / 100;

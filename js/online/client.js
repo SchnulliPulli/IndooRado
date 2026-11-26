@@ -198,6 +198,8 @@ export async function updateEmail(email) { mark(); const { error } = await (awai
 
 // Online-Zugang: Admin, freigeschaltet oder in der 7-tägigen Testphase. Ältere Datenbank ohne diese Spalten = Zugang.
 export function access() {
+  // Anmeldung erst mit dem zweiten Faktor abgeschlossen: bis dahin bleiben alle Online-Bereiche aus (Server prüft dasselbe über mfa_ok)
+  if (online.user && (!online.aal || needsMfa())) return { ok: false, mfa: true };
   const p = online.profile; if (!p) return { ok: false, noProfile: true };
   if (p.role === 'banned') return { ok: false, banned: true };
   if (p.role === 'admin') return { ok: true, admin: true };

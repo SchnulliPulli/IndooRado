@@ -117,6 +117,11 @@ export async function render(el) {
         <h3 class="sub">Workout</h3>
         <select id="woSel" class="inp"><option value="">Kein Workout, freie Fahrt</option>${planOpts()}${cats.map(c => `<optgroup label="${esc(c)}">${wos.filter(w => w.cat === c).map(w => `<option value="${esc(w.id)}" ${w.id === sel.workoutId ? 'selected' : ''}>${esc(w.name)} · ${fmtDur(wStats(w).dur)}</option>`).join('')}</optgroup>`).join('')}</select>
         <div class="wprev"><canvas id="woPrev"></canvas><div class="small muted" id="woInfo"></div></div>
+        <div class="form" style="margin-top:14px">
+          <label class="switch"><input type="checkbox" id="optNpc" ${sel.npcs !== false ? 'checked' : ''}><span></span> Mitfahrer auf der Strecke (Windschatten, Überholen)</label>
+          <label class="switch"><input type="checkbox" id="optGhost" ${sel.ghost !== false ? 'checked' : ''}><span></span> Gegen meine Bestfahrt auf dieser Strecke fahren (Geist)</label>
+          <label class="switch"><input type="checkbox" id="optAdapt" ${sel.adaptive !== false ? 'checked' : ''}><span></span> Workouts adaptiv an Kadenz, Puls und Trainer anpassen</label>
+        </div>
       </div>
       <div>
         <h3 class="sub">Widerstand bei freier Fahrt</h3>
@@ -125,11 +130,6 @@ export async function render(el) {
         <label class="f small" id="hrBox" ${sel.mode === 'hr' ? '' : 'hidden'}>Zielpuls (bpm)<input class="inp sm" id="hrT" type="number" min="80" max="200" value="${sel.hrTarget || Math.round(profile.hrMax * .72)}"></label>
         <h3 class="sub">Schrittmacher</h3>
         <div class="seg" id="pacerSeg">${[0, 'buddy', 2, 2.5, 3, 3.5, 4].map(v => `<button data-p="${v}" aria-pressed="${sel.pacer === v}" ${v === 'buddy' ? 'title="Fährt immer ein bisschen stärker als du, wartet und kontert wie ein echter Trainingspartner"' : ''}>${v === 'buddy' ? '🤝 Buddy' : v ? String(v).replace('.', ',') + ' W/kg' : 'Aus'}</button>`).join('')}</div>
-        <div class="form" style="margin-top:12px">
-          <label class="switch"><input type="checkbox" id="optNpc" ${sel.npcs !== false ? 'checked' : ''}><span></span> Mitfahrer auf der Strecke (Windschatten, Überholen)</label>
-          <label class="switch"><input type="checkbox" id="optGhost" ${sel.ghost !== false ? 'checked' : ''}><span></span> Gegen meine Bestfahrt auf dieser Strecke fahren (Geist)</label>
-          <label class="switch"><input type="checkbox" id="optAdapt" ${sel.adaptive !== false ? 'checked' : ''}><span></span> Workouts adaptiv an Kadenz, Puls und Trainer anpassen</label>
-        </div>
       </div>
     </div>
     <div class="row end" style="margin-top:14px"><a class="btn pri big" href="#/ride">${ICON.ride} Fahrt starten</a></div>
