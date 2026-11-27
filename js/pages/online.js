@@ -9,6 +9,7 @@ import * as O from '../online/client.js';
 import * as PR from '../online/presence.js';
 
 let off = [], tick = null;
+const REL = new Map(); // Nutzer-ID → friend | sent | received | blocked
 export function leave() { off.forEach(f => f()); off = []; clearInterval(tick); }
 
 export async function gate(el) {
@@ -119,13 +120,20 @@ async function players(el) {
     const ps = [...PR.P.peers.values()], riding = ps.filter(p => p.where === 'ride'), byRoute = {};
     for (const p of riding) (byRoute[p.route] ||= { name: p.routeName, list: [] }).list.push(p);
     $('#plKpi', el).innerHTML = [['online (mit dir)', ps.length + 1], ['fahren gerade', riding.length + (PR.P.me.where === 'ride' ? 1 : 0)], ['in der Lobby', PR.lobbies().length + ' Fahrten']].map(([l, v]) => `<div class="card kpi"><b class="num">${v}</b><span class="small muted">${l}</span></div>`).join('');
-    $('#plList', el).innerHTML = [who({ name: O.online.profile?.display_name || 'Du', look: PR.onlineLook() }, ' <span class="muted small">(du)</span>'), ...[...PR.P.peers.entries()].map(([k, p]) => `<div class="row between">${who(p, `<small class="muted">${p.where === 'ride' ? '🚴 fährt ' + esc(p.routeName || '') : '☕ im Menü'}</small>`)}<span class="row">${p.where === 'ride' && p.route ? `<button class="btn xs" data-ride="${esc(p.route)}" data-sid="${esc(k)}" data-name="${esc(p.name)}">Mitfahren</button>` : ''}<button class="btn xs ghost" data-inv="${esc(k)}" data-name="${esc(p.name)}" title="${PR.inviteOffer() ? 'Zu deiner Gruppenfahrt bzw. Fahrt einladen' : 'Leg zuerst eine Gruppenfahrt an'}">📨 Einladen</button>${p.uid ? `<button class="btn xs ghost" data-fr="${esc(p.uid)}" title="Freundschaftsanfrage senden">➕ Freund</button>` : ''}</span></div>`)].join('') || '<p class="muted small">Gerade niemand außer dir.</p>';
+    // Freunde zuerst und hervorgehoben; für Freunde kein „➕ Freund“, bei offenen Anfragen der Stand
+    const rel = uid => uid ? REL.get(uid) : null;
+    const peers = [...PR.P.peers.entries()].sort(([, a], [, b]) => (rel(b.uid) === 'friend') - (rel(a.uid) === 'friend') || (a.name || '').localeCompare(b.name || ''));
+    const frBtn = p => { const r = rel(p.uid); if (!p.uid) return ''; if (r === 'friend') return ''; if (r === 'sent') return '<span class="small muted">angefragt</span>'; if (r === 'received') return `<button class="btn xs pri" data-facc="${esc(p.uid)}">Annehmen</button>`; if (r === 'blocked') return ''; return `<button class="btn xs ghost" data-fr="${esc(p.uid)}" title="Freundschaftsanfrage senden">➕ Freund</button>`; };
+    $('#plList', el).innerHTML = [who({ name: O.online.profile?.display_name || 'Du', look: PR.onlineLook() }, ' <span class="muted small">(du)</span>'), ...peers.map(([k, p]) => `<div class="row between plrow ${rel(p.uid) === 'friend' ? 'isfriend' : ''}">${who(p, `${rel(p.uid) === 'friend' ? ' <span class="frtag">👥 Freund</span>' : ''}<small class="muted">${p.where === 'ride' ? '🚴 fährt ' + esc(p.routeName || '') : '☕ im Menü'}</small>`)}<span class="row">${p.where === 'ride' && p.route ? `<button class="btn xs" data-ride="${esc(p.route)}" data-sid="${esc(k)}" data-name="${esc(p.name)}">Mitfahren</button>` : ''}<button class="btn xs ghost" data-inv="${esc(k)}" data-name="${esc(p.name)}" title="${PR.inviteOffer() ? 'Zu deiner Gruppenfahrt bzw. Fahrt einladen' : 'Leg zuerst eine Gruppenfahrt an'}">📨 Einladen</button>${frBtn(p)}</span></div>`)].join('') || '<p class="muted small">Gerade niemand außer dir.</p>';
     $('#plRoutes', el).innerHTML = Object.entries(byRoute).map(([id, r]) => `<div class="row between"><span>${esc(r.name || id)}</span><span class="row"><b class="num">${r.list.length}</b><button class="btn xs" data-ride="${esc(id)}">Mitfahren</button></span></div>`).join('') || '<p class="muted">Gerade fährt niemand. Starte doch eine Gruppenfahrt in der Lobby.</p>';
   };
-  draw(); off.push(bus.on('presence', draw));
+  const loadRel = async () => { try { const { data } = await (await O.client()).rpc('friend_list'); REL.clear(); for (const f of data || []) REL.set(f.id, f.status === 'accepted' ? 'friend' : f.status === 'blocked' ? 'blocked' : f.incoming ? 'received' : 'sent'); } catch (e) { } if (el.isConnected) draw(); };
+  draw(); loadRel(); off.push(bus.on('presence', draw)); const relT = setInterval(() => el.isConnected ? loadRel() : clearInterval(relT), 30e3); off.push(() => clearInterval(relT));
   el.onclick = async e => {
+    const fa = e.target.closest('[data-facc]');
+    if (fa) { const { error } = await (await O.client()).rpc('friend_respond', { p_other: fa.dataset.facc, p_accept: true }); if (error) return toast(error.message); toast('🎉 Ihr seid jetzt Freunde'); loadRel(); return; }
     const fr = e.target.closest('[data-fr]');
-    if (fr) { fr.disabled = true; const { data, error } = await (await O.client()).rpc('friend_request', { p_to: fr.dataset.fr }); if (error) { fr.disabled = false; return toast(/function|schema cache/i.test(error.message) ? 'Freunde fehlen in der Datenbank: supabase/schema.sql erneut ausführen' : error.message); } fr.textContent = data === 'friend' ? '✓ Freunde' : '✓ Angefragt'; toast(data === 'friend' ? 'Ihr seid jetzt Freunde' : 'Freundschaftsanfrage gesendet'); return; }
+    if (fr) { fr.disabled = true; const { data, error } = await (await O.client()).rpc('friend_request', { p_to: fr.dataset.fr }); if (error) { fr.disabled = false; return toast(/function|schema cache/i.test(error.message) ? 'Freunde fehlen in der Datenbank: supabase/schema.sql erneut ausführen' : error.message); } fr.textContent = data === 'friend' ? '✓ Freunde' : '✓ Angefragt'; toast(data === 'friend' ? 'Ihr seid jetzt Freunde' : 'Freundschaftsanfrage gesendet'); loadRel(); return; }
     const iv = e.target.closest('[data-inv]'); if (iv) { sendInvite(iv.dataset.inv, iv.dataset.name); return; } const b = e.target.closest('[data-ride]'); if (!b) return;
     if (!(await (await import('../online/sharedroute.js')).prepareJoin(b.dataset.sid, b.dataset.ride, toast))) return;
     sel.routeId = b.dataset.ride; saveSel(); if (b.dataset.sid) sessionStorage.setItem('joinRider', JSON.stringify({ sid: b.dataset.sid, name: b.dataset.name })); location.hash = '#/ride'; };
