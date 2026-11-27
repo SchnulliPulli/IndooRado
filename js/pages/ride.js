@@ -208,6 +208,8 @@ async function start(el) {
   S.planLabel = plan ? `${plan.name} · Woche ${wo.week} · Einheit ${wo.n}` : null;
   if (S.wo && !S.group && !sessionStorage.getItem('quickStart') && profile.askForm !== false) await dayForm(S);
   if (route.video) videoSetup(S, el);
+  // Kinderfahrt: Ziel 10 Minuten, dann Lob und Bonus (weiterfahren geht)
+  { const km = +sessionStorage.getItem('kidRide') || 0; sessionStorage.removeItem('kidRide'); if (km) { S.kidMin = km; $('#startCard', el).innerHTML = `<b>🧒 ${km} Minuten Abenteuer</b><span>Tritt los! Sammle Glocken und überhol die anderen.</span>`; const iv = setInterval(() => { if (!S?.alive) return clearInterval(iv); if (S.t >= km * 60) { clearInterval(iv); S.bonusXp = (S.bonusXp || 0) + 50; flash(`🎉 Super, ${km} Minuten geschafft! +50 XP`, 4000); sound.fanfare?.(); } }, 1000); } }
 
   $('#loadTxt').textContent = 'Gelände wird erzeugt …';
   await new Promise(r => setTimeout(r, 30));

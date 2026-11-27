@@ -161,7 +161,9 @@ async function route() {
   const [path, query] = raw.split('?');
   const [key, ...params] = path.split('/');
   let k = key in PAGES ? key : '', jump = 0;
+  // Kinderprofil: kein Online-Bereich (siehe unten, nach den Aliasen)
   if (ALIAS[k]) { [k, jump] = ALIAS[k]; history.replaceState(null, '', '#/' + k); }
+  if (profile.kid && (groupOf(k)?.k === 'lobby' || ['admin', 'account', 'watch'].includes(k))) { history.replaceState(null, '', '#/'); k = ''; }
   // Handy-Ansicht: die Startseite ist dann die kompakte Ansicht (umschalten unter Einstellungen › App)
   if (k === '' && wantsPhoneView()) k = 'companion';
   // Laufende Fahrt beim Verlassen nicht verwerfen, sondern pausiert im Hintergrund parken
@@ -352,6 +354,8 @@ function netIndicator() {
 async function init() {
   netIndicator();
   await loadState(); await loadClickMap(); await loadPlan();
+  { const F = await import('./family.js'); await F.applySeed(); document.body.classList.toggle('kidmode', !!profile.kid); // Familienprofile / Kindermodus
+    const fn = F.currentName(); if (fn) { const fc = document.createElement('a'); fc.className = 'chip famchip'; fc.href = '#/profile'; fc.title = 'Familienprofil wechseln'; fc.textContent = (profile.kid ? '🧒 ' : '🚴 ') + fn; const lbx = document.querySelector('.loginbtn'); if (lbx) lbx.before(fc); else document.querySelector('.topbar .ridebtn')?.before(fc); } }
   const { applyAppTheme } = await import('./pages/profile.js'); applyAppTheme();
   matchMedia('(prefers-color-scheme: light)').addEventListener?.('change', applyAppTheme);
   nav();

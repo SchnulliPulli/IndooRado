@@ -203,6 +203,7 @@ export async function render(el, params = []) {
   const html = {
   profile: `
   <section class="pagehead"><h1>Profil</h1></section>
+  <section class="card form" id="famCard"></section>
   <section class="grid2">
     <div class="card form"><h2>Fahrer</h2>
       ${F('name', 'Name', 'text', 'maxlength="30"')}
@@ -263,6 +264,7 @@ export async function render(el, params = []) {
   <section class="card form" id="nasCard"></section>`,
   };
   el.innerHTML = html[sec] || html.profile;
+  { const fb = el.querySelector('#famCard'); if (fb) { const F = await import('../family.js'); fb.innerHTML = F.familyCardHtml(esc); F.wireFamilyCard(fb, esc, dialog, toast); } }
   const on = (sel, ev, fn) => { const x = $(sel, el); if (x) x[ev] = fn; };
   if ($('#nasCard', el)) nasCard($('#nasCard', el));
   if ($('#stravaCard', el)) stravaCard($('#stravaCard', el));

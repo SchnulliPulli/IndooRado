@@ -88,7 +88,8 @@ export async function render(el) {
   const wkSum = week.reduce((a, r) => ({ d: a.d + r.sum.dist, t: a.t + r.sum.dur, tss: a.tss + r.sum.tss }), { d: 0, t: 0, tss: 0 });
   if (!routes.find(r => r.id === sel.routeId)) sel.routeId = 'b-hills';
   const cats = [...new Set(wos.map(w => w.cat))];
-  el.innerHTML = `
+  el.innerHTML = `${profile.kid ? `<section class="card kidcard"><h2>🧒 Los geht's, ${esc(profile.name)}!</h2><p class="small muted">Kurze Fahrten durch bunte Welten. Sammle Glocken, überhole die anderen und hol dir Abzeichen.</p>
+    <div class="kidgrid">${[['b-candy', '🍭', 'Zuckerland'], ['b-dino', '🦖', 'Dino-Tal'], ['b-weltall', '🚀', 'Weltall'], ['b-hills', '🌳', 'Hügel']].map(([id, i, l]) => `<button class="btn kidbtn" data-kid="${id}"><b>${i}</b>${l}<small class="muted">10 Minuten</small></button>`).join('')}</div></section>` : ''}
   <section class="hero">
     <div><h1>Hallo ${esc(profile.name)}${profile.title ? ` <span class="prtag">🏷️ ${esc(profile.title)}</span>` : ''}</h1><p class="muted">FTP ${profile.ftp} W · ${String(profile.kg).replace('.', ',')} kg · ${(profile.ftp / profile.kg).toFixed(2).replace('.', ',')} W/kg</p></div>
     <div class="hero-lv">${levelBar()}<a class="small seasonlink" href="#/season">${(() => { const z = seasonOf(), st = seasonState(z); return `${z.emoji} ${esc(z.name)} · Stufe ${st.tier}/25${tokensFree() > 0 ? ` · 🔧 ${tokensFree()} Gutschein${tokensFree() === 1 ? '' : 'e'} frei` : ''}`; })()}</a></div>
@@ -146,6 +147,7 @@ export async function render(el) {
   off.push(deviceCards($('#devs', el)));
   el.onclick = (e => {
     if (e.target.closest('[data-quick]')) { sessionStorage.setItem('quickStart', '1'); location.hash = '#/ride'; return; }
+    const kd = e.target.closest('[data-kid]'); if (kd) { sel.routeId = kd.dataset.kid; sel.workoutId = null; sel.npcs = true; saveSel(); sessionStorage.setItem('kidRide', '10'); location.hash = '#/ride'; return; }
     const fs = e.target.closest('[data-ftpset]'); if (fs) { profile.ftp = +fs.dataset.ftpset; saveProfile(); bus.emit('toast', 'FTP auf ' + profile.ftp + ' W gesetzt'); render(el); return; }
     const fn = e.target.closest('[data-ftpno]'); if (fn) { profile.ftpHintOff = +fn.dataset.ftpno; saveProfile(); render(el); return; }
     if (e.target.closest('[data-race]')) { sessionStorage.setItem('raceNext', '1'); location.hash = '#/ride'; return; }
