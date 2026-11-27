@@ -1064,9 +1064,12 @@ html.calm .view.swl, html.calm .view.swr { animation: none; }
 .hero-lv .msgbtn { align-self: flex-start; margin-bottom: 6px; }
 .inboxdlg { width: min(520px, calc(100vw - 24px)); max-height: calc(100vh - 60px); overflow: auto; }
 
-/* Handy hochkant: in der Kopfleiste nur Logo, Nachrichten und Konto (Geräte, Online-Zähler, Vollbild, Schnellstart ausgeblendet) */
+/* Handy hochkant: in der Kopfleiste nur Logo, Nachrichten, Konto und Schnellstart (Geräte, Online-Zähler, Vollbild ausgeblendet) */
 @media (max-width: 600px) and (orientation: portrait) {
-  .topbar .tbmore, .topbar .tbx, .topbar .onlinechip, .topbar .ridebtn, .topbar .fsbtn { display: none !important; }
+  .topbar .tbmore, .topbar .tbx, .topbar .onlinechip, .topbar .fsbtn { display: none !important; }
+  /* Schnellstart bleibt, aber kompakt: nur Blitz-Symbol, damit nichts das Logo überdeckt */
+  .topbar .ridebtn { font-size: 0; width: 38px; height: 36px; padding: 0; display: grid; place-items: center; flex: none; }
+  .topbar .ridebtn::before { content: '⚡'; font-size: 18px; }
   .topbar .logo { margin-right: auto; }
   .topbar .logo { min-width: 0; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; }
 }
