@@ -376,6 +376,7 @@ export function schedulePush(ms = 4000) {
 export const syncReady = () => configured() && !sync.needLogin && (ON || sync.cfg.mode !== 'dsm' || sync.cfg.sid || sync.cfg.pass);
 let liveBusy = false;
 export async function putLive(obj) {
+  if (ON) import('./tv.js').then(m => m.sendLive(obj)).catch(() => { }); // zusätzlich sofort über den Echtzeitkanal des Kontos
   if (!syncReady() || liveBusy) return;
   liveBusy = true;
   try { await prep(); await B().put('live.json', JSON.stringify({ ...obj, ts: Date.now() }), 'application/json'); } catch (e) { } finally { liveBusy = false; }

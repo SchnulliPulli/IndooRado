@@ -1202,3 +1202,15 @@ html.tv .btn { min-height: 48px; }
 .fitb { display: inline-block; align-self: flex-start; width: max-content; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: rgba(63,167,245,.18); color: #7cc4ff; margin-top: 4px; }
 .fitb.ok { background: rgba(79,209,139,.18); color: #4fd18b; }
 .fitb.no { background: rgba(255,255,255,.08); color: var(--muted, #9aa7b3); }
+
+/* Eingehender Anruf: gut sichtbar, nicht durchsichtig */
+.invcard.callring { background: var(--panel); border: 2px solid var(--acc, #ff6a3d); border-radius: 16px; padding: 16px; box-shadow: 0 16px 48px rgba(0,0,0,.6), 0 0 0 6px color-mix(in srgb, var(--acc, #ff6a3d) 18%, transparent); min-width: 280px; animation: invin .25s ease-out, ringpulse 1.6s ease-in-out .3s infinite; }
+.invcard.callring b { font-size: 16px; }
+.invcard.callring .row.end { gap: 10px; margin-top: 12px; }
+.invcard.callring .btn { min-height: 44px; padding: 0 18px; font-size: 15px; }
+.invcard.callring [data-no] { background: #e5343d; color: #fff; border-color: transparent; }
+.invcard.callring [data-ok] { background: #2fbf71; color: #fff; border-color: transparent; }
+@keyframes ringpulse { 50% { box-shadow: 0 16px 48px rgba(0,0,0,.6), 0 0 0 12px color-mix(in srgb, var(--acc, #ff6a3d) 8%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .invcard.callring { animation: none; } }
+.callwin .cwtile.away::after { content: "⏸ pausiert"; position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.65); color: #fff; font-weight: 700; }
+.callwin.paused .cwlocal { opacity: .3; }

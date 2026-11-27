@@ -1,6 +1,6 @@
 // Live-Ansicht der laufenden Fahrt deines Kontos (auf einem anderen Gerät): aktuelle Werte, Workout, Strecke und Zeitverlauf.
 // Daten kommen aus dem Konto bzw. Cloud-Speicher (live.json, von der Fahrt alle 5 s geschrieben).
-import { $, esc, fmtKm, fmtT } from '../util.js';
+import { $, esc, fmtKm, fmtT, bus } from '../util.js';
 import { syncReady, getLive, loadSync, sync, liveFresh } from '../sync.js';
 import { multiChart } from '../charts.js';
 
@@ -11,13 +11,15 @@ export async function render(el) {
   if (!sync.cfg && !sync.online) await loadSync().catch(() => { });
   el.innerHTML = `<section class="pagehead"><h1>Live-Fahrt</h1><span class="small muted" id="lvUpd"></span></section>
     <div id="lvBody"><div class="pageload"><div class="spinner"></div><div class="small muted">Laufende Fahrt wird gesucht …</div></div></div>`;
-  if (!syncReady()) { $('#lvBody', el).innerHTML = '<section class="card"><p class="muted">Die Live-Ansicht braucht ein IndooRado-Konto oder einen verbundenen Cloud-Speicher, damit die Fahrt vom anderen Gerät hier ankommt.</p><a class="btn" href="#/account">Zum Konto</a></section>'; return; }
+  const T = await import('../tv.js'); await T.whenReady();
+  if (!syncReady() && !(await import('../online/client.js')).loggedIn()) { $('#lvBody', el).innerHTML = '<section class="card"><p class="muted">Die Live-Ansicht braucht ein IndooRado-Konto oder einen verbundenen Cloud-Speicher, damit die Fahrt vom anderen Gerät hier ankommt.</p><a class="btn" href="#/account">Zum Konto</a></section>'; return; }
   const tick = async () => {
     if (!document.body.contains(el) || !$('#lvBody', el)) return leave();
-    let L = null; try { L = await getLive(); } catch (e) { }
+    let L = null; try { L = await T.liveNow(); } catch (e) { }
     draw(el, L);
   };
   tick(); timer = setInterval(tick, 5000);
+  const off = bus.on('liveRt', () => { if (!timer) return off?.(); tick(); }); // sofort neu zeichnen, wenn der Echtzeitkanal etwas bringt
 }
 const fresh = L => liveFresh(L);
 function draw(el, L) {

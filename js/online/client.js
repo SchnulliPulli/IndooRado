@@ -14,6 +14,9 @@ export async function loadSiteConfig() {
   try { const r = await fetch('online.json', { cache: 'no-cache' }); site = r.ok ? await r.json() : {}; } catch (e) { site = {}; }
   return site;
 }
+// Mindest-Stand der Datenbank (public.schema_version in schema.sql)
+export const SCHEMA_NEED = 20261128;
+export async function schemaOk() { try { const { data, error } = await (await client()).rpc('schema_version'); return !error && data >= SCHEMA_NEED; } catch (e) { return true; } }
 export function config() {
   let o = {}; try { o = JSON.parse(localStorage.getItem(LS) || '{}'); } catch (e) { }
   const s = site || {};
@@ -216,6 +219,7 @@ export async function diagnose(onStep) {
   const step = async (name, fn) => { const t0 = performance.now(); try { const r = await withTimeout(fn(), 10000, name); onStep({ name, ok: true, ms: Math.round(performance.now() - t0), info: r }); return r; } catch (e) { onStep({ name, ok: false, ms: Math.round(performance.now() - t0), info: e.message || String(e) }); return null; } };
   const sb = await client();
   await step('Anmeldung (Sitzung)', async () => { const { data, error } = await sb.auth.getSession(); if (error) throw error; if (!data.session) throw new Error('keine Sitzung, bitte anmelden'); return 'angemeldet als ' + data.session.user.email; });
+  await step('Datenbank-Version', async () => { const { data, error } = await sb.rpc('schema_version'); if (error || !data) throw new Error('veraltet: supabase/schema.sql im SQL-Editor neu ausführen'); if (data < SCHEMA_NEED) throw new Error(`Stand ${data}, die App braucht ${SCHEMA_NEED}: schema.sql neu ausführen`); return 'Stand ' + data; });
   await step('2FA-Status', async () => { const { data, error } = await sb.auth.mfa.getAuthenticatorAssuranceLevel(); if (error) throw error; return `aktuell ${data.currentLevel}, möglich ${data.nextLevel}`; });
   await step('Profil direkt (ohne Bibliothek)', async () => { const { data } = await sb.auth.getSession(); const c = config(); const r = await fetch(`${c.url}/rest/v1/profiles?id=eq.${online.user.id}&select=role,approved`, { headers: { apikey: c.anonKey, Authorization: 'Bearer ' + data.session.access_token } }); const j = await r.json(); if (!r.ok) throw new Error('HTTP ' + r.status + ': ' + (j.message || JSON.stringify(j))); return j.length ? `Rolle ${j[0].role}, freigeschaltet ${j[0].approved}` : 'leer (Regel verhindert Lesen?)'; });
   await step('Profil lesen', async () => { const { data, error } = await sb.from('profiles').select('role,approved,trial_until,display_name').eq('id', online.user.id).maybeSingle(); if (error) throw error; if (!data) throw new Error('kein Profil vorhanden'); return `Rolle ${data.role}, freigeschaltet ${data.approved}, Test bis ${data.trial_until ? new Date(data.trial_until).toLocaleString('de-DE') : '–'}`; });

@@ -69,13 +69,16 @@ export async function render(el) {
   };
   // Laufende Fahrt vom PC alle 5 Sekunden abfragen
   clearInterval(timer);
-  if (syncReady()) { const poll = () => liveTick(el); poll(); timer = setInterval(poll, 5000); }
+  // Live-Fahrt eines anderen Geräts: sofort über den Echtzeitkanal des Kontos, sonst alle 5 s aus dem Speicher.
+  // Nicht sofort aufgeben, falls Anmeldung bzw. Cloud-Speicher nach dem Öffnen erst noch verbunden werden.
+  (async () => { const T = await import('../tv.js'); if (!(await T.whenReady()) || !el.isConnected) return; const poll = () => liveTick(el); poll(); clearInterval(timer); timer = setInterval(poll, 5000);
+    const off = bus.on('liveRt', () => { if (!el.isConnected) return off?.(); liveTick(el); }); })();
 }
 function syncText() { return sync.needLogin ? '🔑 Anmeldung beim Cloud-Speicher abgelaufen, unter Einstellungen › Verbindungen neu anmelden' : sync.error ? '⚠ ' + sync.error : sync.last ? 'Abgeglichen: ' + fmtDate(sync.last, { dateStyle: 'short', timeStyle: 'short' }) : 'Noch nicht abgeglichen'; }
 
 async function liveTick(el) {
   const box = $('#cLive', el); if (!box) { clearInterval(timer); return; }
-  let L = null; try { L = await getLive(); } catch (e) { }
+  let L = null; try { L = await (await import('../tv.js')).liveNow(); } catch (e) { }
   // Nicht flackern: erst nach zwei Fehlversuchen hintereinander ausblenden
   let fresh = liveFresh(L); if (!fresh && L === null && !box.hidden && (liveMiss = (liveMiss || 0) + 1) < 2) return; if (fresh || L) liveMiss = 0;
   box.hidden = !fresh; if (!fresh) return;

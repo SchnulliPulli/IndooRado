@@ -64,17 +64,35 @@ addEventListener('gamepaddisconnected', () => { pads = Math.max(0, pads - 1); })
    Beide Geräte mit demselben Konto angemeldet. Privater Realtime-Kanal „remote:<Nutzer-ID>“ (nur dieses Konto).
    Der Fernseher/PC hört nur zu, während eine Fahrt läuft. */
 export const REMOTE = { pause: ' ', up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', cam: 'c', rideon: 'r', photo: 'p', map: 'k', pup: 'u', music: 't' };
-let rch = null;
+let rch = null, rchP = null, lastLive = null; export const remote = { err: null, ok: false };
 async function channel() {
   const O = await import('./online/client.js'); if (!O.loggedIn() || !O.access().ok) return null;
-  if (rch) return rch;
+  if (rch) return rch; if (rchP) return rchP;
+  rchP = open_(O).finally(() => { rchP = null; }); return rchP;
+}
+async function open_(O) {
   const sb = await O.client(); await O.realtimeAuth().catch(() => { });
   rch = sb.channel('remote:' + O.online.user.id, { config: { private: true, broadcast: { self: false } } });
   rch.on('broadcast', { event: 'cmd' }, ({ payload }) => { if (!inRide()) { rch.send({ type: 'broadcast', event: 'ack', payload: { ok: false, why: 'keine Fahrt' } }); return; } const k = REMOTE[payload?.c]; if (k) { key(k); rch.send({ type: 'broadcast', event: 'ack', payload: { ok: true, c: payload.c } }); } });
   rch.on('broadcast', { event: 'ack' }, ({ payload }) => bus.emit('remoteAck', payload));
-  await new Promise(res => { rch.subscribe(st => { if (st === 'SUBSCRIBED' || st === 'CHANNEL_ERROR' || st === 'TIMED_OUT') res(); }); setTimeout(res, 8000); });
-  return rch;
+  // Live-Stand einer Fahrt auf einem anderen Gerät desselben Kontos (sofort, ohne Umweg über den Speicher)
+  rch.on('broadcast', { event: 'live' }, ({ payload }) => { if (payload) { lastLive = { ...payload, rx: Date.now() }; bus.emit('liveRt', lastLive); } });
+  const c = rch; let st = '';
+  await new Promise(res => { c.subscribe(s => { st = s; if (s === 'SUBSCRIBED' || s === 'CHANNEL_ERROR' || s === 'TIMED_OUT') res(); }); setTimeout(res, 8000); });
+  remote.ok = st === 'SUBSCRIBED'; remote.err = remote.ok ? null : st === 'CHANNEL_ERROR' ? 'Kanal abgelehnt – Datenbankschema aktualisieren (schema.sql erneut ausführen)' : 'keine Verbindung zum Server';
+  if (!remote.ok) { try { (await O.client()).removeChannel(c); } catch (e) { } rch = null; return null; }
+  return c;
 }
 export async function listenRemote() { try { await channel(); } catch (e) { } }
-export async function sendRemote(c) { const ch = await channel(); if (!ch) { toast('Fernbedienung braucht ein angemeldetes Konto'); return false; } ch.send({ type: 'broadcast', event: 'cmd', payload: { c } }); return true; }
-bus.on('online', ev => { if (ev === 'SIGNED_OUT' || ev === 'out') { rch = null; } });
+export async function sendRemote(c) { const O = await import('./online/client.js'); if (!O.loggedIn()) { toast('Fernbedienung braucht ein angemeldetes Konto'); return false; } const ch = await channel(); if (!ch) { toast('Fernbedienung: ' + (remote.err || 'keine Verbindung'), 5000); return false; } ch.send({ type: 'broadcast', event: 'cmd', payload: { c } }); return true; }
+// Fahrt-Gerät: Live-Stand an die anderen Geräte desselben Kontos senden
+export async function sendLive(obj) { const ch = await channel().catch(() => null); ch?.send({ type: 'broadcast', event: 'live', payload: { ...obj, ts: Date.now() } }); }
+// Anzeige-Gerät: frischester Live-Stand (Echtzeitkanal, sonst Speicher)
+export async function liveNow() {
+  channel().catch(() => { });
+  if (lastLive && Date.now() - lastLive.rx < 12000) return lastLive;
+  try { const S = await import('./sync.js'); return S.syncReady() ? await S.getLive() : null; } catch (e) { return null; }
+}
+// Bis zu ms warten, bis Konto oder Cloud-Speicher bereit sind (nach dem Öffnen läuft die Anmeldung oft noch)
+export async function whenReady(ms = 8000) { const S = await import('./sync.js'), O = await import('./online/client.js'); const t0 = Date.now(); while (Date.now() - t0 < ms) { if (S.syncReady() || O.loggedIn()) return true; await new Promise(r => setTimeout(r, 300)); } return S.syncReady() || O.loggedIn(); }
+bus.on('online', ev => { if (ev === 'SIGNED_OUT' || ev === 'out') { rch = null; remote.ok = false; } else setTimeout(() => listenRemote(), 1500); }); // angemeldet: Kanal des Kontos offen halten

@@ -79,7 +79,7 @@ async function openFriend(sb, me, f, redraw) {
   const esck = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
   document.addEventListener('keydown', esck, true);
   const log = w.querySelector('#chLog');
-  let last = '';
+  let last = null; // null: auch ein leerer Chat wird einmal gezeichnet (Platzhalter statt Ladesymbol)
   const loadChat = async () => {
     const { data, error } = await sb.from('chat_messages').select('id,sender,body,created_at').or(`and(sender.eq.${me},recipient.eq.${f.id}),and(sender.eq.${f.id},recipient.eq.${me})`).order('created_at', { ascending: false }).limit(100);
     if (!w.isConnected) return; if (error) { log.innerHTML = `<p class="muted small">${esc(miss(error))}</p>`; return; }
@@ -113,7 +113,7 @@ async function openFriend(sb, me, f, redraw) {
     if (e.target.closest('[data-clear]')) {
       const v = await dialog({ title: `Chat mit ${f.display_name} löschen?`, html: '<p class="muted"><b>Nur für mich:</b> Der Verlauf verschwindet bei dir, dein Freund behält seine Kopie.<br><b>Meine Nachrichten für beide:</b> Was du geschrieben hast, wird auch bei deinem Freund entfernt; seine Nachrichten werden bei dir ausgeblendet.</p>', buttons: [{ label: 'Abbrechen', value: 0 }, { label: 'Nur für mich', value: 1 }, { label: 'Meine Nachrichten für beide', value: 2, cls: 'danger' }] });
       if (!v) return; const { error } = await sb.rpc('chat_clear', { p_other: f.id, p_for_both: v === 2 }); if (error) return toast(miss(error));
-      last = ''; loadChat(); toast('Chat gelöscht'); return;
+      last = null; loadChat(); toast('Chat gelöscht'); return;
     }
     const jn = e.target.closest('[data-join]'); if (jn) { (await import('../call.js')).joinCall(jn.dataset.join, { id: f.id, name: f.display_name }); return; }
     const tb = e.target.closest('[data-tab]'); if (tb) { w.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-pressed', String(b === tb))); w.querySelectorAll('[data-pane]').forEach(p => p.hidden = p.dataset.pane !== tb.dataset.tab); if (tb.dataset.tab === 'prof') loadProf(); return; }

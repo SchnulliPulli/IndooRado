@@ -839,7 +839,7 @@ function step(dt, first) {
   const pw = live.fresh ? live.power : 0;
   if (S.parked) return; // im Menü: Fahrt steht
   // Nach der Rückkehr aus dem Menü: Treten setzt die Fahrt fort
-  if (S.resumeOnPedal && S.state === 'paused' && (pw > 10 || (cad || 0) > 20)) { S.resumeOnPedal = false; S.state = 'riding'; flash('Weiter'); $('#tPause', S.el).innerHTML = ICON.pause + '<span>Pause</span>'; }
+  if (S.resumeOnPedal && S.state === 'paused' && !(S.hiddenPause && document.hidden) && (pw > 10 || (cad || 0) > 20)) { S.resumeOnPedal = false; S.state = 'riding'; flash('Weiter'); $('#tPause', S.el).innerHTML = ICON.pause + '<span>Pause</span>'; }
   // Start und automatische Pause
   if (S.state === 'ready' && (pw > 10 || (cad || 0) > 20)) begin();
   if (S.state === 'riding' && profile.autoPause && pw < 5 && (cad || 0) < 5 && S.v < .3) { S.idle += dt; if (S.idle > 3) { S.state = 'auto'; flash('Automatische Pause'); endHint(true); } } else S.idle = 0;
@@ -1229,7 +1229,17 @@ async function endRide(auto = false) {
 
 let wake = null;
 async function lockScreen() { try { if ('wakeLock' in navigator) wake = await navigator.wakeLock.request('screen'); } catch (e) { } }
-document.addEventListener('visibilitychange', () => { if (S?.alive && document.visibilityState === 'visible') lockScreen(); });
+document.addEventListener('visibilitychange', () => {
+  if (!S?.alive) return;
+  // Handy/Tablet gesperrt oder App verlassen: Fahrt pausieren (am Computer läuft sie im Hintergrund weiter)
+  const mobile = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad/.test(navigator.userAgent);
+  if (document.visibilityState === 'hidden') {
+    if (mobile && (S.state === 'riding' || S.state === 'auto')) { S.state = 'paused'; S.v = 0; S.hiddenPause = true; S.resumeOnPedal = true; $('#rideVid', S.el)?.pause(); const b = $('#tPause', S.el); if (b) b.innerHTML = ICON.play + '<span>Weiter</span>'; }
+    return;
+  }
+  lockScreen();
+  if (S.hiddenPause) { S.hiddenPause = false; flash('⏸ Pausiert, weil die App im Hintergrund war · treten oder „Weiter“', 3500); endHint(true); }
+});
 
 export function leave() {
   if (!S) return;

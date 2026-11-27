@@ -67,7 +67,7 @@ export async function hangUp(notify = true) {
   for (const P of call.peers.values()) { try { P.pc.close(); } catch (e) { } }
   call.local?.getTracks().forEach(t => t.stop());
   try { if (call.ch) (await O.client()).removeChannel(call.ch); } catch (e) { }
-  call.win?.remove(); call.peers.clear(); Object.assign(call, { win: null, room: null, peer: null, pc: null, ch: null, local: null });
+  call.win?.remove(); call.peers.clear(); call.away = null; Object.assign(call, { win: null, room: null, peer: null, pc: null, ch: null, local: null });
   // Klingeln beenden, falls noch niemand abgenommen hat
   if (notify) { try { const PR = await import('./online/presence.js'); for (const id of notifyIds) PR.callSignal(id, 'callend'); } catch (e) { } }
 }
@@ -161,7 +161,8 @@ async function openWindow(room, peer, mode = 'av') {
     if (why) toast(why, 3000);
     if (!call.peers.size) setTimeout(() => { if (call.room === room && !call.peers.size) { toast('📴 Alle haben aufgelegt'); hangUp(false); } }, 1500);
   };
-  call.dropPeer = drop;
+  call.dropPeer = drop; call.sendAll = payload => send(null, payload);
+  call.resume = () => { for (const P of call.peers.values()) if (!P.polite && P.pc.connectionState !== 'connected') { try { P.pc.restartIce(); } catch (e) { } } };
   ch.on('broadcast', { event: 'sig' }, async ({ payload: m }) => {
     if (!m?.from || m.from === me || call.room !== room) return;
     if (m.to && m.to !== me) return; // gilt einem anderen Teilnehmer
@@ -169,6 +170,7 @@ async function openWindow(room, peer, mode = 'av') {
       if (m.t === 'hello') { const P = mk(m.from, m.name); if (!P) { send(m.from, { t: 'full' }); return; } if (!m.reply) send(m.from, { t: 'hello', reply: true, name: myName }); if (!P.polite) P.start(); return; } // nur eine Seite je Paar beginnt, die andere antwortet (keine Kollision)
       if (m.t === 'bye') return drop(m.from, `📴 ${call.peers.get(m.from)?.name || 'Jemand'} hat aufgelegt`);
       if (m.t === 'full') { toast('Der Anruf ist voll (höchstens 4 Personen)'); return; }
+      if (m.t === 'away' || m.t === 'back') { const P = call.peers.get(m.from); P?.tile.classList.toggle('away', m.t === 'away'); return; }
       const P = call.peers.get(m.from) || mk(m.from, m.name); if (!P) return;
       // Signale je Gegenüber streng nacheinander verarbeiten (sonst kann ein Kandidat vor seiner Beschreibung ankommen)
       P.q = (P.q || Promise.resolve()).then(async () => {
@@ -195,7 +197,7 @@ async function addToCall() {
   const v = await dialog({ title: '➕ Freund dazuholen', html: `<p class="small muted">Bis zu 4 Personen. Bei mehreren Teilnehmern geht jede Verbindung direkt von Gerät zu Gerät, das braucht etwas mehr Upload.</p><div class="addlist">${list.map(f => `<label class="switch"><input type="radio" name="addf" value="${esc(f.id)}"><span></span> <div class="swt">${esc(f.display_name)}${PR.sidsOf(f.id).length ? ' <small class="muted">● online</small>' : ''}</div></label>`).join('')}</div>`, buttons: [{ label: 'Abbrechen', value: null }, { label: 'Anrufen', value: 'ok', cls: 'pri' }] });
   const id = window.__addPick; window.__addPick = null; if (v !== 'ok' || !id) return;
   const f = list.find(x => x.id === id); if (!f) return;
-  const r = await sb.rpc('call_add', { p_room: call.room, p_friend: f.id }); if (r.error) return toast(r.error.message, 4000);
+  const r = await sb.rpc('call_add', { p_room: call.room, p_friend: f.id }); if (r.error) return toast(/function|schema cache/i.test(r.error.message) ? 'Gruppenanrufe fehlen in der Datenbank: schema.sql neu ausführen' : r.error.message, 6000);
   const ins = await sb.from('chat_messages').insert({ recipient: f.id, body: `[[call:${call.room}]]` }); if (ins.error) return toast(ins.error.message, 4000);
   const n = await PR.callSignal(f.id, 'call');
   toast(n ? `📞 Es klingelt bei ${f.display_name} …` : `${f.display_name} ist gerade nicht online – die Einladung liegt im Chat`, 4000);
@@ -247,13 +249,26 @@ bus.on('callsignal', async s => {
   const room = callRoom(data?.[0]?.body); if (!room || Date.now() - new Date(data[0].created_at) > 180e3) return;
   const { avatarSvg } = await import('./components.js');
   const c = document.createElement('div'); c.className = 'invcard callring'; c.setAttribute('role', 'alertdialog');
-  c.innerHTML = `<div class="row">${avatarSvg(s.look || {}, 40)}<div><b>📹 ${esc(s.name)} ruft an</b><div class="small muted">Videoanruf</div></div></div><div class="row end"><button class="btn sm ghost" data-no>Ablehnen</button><button class="btn sm pri" data-ok>Annehmen</button></div>`;
+  c.innerHTML = `<div class="row">${avatarSvg(s.look || {}, 40)}<div><b>📹 ${esc(s.name)} ruft an</b><div class="small muted">Videoanruf</div></div></div><div class="row end"><button class="btn sm ghost" data-no>📵 Ablehnen</button><button class="btn sm pri" data-ok>📞 Annehmen</button></div>`;
   document.body.appendChild(c); const t = setTimeout(() => c.remove(), 60e3);
   try { (await import('./sound.js')).sound.beep(true); } catch (e) { }
   c.onclick = async e => {
     if (e.target.closest('[data-no]')) { clearTimeout(t); c.remove(); (await import('./online/presence.js')).callSignal(s.uid, 'callend'); return; }
     if (e.target.closest('[data-ok]')) { clearTimeout(t); c.remove(); joinCall(room, { id: s.uid, name: s.name }); }
   };
+});
+// App verlassen (Handy gesperrt, andere App): Kamera und Mikrofon pausieren, die anderen sehen „pausiert“.
+// Zurück in der App: alles wie vorher an, abgerissene Verbindungen werden neu ausgehandelt.
+document.addEventListener('visibilitychange', () => {
+  if (!call.room || !call.local) return;
+  if (document.hidden) {
+    if (call.away) return; call.away = call.local.getTracks().map(t => [t, t.enabled]); call.local.getTracks().forEach(t => t.enabled = false);
+    call.win?.classList.add('paused'); try { call.sendAll?.({ t: 'away' }); } catch (e) { }
+  } else if (call.away) {
+    for (const [t, on] of call.away) t.enabled = on; call.away = null;
+    call.win?.classList.remove('paused'); try { call.sendAll?.({ t: 'back' }); } catch (e) { }
+    setTimeout(() => call.resume?.(), 800);
+  }
 });
 // Abmelden beendet ein laufendes Gespräch
 bus.on('online', () => { if (call.room && !O.loggedIn()) hangUp(false); });
