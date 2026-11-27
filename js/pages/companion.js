@@ -31,10 +31,11 @@ export async function render(el) {
     <div class="small ${nas || OC.hasStoredSession() ? 'muted' : 'warn'}" id="cSync">${nas ? syncText() : OC.hasStoredSession() ? '🔄 Online-Konto wird verbunden …' : 'Ohne Cloud-Abgleich siehst du hier nur die Daten dieses Geräts. Unter Einstellungen › Verbindungen einen Cloud-Speicher verbinden (NAS, OneDrive, Google Drive, Dropbox), dann zeigt das Handy deine Fahrten, Pläne und die laufende Fahrt vom PC.'}</div>
 
     <div class="card live" id="cLive" hidden></div>
-    ${OC.loggedIn() ? `<div class="card remote"><div class="row between"><h2>🎮 Fernbedienung</h2><span class="small muted" id="rmSt">für die laufende Fahrt</span></div>
+    ${OC.loggedIn() ? `<div class="card remote" id="cRemote" hidden><div class="row between"><h2>🎮 Fernbedienung</h2><span class="small muted" id="rmSt">für die laufende Fahrt</span></div>
       <div class="rmgrid">${[['pause', '⏯️', 'Pause'], ['up', '➕', 'Schwerer'], ['cam', '🎥', 'Kamera'], ['left', '⬅️', 'Spur'], ['down', '➖', 'Leichter'], ['right', '➡️', 'Spur'], ['rideon', '👍', 'Ride On'], ['photo', '📷', 'Foto'], ['music', '🎵', 'Musik']].map(([c, i, l]) => `<button class="btn rmb" data-rm="${c}"><b>${i}</b><span>${l}</span></button>`).join('')}</div>
-      <h3 class="sub">Workout</h3>
-      <div class="rmgrid">${[['prev', '⏮️', 'Zurück'], ['restart', '↺', 'Neu starten'], ['next', '⏭️', 'Weiter'], ['easier', '🔽', 'Leichter %'], ['harder', '🔼', 'Härter %'], ['end', '⏹️', 'Beenden']].map(([c, i, l]) => `<button class="btn rmb ${c === 'end' ? 'danger' : ''}" data-rm="${c}"><b>${i}</b><span>${l}</span></button>`).join('')}</div>
+      <div id="rmWo"><h3 class="sub">Workout</h3>
+      <div class="rmgrid">${[['prev', '⏮️', 'Zurück'], ['restart', '↺', 'Neu starten'], ['next', '⏭️', 'Weiter'], ['easier', '🔽', 'Leichter'], ['harder', '🔼', 'Härter']].map(([c, i, l]) => `<button class="btn rmb" data-rm="${c}"><b>${i}</b><span>${l}</span></button>`).join('')}</div></div>
+      <div class="row"><button class="btn danger" data-rm="end" style="flex:1">⏹️ Fahrt beenden</button></div>
       <p class="small muted">Steuert die laufende Fahrt auf deinem PC oder Fernseher, wenn dort dasselbe Konto angemeldet ist. ⏮️ springt an den Anfang des Intervalls, zweimal schnell ins vorherige.</p></div>` : ''}
 
     <div class="card"><div class="row between"><h2>Nächste Fahrt</h2><a class="small" href="#/plans">Plan</a></div>
@@ -88,7 +89,10 @@ async function liveTick(el) {
   let L = null; try { L = await (await import('../tv.js')).liveNow(); } catch (e) { }
   // Nicht flackern: erst nach zwei Fehlversuchen hintereinander ausblenden
   let fresh = liveFresh(L); if (!fresh && L === null && !box.hidden && (liveMiss = (liveMiss || 0) + 1) < 2) return; if (fresh || L) liveMiss = 0;
-  box.hidden = !fresh; if (!fresh) return;
+  box.hidden = !fresh;
+  // Fernbedienung nur zusammen mit einer laufenden Fahrt; Workout-Knöpfe nur, wenn dort ein Workout läuft
+  const rc = $('#cRemote', el); if (rc) { rc.hidden = !fresh; const wo = $('#rmWo', el); if (wo) wo.hidden = !(fresh && L.wo); }
+  if (!fresh) return;
   const pct = L.total ? Math.min(100, (L.pos / L.total) * 100) : 0, w = L.wo;
   box.innerHTML = `<div class="row between"><div><span class="livedot"></span> <a href="#/live"><b>Live</b> ›</a> <span class="small muted">· ${esc(L.route)}${L.state === 'paused' || L.state === 'auto' ? ' · Pause' : ''}</span></div><span class="small muted num">${fmtT(L.t)}</span></div>
     <div class="livebig"><div><b class="num">${L.p}</b><span>Watt</span></div><div><b class="num" style="color:var(--hr)">${L.hr ?? '–'}</b><span>Puls</span></div><div><b class="num" style="color:var(--cad)">${L.cad ?? '–'}</b><span>U/min</span></div></div>
