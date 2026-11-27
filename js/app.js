@@ -412,14 +412,21 @@ init();
   let lost = 0, lostT = null;
   const show = (txt, kind) => { nb.innerHTML = txt; nb.className = 'netbar ' + kind; nb.hidden = false; };
   const hide = () => { nb.hidden = true; };
-  const offline = () => show('📡 <b>Keine Internetverbindung</b> · Fahrten und Daten bleiben auf dem Gerät, Online-Funktionen pausieren', 'off');
+  // Nur echte Ausfälle melden: kurzes Flackern (Netzwechsel) ignorieren, und weil manche Browser das „online“-Ereignis
+  // nicht zuverlässig senden, regelmäßig selbst nachsehen, ob die Verbindung wieder da ist.
+  let offT = null, chk = null;
+  const back = () => { clearTimeout(offT); offT = null; clearInterval(chk); chk = null; if (!nb.hidden && nb.classList.contains('off')) { hide(); toast('✓ Wieder online', 2500); } };
+  const offline = () => {
+    if (offT || chk) return;
+    offT = setTimeout(() => { offT = null; if (navigator.onLine) return; show('📡 <b>Keine Internetverbindung</b> · Fahrten und Daten bleiben auf dem Gerät, Online-Funktionen pausieren', 'off'); chk = setInterval(() => { if (navigator.onLine) back(); }, 3000); }, 4000);
+  };
   addEventListener('offline', offline);
-  addEventListener('online', () => { if (!nb.hidden) { hide(); toast('✓ Wieder online', 2500); } });
+  addEventListener('online', back);
   if (!navigator.onLine) offline();
   // Server: Anwesenheitskanal war verbunden und ist länger als 8 s weg (bei bestehendem Internet)
   bus.on('presence', async () => {
     const PR = await import('./online/presence.js');
-    if (PR.P.ready) { clearTimeout(lostT); lostT = null; if (lost && !nb.hidden && nb.classList.contains('srv')) { hide(); toast('✓ Verbindung zum Server wiederhergestellt', 2500); } lost = 0; window.__wasReady = true; return; }
+    if (PR.P.ready) { if (!nb.hidden && nb.classList.contains('off')) back(); clearTimeout(lostT); lostT = null; if (lost && !nb.hidden && nb.classList.contains('srv')) { hide(); toast('✓ Verbindung zum Server wiederhergestellt', 2500); } lost = 0; window.__wasReady = true; return; }
     if (!window.__wasReady || !navigator.onLine || lostT) return;
     lostT = setTimeout(() => { lostT = null; if (PR.P.ready || !navigator.onLine || !PR.P.ch || document.hidden) return; lost = Date.now(); show('⚠️ <b>Verbindung zum Server unterbrochen</b> · wird neu aufgebaut …', 'srv'); }, 15000);
   });

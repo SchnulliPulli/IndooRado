@@ -1,13 +1,23 @@
-// Videoanrufe zwischen Freunden über Jitsi Meet (eingebettet). Nur angemeldet, nach Zustimmung.
+// Videoanrufe zwischen Freunden: direkt per WebRTC (Signal über Supabase Realtime), Weiterleitung über TURN, Jitsi als Ausweichlösung. Nur angemeldet, nach Zustimmung.
 // Ablauf: Raumname (zufällig, nicht erratbar) geht als private Chat-Nachricht an den Freund (nur Freunde können sie lesen),
 // über die Lobby-Verbindung nur ein „es klingelt“ ohne Raum. Das Anruffenster bleibt über Seitenwechsel und während der Fahrt offen.
 import { $, esc, toast, dialog, bus } from './util.js';
 import { profile, sel } from './state.js';
 import * as O from './online/client.js';
 
-export const CALL_TERMS = 2;
+export const CALL_TERMS = 3;
 // Verbindungshelfer (STUN): verraten den Geräten ihre öffentliche Adresse, damit sie sich direkt erreichen. Kein Bild/Ton läuft darüber.
 const ICE = [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.nextcloud.com:443'] }];
+// Weiterleitung (TURN, Cloudflare), wenn keine direkte Verbindung möglich ist (Gast-WLAN, Mobilfunk, strenge Router).
+// Kurzlebige Zugangsdaten holt die Supabase-Funktion „turn“, nur für Teilnehmer dieses Anrufs. Fehlt sie: nur STUN.
+async function iceFor(room) {
+  try {
+    const sb = await O.client();
+    const r = await Promise.race([sb.functions.invoke('turn', { body: { room } }), new Promise(res => setTimeout(() => res(null), 5000))]);
+    const list = r && !r.error && Array.isArray(r.data?.iceServers) ? r.data.iceServers.filter(x => x && x.urls) : [];
+    return list.length ? [...ICE, ...list] : ICE;
+  } catch (e) { return ICE; }
+}
 const JITSI = 'meet.ffmuc.net'; // Ausweichlösung im eigenen Fenster
 const MARK = /^\[\[call:(IndooRado-[A-Za-z0-9]{24})\]\]$/;
 export const callRoom = body => (MARK.exec(body || '') || [])[1] || null;
@@ -21,6 +31,7 @@ async function allowed() {
   return consent('call', CALL_TERMS, { title: 'Videoanrufe', html: `
     <p>Bild und Ton gehen <b>direkt und verschlüsselt</b> von deinem Gerät zu deinem Freund (WebRTC, Ende-zu-Ende). Kein Server zeichnet etwas auf, auch IndooRado nicht.</p>
     <p>Für den Verbindungsaufbau tauschen eure Geräte über IndooRado Online (Supabase) kurz technische Verbindungsdaten aus. Dabei sieht dein Gesprächspartner – wie bei jedem direkten Anruf – deine <b>IP-Adresse</b>. Zum Finden der Verbindung werden die STUN-Server von Cloudflare und Nextcloud angefragt (sie sehen ebenfalls nur die IP-Adresse).</p>
+    <p>Klappt keine direkte Verbindung (z. B. Gast-WLAN, Mobilfunk), wird der Anruf über einen <b>Weiterleitungsserver (TURN) von Cloudflare</b> geleitet. Bild und Ton bleiben dabei Ende-zu-Ende-verschlüsselt – Cloudflare kann sie nicht ansehen oder anhören, sieht aber IP-Adressen und Datenmenge.</p>
     <p>Gespeichert wird nur die Einladung als private Chat-Nachricht zwischen euch beiden (Raumname, Zeitpunkt), gelöscht nach 12 Monaten. Kamera und Mikrofon fragt dein Browser jeweils ab.</p>
     <p class="small muted">Bitte nur Freunde anrufen, die das möchten, und keine Gespräche ohne Einverständnis aufnehmen.</p>` });
 }
@@ -91,7 +102,8 @@ async function openWindow(room, peer, mode = 'av') {
   if (call.room !== room) return;
   if (mode === 'audio') w.querySelector('.cwlocal').remove(); else w.querySelector('.cwlocal').srcObject = call.local;
   // Direkte Verbindung mit „perfekter Aushandlung“: der Höflichere (größere Nutzer-ID) gibt bei gleichzeitigen Angeboten nach
-  const me = O.online.user.id, polite = me > (peer?.id || ''), pc = call.pc = new RTCPeerConnection({ iceServers: ICE });
+  const iceServers = await iceFor(room); if (call.room !== room) return;
+  const me = O.online.user.id, polite = me > (peer?.id || ''), pc = call.pc = new RTCPeerConnection({ iceServers });
   let makingOffer = false, ignoreOffer = false, started = false;
   const sb = await O.client(); await O.realtimeAuth().catch(() => { });
   const ch = call.ch = sb.channel('call:' + room, { config: { private: true, broadcast: { self: false } } });
@@ -112,7 +124,7 @@ async function openWindow(room, peer, mode = 'av') {
     clearTimeout(restartT); if (s === 'disconnected') restartT = setTimeout(restart, 4000); if (s === 'failed') restart();
     if (s === 'connected') sas(pc).then(c => { const e = w.querySelector('.cwsas'); if (c && e) { e.hidden = false; e.innerHTML = `🔒 Sicherheitscode <b class="num">${c}</b> <span class="small">– sieht ${esc(peer?.name || 'dein Freund')} dieselbe Zahl?</span>`; } });
     st({ connecting: 'verbinde …', connected: 'verbunden', disconnected: 'Verbindung wackelt …', failed: 'keine direkte Verbindung', closed: 'beendet' }[s] || s);
-    if (s === 'failed') toast('Keine direkte Verbindung möglich (strenges Netzwerk). Tipp: ↗ öffnet den Anruf über Jitsi in einem neuen Fenster.', 7000);
+    if (s === 'failed') toast('Keine Verbindung möglich (strenges Netzwerk). Tipp: ↗ öffnet den Anruf über Jitsi in einem neuen Fenster.', 7000);
   };
   ch.on('broadcast', { event: 'sig' }, async ({ payload: m }) => {
     if (!m || m.from !== peer?.id || call.room !== room) return; // nur der eingeladene Freund
