@@ -248,7 +248,7 @@ export async function testConnection() {
 
 async function stateObj(rev) {
   const now = new Date().toISOString();
-  const out = { app: 'trittwerk', format: 'indoorado-data', schema: SCHEMA, savedAt: now, rev, by: { ...sync.device }, devices: { ...sync.devices, [sync.device.id]: { name: sync.device.name, last: now } }, kvT: {}, kv: {}, routes: (await db.all('routes')).map(r => ({ ...r, dem: undefined })), workouts: await db.all('workouts') };
+  const out = { app: 'trittwerk', format: 'indoorado-data', schema: SCHEMA, savedAt: now, rev, by: { ...sync.device }, devices: { ...sync.devices, [sync.device.id]: { name: sync.device.name, last: now } }, kvT: {}, kv: {}, routes: (await db.all('routes')).map(r => ({ ...r, dem: undefined, osm: undefined })), workouts: await db.all('workouts') };
   for (const k of await db.keys('kv')) if (!LOCAL_ONLY.has(k)) { out.kv[k] = await db.get('kv', k); out.kvT[k] = kvT[k] || 0; }
   return out;
 }
@@ -275,7 +275,7 @@ async function applyRemote(st, how) {
       if (remoteWins) kvT[k] = remoteT;
     }
     for (const k of TOMBS) await db.put('kv', [...T[k]], k);
-    for (const x of st.routes || []) { if (goneR.has(x.id)) continue; const loc = await db.get('routes', x.id); if (!loc || how === 'remote' || (x.updated || 0) >= (loc.updated || 0)) await db.put('routes', loc?.dem ? { ...x, dem: loc.dem } : x); }
+    for (const x of st.routes || []) { if (goneR.has(x.id)) continue; const loc = await db.get('routes', x.id); if (!loc || how === 'remote' || (x.updated || 0) >= (loc.updated || 0)) await db.put('routes', loc ? { ...x, dem: x.dem || loc.dem, osm: x.osm || loc.osm } : x); }
     for (const x of st.workouts || []) { if (goneW.has(x.id)) continue; const loc = await db.get('workouts', x.id); if (!loc || how === 'remote' || (x.updated || 0) >= (loc.updated || 0)) await db.put('workouts', x); }
     // Auf anderen Geräten gelöschte Strecken und Workouts hier entfernen
     for (const id of goneR) if (await db.get('routes', id)) { await db.del('routes', id); changed++; }

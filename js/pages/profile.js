@@ -246,6 +246,10 @@ export async function render(el, params = []) {
       <div class="row"><button class="btn ghost danger" id="wp">Alle lokalen Daten löschen</button></div>
     </div>
   </section>
+  <section class="card form"><h2>Einwilligungen</h2>
+    <p class="small muted">Funktionen, die Daten an einen fremden Dienst schicken, fragen vor der ersten Nutzung. Hier kannst du die Zustimmung widerrufen; beim nächsten Mal wird wieder gefragt.</p>
+    <div id="cnsList">${(() => { const N = { osm: 'Echte Gebäude (OpenStreetMap / Overpass)', call: 'Videoanrufe (Jitsi)' }, c = profile.consents || {}; const ks = Object.keys(N).filter(k => c[k]); return ks.length ? ks.map(k => `<div class="row between"><span>✅ ${N[k]}</span><button class="btn xs ghost" data-revoke="${k}">Widerrufen</button></div>`).join('') : '<p class="small muted">Keine Einwilligungen erteilt.</p>'; })()}</div>
+  </section>
   <section class="card form"><h2>Technik</h2>
     <label class="switch"><input type="checkbox" id="saveDemo" ${profile.saveDemo ? 'checked' : ''}><span></span> <div class="swt">Fahrten mit Demo-Geräten speichern<small class="muted">Zum Testen, z. B. des Strava-Uploads. Solche Fahrten zählen dann wie echte Fahrten (XP, Rekorde, Trainingsplan) und sind in der Zusammenfassung als Demo markiert. Danach am besten wieder ausschalten.</small></div></label>
     <p class="small muted"><span id="buildInfo">Version ${esc(APP_VERSION)}</span> · ${navigator.bluetooth ? 'Bluetooth verfügbar' : 'Kein Web-Bluetooth in diesem Browser (Chrome oder Edge nötig)'} · ${location.protocol === 'https:' ? 'Offline-Betrieb aktiv' : 'Offline-Betrieb nur über https'}</p>
@@ -272,6 +276,7 @@ export async function render(el, params = []) {
   on('#saveDemo', 'onchange', e => { profile.saveDemo = e.target.checked; saveProfile(); toast(e.target.checked ? 'Demo-Fahrten werden gespeichert' : 'Demo-Fahrten werden nicht mehr gespeichert', 2000); });
   on('#quality', 'onchange', e => { profile.quality = e.target.value; saveProfile(); toast('Gilt ab der nächsten Fahrt', 1500); });
   on('#phoneView', 'onchange', e => { profile.phoneView = e.target.value; saveProfile(); toast('Gespeichert', 900); });
+  el.querySelectorAll('[data-revoke]').forEach(b => b.onclick = async () => { (await import('../consent.js')).revoke(b.dataset.revoke); toast('Einwilligung widerrufen'); b.closest('.row').remove(); });
   on('#appTheme', 'onchange', e => { profile.appTheme = e.target.value; saveProfile(); applyAppTheme(); });
   on('#fontScale', 'onchange', e => { profile.fontScale = +e.target.value; saveProfile(); applyAppTheme(); });
   on('#highContrast', 'onchange', e => { profile.highContrast = e.target.checked; saveProfile(); applyAppTheme(); });

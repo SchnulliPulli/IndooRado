@@ -14,6 +14,6 @@ export const LEGAL = {
   // Region deines Supabase-Projekts (Supabase-Dashboard › Project Settings › General), z. B. „EU (Frankfurt)“
   supabaseRegion: '[Region des Supabase-Projekts]',
   // Stand der Texte
-  updated: '26.11.2026',
+  updated: '27.11.2026',
 };
 export const legalIncomplete = () => Object.values(LEGAL).some(v => typeof v === 'string' && /^\[.*\]$/.test(v));

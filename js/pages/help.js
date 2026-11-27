@@ -38,6 +38,7 @@ const T = [
   ['strecken', '🗺️', 'Strecken und Baukasten', `<ul class="tips">
     <li>Fast 30 eingebaute Welten von Hügelland bis Weltall, Tiefsee, Lava-Insel, Wolken und Zuckerland. Jede Strecke zeigt ein Vorschaubild.</li>
     <li><b>🧱 Strecken-Baukasten</b> (Strecken › Baukasten): Bausteine antippen – Geraden, Kurven, Spitzkehren, Serpentinen, Anstiege, Steilwände, Abfahrten, Achterbahn, Korkenzieher und mehr. Jeden Baustein in Länge, Steilheit und Richtung anpassen, Landschaft und Belag wählen, als Rundkurs schließen, speichern und fahren. Vorlagen und 🎲 Zufall helfen beim Start.</li>
+    <li><b>🏙️ Echte Gebäude</b> (bei importierten echten Strecken, mit Anmeldung): Häuser, Kirchen und Hallen entlang der Strecke aus OpenStreetMap, in echter Form und Höhe. Laden auf der Seite der Strecke.</li>
     <li><b>GPX und Strava-Routen</b> importieren; auf Wunsch mit <b>echtem Gelände</b> aus einem frei verfügbaren Höhenmodell.</li>
     <li>Einmal die ganze Strecke fahren bringt das <b>Routen-Abzeichen</b> 🏅 (+100 XP).</li></ul>`],
   ['fortschritt', '🏆', 'Level, Saison und Werkstatt', `<ul class="tips">
@@ -48,6 +49,7 @@ const T = [
   ['online', '🌐', 'Online: Mitfahren, Events und Teams', `<ul class="tips">
     <li><b>Konto</b> (Online › Konto): Anmeldung mit Passwort oder <b>Code per E-Mail</b>, empfohlen mit <b>Zwei-Faktor</b> (Authenticator-App) – richte am besten eine zweite App als Ersatz ein. Ist alles verloren, kann der Admin die 2FA zurücksetzen. Mehrere Konten lassen sich über das Avatar-Menü oben wechseln.</li>
     <li><b>Freunde</b> (Online › Freunde): Spieler suchen, Anfrage schicken – erst wenn beide zustimmen, seht ihr Level, Wochen- und Gesamtstatistik und könnt <b>chatten</b>. Einzelne Fahrten sieht ein Freund nur, wenn du es erlaubst. Puls, Gewicht oder Alter sieht nie jemand. Freundschaft beenden und Blockieren geht jederzeit.</li>
+    <li><b>📹 Videoanruf</b> (im Chat eines Freundes „Anrufen“): Dein Freund bekommt einen Klingel-Hinweis oder findet die Einladung im Chat. Das Anruffenster lässt sich verschieben (am Kopf ziehen) und in der Größe ändern (Ecke unten rechts) und bleibt auch während der Fahrt offen. Mit „👥 Lobby“ lädst du deinen Gesprächspartner direkt zu einer gemeinsamen Fahrt ein. Läuft über Jitsi Meet (meet.ffmuc.net); vor dem ersten Anruf wirst du um Zustimmung gefragt.</li>
     <li><b>Wer gerade online ist</b> (unten in der Lobby): sieh, wer fährt, schick direkt eine Freundschaftsanfrage, <b>fahr mit</b> (du landest direkt hinter dem anderen) oder <b>lade ein</b>. Echte Spieler haben einen Pfeil und ein Leuchten über dem Kopf.</li>
     <li><b>Eigene Strecken teilen</b>: Fährst du eine Baukasten-Strecke, können andere einfach mitfahren – die Strecke wird bei ihnen automatisch nachgebaut. Das klappt auch in Gruppenfahrten und Events. Importierte GPX-Strecken lassen sich (noch) nicht teilen.</li>
     <li><b>Lobby</b>: Gruppenfahrten und Rennen mit gemeinsamem Start, gleichem Wetter und optional einem gemeinsamen Workout oder Plan.</li>

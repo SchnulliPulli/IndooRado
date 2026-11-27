@@ -358,6 +358,7 @@ async function init() {
   // Barrierefreiheit: Sprunglink zum Inhalt (ohne den Hash-Router zu stören), Tastenkürzel-Übersicht mit ?
   const sk = document.getElementById('skipLink'); if (sk) sk.onclick = e => { e.preventDefault(); document.getElementById('view')?.focus(); };
   import('./shortcuts.js').then(m => m.initShortcuts());
+  import('./online/client.js').then(O => { if (O.configured()) import('./call.js'); }); // Videoanrufe: nur mit Online-Konto, lädt nichts Externes ohne Anruf
   import('./sensors.js').then(m => m.reconnectSensors()).catch(() => { });
   // NAS-Abgleich: neuerer Stand vom NAS wird übernommen, danach Seite neu aufbauen
   // Erst den Online-Login abwarten: angemeldet läuft der Abgleich über das Konto (bindOnline), sonst wie bisher über NAS/Cloud

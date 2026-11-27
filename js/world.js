@@ -341,6 +341,7 @@ export class World {
     this.buildRoad(); this.buildInstances(); this.buildFar(); this.buildClouds(); this.buildProps(); this.buildTunnels();
     if (this.living) { this.flare = FX.makeFlare(this.scene); this.parts = FX.makeParticles(this.scene, FX.particleKind(route.theme), this.qKey === 'high' ? 320 : 180); this.specs = FX.makeSpectators(this, route, this.vcMat); }
     if (route.realTerrain) { this.buildDemFar(); this.scene.fog.far = 7000; this.scene.fog.near = viewR * .6; }
+    if (route.osm) this.buildOsm();
     this.npcs = [];
     if (route.water != null) {
       const wm = new THREE.MeshPhongMaterial({ color: 0x1f5f8f, specular: 0x5f8fb8, shininess: 60, transparent: true, opacity: .94 });
@@ -619,6 +620,43 @@ export class World {
     this.far = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, fog: false, side: THREE.DoubleSide, depthWrite: false })); this.far.renderOrder = -5; this.scene.add(this.far);
   }
   // Echtes Gelände in der Ferne: grobes Netz aus dem Höhenmodell (liegt etwas tiefer als die Nahkacheln)
+  // Echte Gebäude (OpenStreetMap): Wände und flache Dächer, je 600-m-Kachel eine Geometrie (wird außerhalb der Sicht ausgeblendet)
+  buildOsm() {
+    const R = this.route, G = R.geo, M = 111320, clear = R.roadW / 2 + 2.5, tiles = new Map(), col = new THREE.Color();
+    const WALL = [['#e9e1d3', '#f1ece2', '#d8cbb6', '#efe6d6', '#c9b79c'], ['#a9adb2', '#b7b2a8', '#9aa0a6'], ['#cfc7b8', '#bfb6a5'], ['#d9dde2', '#c4ccd4', '#e4ddd2', '#b8c2cc']];
+    const ROOF = [['#9c4a3a', '#7d3b31', '#5f5a55', '#8a4f3c'], ['#6f747a', '#80868c'], ['#5b6470', '#4f5966'], ['#6b7077', '#585e66', '#7a8088']];
+    const hash = (a, b) => { const v = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return v - Math.floor(v); };
+    let n = 0;
+    import('./osm.js').then(({ footprints }) => {
+      for (const f of footprints(R.osm)) {
+        const pts = f.p.map(([la, lo]) => [(lo - G.lon0) * G.kx, -(la - G.lat0) * M]);
+        let cx = 0, cz = 0; for (const [x, z] of pts) { cx += x; cz += z; } cx /= pts.length; cz /= pts.length;
+        const nn = R.nearest(cx, cz); if (!nn || nn.dist > 420) continue;
+        if (pts.some(([x, z]) => { const q = R.nearest(x, z); return q && q.dist < clear; })) continue; // nicht auf der Straße
+        let base = Infinity; for (const [x, z] of pts) base = Math.min(base, R.heightAt(x, z)); if (!Number.isFinite(base)) continue;
+        base -= .6; const top = base + .6 + f.h, key = Math.floor(cx / 600) + ',' + Math.floor(cz / 600);
+        const T = tiles.get(key) || tiles.set(key, { pos: [], colr: [] }).get(key), r = hash(cx, cz);
+        const wc = col.set(WALL[f.kind][Math.floor(r * WALL[f.kind].length)]).clone(), rc = new THREE.Color(ROOF[f.kind][Math.floor(hash(cz, cx) * ROOF[f.kind].length)]);
+        // Umlaufsinn prüfen (Wände nach außen)
+        let area = 0; for (let i = 0; i < pts.length; i++) { const [x1, z1] = pts[i], [x2, z2] = pts[(i + 1) % pts.length]; area += x1 * z2 - x2 * z1; }
+        const P = area < 0 ? pts : pts.slice().reverse();
+        for (let i = 0; i < P.length; i++) {
+          const [x1, z1] = P[i], [x2, z2] = P[(i + 1) % P.length], shade = .82 + .18 * Math.abs(Math.cos(Math.atan2(z2 - z1, x2 - x1)));
+          T.pos.push(x1, base, z1, x2, base, z2, x2, top, z2, x1, base, z1, x2, top, z2, x1, top, z1);
+          for (let k = 0; k < 6; k++) T.colr.push(wc.r * shade, wc.g * shade, wc.b * shade);
+        }
+        const tri = THREE.ShapeUtils.triangulateShape(P.map(([x, z]) => new THREE.Vector2(x, z)), []);
+        for (const [a, b, c] of tri) { for (const i of [a, c, b]) { T.pos.push(P[i][0], top, P[i][1]); T.colr.push(rc.r, rc.g, rc.b); } }
+        n++;
+      }
+      const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }); this.osmGroup = new THREE.Group();
+      for (const T of tiles.values()) {
+        const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(T.pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(T.colr, 3)); g.computeVertexNormals(); g.computeBoundingSphere();
+        const m = new THREE.Mesh(g, mat); m.castShadow = this.qKey === 'high'; m.receiveShadow = true; this.osmGroup.add(m);
+      }
+      this.scene.add(this.osmGroup); this.osmCount = n;
+    }).catch(e => console.warn('OSM-Gebäude', e));
+  }
   buildDemFar() {
     const R = this.route, D = R.dem, step = Math.max(1, Math.ceil(Math.max(D.nx, D.nz) / 260));
     const nx = Math.floor((D.nx - 1) / step) + 1, nz = Math.floor((D.nz - 1) / step) + 1;
@@ -700,7 +738,7 @@ export class World {
       const y = R.heightAt(x, z); if (R.water != null && y < R.water + 1) continue; if (y > th.snow) continue;
       if (!th.moon && !th.noTufts && (!th.dry || r() < .25)) objs.tuft.push([x, y - .05, z, .6 + r() * .9, r() * 6.28, 1]);
     }
-    const hc = Math.round(th.houses * 40);
+    const hc = this.route.osm ? 0 : Math.round(th.houses * 40); // mit echten Gebäuden keine erfundenen Häuser
     for (let t = 0; t < hc; t++) {
       const x = x0 + r() * CHUNK, z = z0 + r() * CHUNK, nn = R.nearest(x, z);
       if (!nn || nn.dist < 16 || nn.dist > 70) continue;

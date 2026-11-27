@@ -68,7 +68,7 @@ async function openFriend(sb, me, f, redraw) {
   if (!f) return;
   const w = document.createElement('div'); w.className = 'modal on';
   w.innerHTML = `<div class="card dlg frdlg" role="dialog" aria-modal="true" aria-label="${esc(f.display_name)}"><div class="row between"><div class="row">${avatarSvg(f.avatar || {}, 44)}<div><h2 style="margin:0">${esc(f.display_name)}</h2><div class="small muted" id="fpSub">Level ${f.level}</div></div></div><button class="btn sm ghost" data-x aria-label="Schließen">✕</button></div>
-    <div class="frtabs seg sm"><button aria-pressed="true" data-tab="chat">💬 Chat</button><button aria-pressed="false" data-tab="prof">📊 Profil</button></div>
+    <div class="row between"><div class="frtabs seg sm"><button aria-pressed="true" data-tab="chat">💬 Chat</button><button aria-pressed="false" data-tab="prof">📊 Profil</button></div><button class="btn sm pri" data-call title="Videoanruf über Jitsi">📹 Anrufen</button></div>
     <div data-pane="chat"><div class="chat" id="chLog"><div class="pageload"><div class="spinner"></div></div></div>
       <form class="chatin" id="chForm"><input class="inp" id="chTxt" maxlength="1000" placeholder="Nachricht schreiben …" autocomplete="off"><button class="btn pri" type="submit">Senden</button></form></div>
     <div data-pane="prof" hidden><div id="fpBody"><div class="pageload"><div class="spinner"></div></div></div>
@@ -84,7 +84,8 @@ async function openFriend(sb, me, f, redraw) {
     if (!w.isConnected) return; if (error) { log.innerHTML = `<p class="muted small">${esc(miss(error))}</p>`; return; }
     const key = data.map(m => m.id).join(); if (key === last) return; last = key;
     const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
-    log.innerHTML = data.length ? data.reverse().map(m => `<div class="msg ${m.sender === me ? 'me' : ''}"><span>${esc(m.body)}</span><small>${new Date(m.created_at).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</small></div>`).join('') : '<p class="muted small">Noch keine Nachrichten. Sag Hallo! 👋</p>';
+    const C = await import('../call.js');
+    log.innerHTML = data.length ? data.reverse().map(m => { const room = C.callRoom(m.body), fresh = Date.now() - new Date(m.created_at) < 3600e3; return room ? `<div class="msg call ${m.sender === me ? 'me' : ''}"><span>📹 Videoanruf${fresh ? ` <button class="btn xs ${m.sender === me ? 'ghost' : 'pri'}" data-join="${esc(room)}">Beitreten</button>` : ' (vorbei)'}</span><small>${new Date(m.created_at).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</small></div>` : `<div class="msg ${m.sender === me ? 'me' : ''}"><span>${esc(m.body)}</span><small>${new Date(m.created_at).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</small></div>`; }).join('') : '<p class="muted small">Noch keine Nachrichten. Sag Hallo! 👋</p>';
     if (atBottom || data.length) log.scrollTop = log.scrollHeight;
     sb.rpc('chat_read', { p_other: f.id }).then(() => { });
   };
@@ -105,6 +106,8 @@ async function openFriend(sb, me, f, redraw) {
   };
   w.addEventListener('click', async e => {
     if (e.target === w || e.target.closest('[data-x]')) return close();
+    if (e.target.closest('[data-call]')) { (await import('../call.js')).startCall(f); return; }
+    const jn = e.target.closest('[data-join]'); if (jn) { (await import('../call.js')).joinCall(jn.dataset.join, { id: f.id, name: f.display_name }); return; }
     const tb = e.target.closest('[data-tab]'); if (tb) { w.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-pressed', String(b === tb))); w.querySelectorAll('[data-pane]').forEach(p => p.hidden = p.dataset.pane !== tb.dataset.tab); if (tb.dataset.tab === 'prof') loadProf(); return; }
     if (e.target.closest('[data-rm]')) { if (await dialog({ title: `Freundschaft mit ${f.display_name} beenden?`, html: '<p class="muted">Ihr seht dann keine Profile mehr und könnt nicht mehr chatten. Bisherige Nachrichten bleiben bei euch beiden gespeichert, bis ihr sie löscht oder sie nach 12 Monaten entfernt werden.</p>', buttons: [{ label: 'Abbrechen', value: 0 }, { label: 'Beenden', value: 1, cls: 'danger' }] })) { await sb.rpc('friend_remove', { p_other: f.id }); close(); } return; }
     if (e.target.closest('[data-block]')) { if (await dialog({ title: `${f.display_name} blockieren?`, html: '<p class="muted">Die Freundschaft endet, und ihr könnt euch keine Anfragen oder Nachrichten mehr schicken. Unter „Blockiert“ kannst du das rückgängig machen.</p>', buttons: [{ label: 'Abbrechen', value: 0 }, { label: 'Blockieren', value: 1, cls: 'danger' }] })) { await sb.rpc('friend_block', { p_other: f.id }); toast('Blockiert'); close(); } return; }

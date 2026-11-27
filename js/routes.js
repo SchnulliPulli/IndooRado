@@ -322,7 +322,7 @@ export function prepare(raw) {
   const shape = raw.shape;
   // Orte und Tunnel (GPX: Orte automatisch, keine Tunnel)
   let towns = (raw.towns || []).map(([at, len, name]) => ({ from: at, to: Math.min(total - 50, at + len), name }));
-  if (!raw.builtin && !raw.towns && total > 8000) towns = [[.3, 'Ortschaft'], [.7, 'Weiler']].map(([f, name]) => ({ from: total * f, to: total * f + 600, name }));
+  if (!raw.builtin && !raw.towns && total > 8000 && !raw.osm?.b?.length) towns = [[.3, 'Ortschaft'], [.7, 'Weiler']].map(([f, name]) => ({ from: total * f, to: total * f + 600, name }));
   const tunnels = (raw.tunnels || []).map(([from, to]) => ({ from, to })).filter(t => t.to < total - 60);
   const townAt = d => towns.find(t => d >= t.from && d <= t.to) || null;
   const tunnelAt = (d, pad = 0) => tunnels.find(t => d >= t.from - pad && d <= t.to + pad) || null;
@@ -405,5 +405,6 @@ export function prepare(raw) {
     eleAt: d => sample(e, d), gradeAt: d => sample(grade, d), xAt: d => sample(x, d), zAt: d => sample(z, d), headAt,
     latAt: d => lat0 - sample(z, d) / M_DEG, lonAt: d => lon0 + sample(x, d) / kx,
     heightAt, nearest, realTerrain: !!dem, dem, demAt,
+    osm: raw.osm?.b?.length ? raw.osm : null, geo: { lat0, lon0, kx }, // echte Gebäude (OpenStreetMap) und Umrechnung Grad → Meter
   };
 }

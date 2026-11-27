@@ -66,6 +66,8 @@ function datenschutz() {
     <li><b>Strava</b> (Strava Inc., USA): Hochladen von Fahrten und Laden von Routen mit deiner eigenen Strava-App.</li>
     <li><b>Cloud-Speicher</b> Google Drive (Google Ireland Ltd.), Microsoft OneDrive (Microsoft Ireland Operations Ltd.), Dropbox (Dropbox International Unlimited Company) oder dein eigenes NAS/WebDAV: Abgleich deiner Daten in deinen eigenen Speicher.</li>
     <li><b>Geländedaten:</b> Beim Laden von „echtem Gelände“ für eigene Strecken werden Höhendaten-Kacheln aus dem öffentlichen Datensatz „Terrain Tiles“ bei Amazon Web Services (AWS) abgerufen. Dabei wird deine IP-Adresse an AWS übermittelt.</li>
+    <li><b>Echte Gebäude (OpenStreetMap):</b> Nur mit Konto und nach deiner Zustimmung. Beim Laden werden der Verlauf der Strecke (Korridor von 150 m) und technisch bedingt deine IP-Adresse an die Overpass-API (overpass-api.de, betrieben von der FOSSGIS e.V., Deutschland) übertragen. Die Gebäudedaten werden nur auf deinem Gerät gespeichert. Rechtsgrundlage: Art. 6 Abs. 1 lit. a DSGVO (Einwilligung, widerrufbar unter Einstellungen › App & Daten).</li>
+    <li><b>Videoanrufe (Jitsi Meet):</b> Nur mit Konto, zwischen bestätigten Freunden und nach deiner Zustimmung. Bild, Ton, Anzeigename und technisch bedingt deine IP-Adresse werden an den Jitsi-Server meet.ffmuc.net (Freifunk München e.V., Deutschland; alternativ meet.jit.si der 8x8 Inc., USA) und an deinen Gesprächspartner übertragen; es gilt die Datenschutzerklärung des Server-Betreibers. IndooRado zeichnet nichts auf. Gespeichert wird nur die Einladung (Raumname, Zeitpunkt) als private Chat-Nachricht zwischen euch beiden, gelöscht nach 12 Monaten. Rechtsgrundlage: Art. 6 Abs. 1 lit. a DSGVO (Einwilligung, widerrufbar).</li>
   </ul>
 
   <h3>7. Speicherdauer und Löschung</h3>
@@ -90,6 +92,7 @@ function nutzung() {
     <li><b>Online-Funktionen:</b> Der Zugang kann nach einer Testphase von einer Freischaltung abhängen und bei Missbrauch gesperrt werden. Wähle einen Anzeigenamen, der keine Rechte Dritter verletzt und nicht beleidigend ist. Belästigung anderer Nutzer, das Fälschen von Bestenlisten oder Angriffe auf den Dienst sind untersagt.</li>
     <li><b>Haftung:</b> Ich hafte unbeschränkt für Vorsatz und grobe Fahrlässigkeit sowie bei Verletzung von Leben, Körper oder Gesundheit. Im Übrigen ist die Haftung, soweit gesetzlich zulässig, ausgeschlossen, insbesondere für Datenverlust und für Schäden durch die Nutzung von Trainingsgeräten.</li>
     <li><b>Dienste Dritter:</b> Für Strava, Cloud-Speicher und andere selbst verbundene Dienste gelten deren Bedingungen.</li>
+    <li><b>Chat und Videoanrufe:</b> Sei respektvoll. Belästigung, Bedrohung, Werbung, rechtswidrige Inhalte und das Aufzeichnen von Gesprächen ohne Einverständnis aller Beteiligten sind verboten. Du kannst andere jederzeit blockieren; bei Verstößen kann das Konto gesperrt werden.</li>
   </ul>`;
 }
 
@@ -100,6 +103,8 @@ function lizenzen() {
     <li><b>supabase-js</b> (Online-Anbindung), © Supabase, MIT-Lizenz.</li>
     <li><b>Barlow</b> und <b>Barlow Condensed</b> (Schriften), © Jeremy Tribby, SIL Open Font License 1.1; lokal eingebunden.</li>
     <li><b>Höhendaten</b> für „echtes Gelände“: „Terrain Tiles“ (Mapzen/Linux Foundation, AWS Open Data) mit Daten u. a. von SRTM, GMTED, ETOPO1 und weiteren Quellen gemäß deren Lizenzen.</li>
+    <li><b>Gebäudedaten</b> für „echte Gebäude“: © OpenStreetMap-Mitwirkende, verfügbar unter der Open Database License (ODbL), openstreetmap.org/copyright. Abgefragt über die Overpass-API.</li>
+    <li><b>Videoanrufe</b>: Jitsi Meet (Apache-2.0-Lizenz), eingebettet von meet.ffmuc.net (Freifunk München e.V.).</li>
   </ul>
   <p>Alle Strecken, Workouts, Grafiken und Texte von IndooRado sind eigene Inhalte, soweit nicht anders angegeben.</p>`;
 }

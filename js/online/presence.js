@@ -67,7 +67,10 @@ export async function joinPresence() {
   });
   // Einladungen anderer Spieler an mich (Lobby oder Mitfahren), streng geprüft
   P.ch.on('broadcast', { event: 'invite' }, ({ payload: m }) => {
-    if (!m || m.to !== sid || typeof m.from !== 'string' || m.from.length > 40 || !['lobby', 'ride'].includes(m.kind)) return;
+    if (!m || m.to !== sid || typeof m.from !== 'string' || m.from.length > 40) return;
+    // Anruf-Signale: nur „es klingelt“ bzw. „aufgelegt“ – der Raum selbst steht ausschließlich in der privaten Chat-Nachricht
+    if (m.kind === 'call' || m.kind === 'callend') { const peer = P.peers.get(m.from); if (peer?.uid) bus.emit('callsignal', { kind: m.kind, sid: m.from, uid: peer.uid, name: peer.name, look: peer.look }); return; }
+    if (!['lobby', 'ride'].includes(m.kind)) return;
     const inv = { kind: m.kind, from: m.from, name: txt(m.name, 30) || 'Fahrer', lobby: txt(m.lobby, 24), title: txt(m.title, 40), route: txt(m.route, 40), routeName: txt(m.routeName, 40), startAt: Number(m.startAt) || 0 };
     const peer = P.peers.get(m.from); if (!peer) return; // nur von Spielern, die gerade online sind
     bus.emit('invite', { ...inv, look: peer.look });
@@ -131,6 +134,13 @@ export function inviteOffer() {
   return null;
 }
 const lastInv = new Map();
+// Anruf-Signal an alle Geräte eines Nutzers senden, die gerade online sind (ohne Rauminformation)
+export async function callSignal(uid, kind) {
+  if (!P.ch || P.ch === 'pending' || !P.ready) return 0; let n = 0;
+  for (const [k, p] of P.peers) if (p.uid === uid) { try { await P.ch.send({ type: 'broadcast', event: 'invite', payload: { to: k, from: sid, kind } }); n++; } catch (e) { } }
+  return n;
+}
+export const sidsOf = uid => [...P.peers.entries()].filter(([, p]) => p.uid === uid).map(([k]) => k);
 export async function invite(toSid) {
   const o = inviteOffer(); if (!o) throw new Error('Leg zuerst eine Gruppenfahrt in der Lobby an oder starte eine Fahrt, dann kannst du einladen.');
   if (!P.ch || P.ch === 'pending' || !P.ready) throw new Error('Keine Verbindung zur Lobby');
