@@ -24,7 +24,7 @@ export async function render(el, params = [], query = '') {
       <p class="small muted">Die Suche findet nur Spieler, die „In der Suche auffindbar“ eingeschaltet haben.</p>
       <h3 class="sub">Privatsphäre</h3>
       <label class="switch"><input type="checkbox" id="frShare" ${O.online.profile?.share_rides ? 'checked' : ''}><span></span> <div class="swt">Freunde dürfen meine einzelnen Fahrten sehen<small class="muted">Datum, Strecke, Distanz, Dauer, Höhenmeter, Ø Watt. Ohne diese Erlaubnis sehen Freunde nur Level und Summen. Puls, Gewicht und Alter sieht nie jemand.</small></div></label>
-      <label class="switch"><input type="checkbox" id="frFind" ${O.online.profile?.discoverable ? 'checked' : ''}><span></span> <div class="swt">In der Suche auffindbar<small class="muted">Andere angemeldete Spieler finden dich über deinen Namen und sehen dabei Name, Avatar und Level. Standardmäßig aus – mit Freundescode oder über die Online-Liste können dich Freunde trotzdem anfragen.</small></div></label>
+      <label class="switch"><input type="checkbox" id="frFind" ${O.online.profile?.discoverable !== false ? 'checked' : ''}><span></span> <div class="swt">In der Suche auffindbar<small class="muted">Andere angemeldete Spieler finden dich über deinen Namen und sehen dabei Name, Avatar und Level. Standardmäßig an. Ausgeschaltet können dich Freunde trotzdem per Freundescode oder über die Online-Liste anfragen.</small></div></label>
     </div>
   </section>`;
   let list = [];

@@ -66,7 +66,7 @@ const T = [
     <li><b>Barrierefreiheit</b> (Einstellungen › App & Daten): Schriftgröße bis 130 %, hoher Kontrast, weniger Bewegung (keine Kamerafahrten und Animationen). Alles ist per Tastatur bedienbar, Dialoge schließen mit Esc, Meldungen werden Bildschirmlesern vorgelesen.</li></ul>`],
   ['daten', '🔒', 'Daten, Tresor und Strava', `<ul class="tips">
     <li>Ohne Konto bleibt <b>alles im Browser</b> dieses Geräts; die App sendet dann nichts ins Internet. Unter Profil gibt es eine Sicherungsdatei zum Herunterladen und Einspielen.</li>
-    <li><b>Online-Abgleich</b>: Mit Konto werden Einstellungen, Fahrten und Fotos zwischen deinen Geräten abgeglichen (verschlüsselt übertragen über HTTPS).</li>
+    <li><b>Online-Abgleich</b>: Mit Konto werden Einstellungen und Fahrten zwischen deinen Geräten abgeglichen (verschlüsselt übertragen über HTTPS). Fotos der Fahrten landen nie im Konto, nur in deinem verbundenen NAS oder Cloud-Speicher; die App zeigt Fahrt und Fotos zusammen an.</li>
     <li><b>🔐 Tresor</b> (Konto › Tresor, empfohlen): verschlüsselt deine Online-Daten schon im Browser mit einem eigenen Tresor-Passwort (AES-256). Dann kann sie auch der Server-Betreiber nicht lesen. Passwort gut aufheben – ohne es sind die Online-Daten nicht wiederherstellbar.</li>
     <li>Alternativ Abgleich über <b>NAS (Synology)</b>, OneDrive, Google Drive oder Dropbox (Einstellungen › App & Daten).</li>
     <li><b>Strava</b>: „Zu Strava“ in der Auswertung speichert FIT-Datei und Bild und öffnet die Upload-Seite. Mit eigener Strava-API-App (braucht ein Strava-Abo) geht der Upload automatisch. Bisherige Fahrten übernimmst du unter Aktivitäten › Importieren (FIT, ZIP-Export oder Strava).</li>

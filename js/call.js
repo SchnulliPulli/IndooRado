@@ -96,15 +96,20 @@ async function openWindow(room, peer, mode = 'av') {
   const sb = await O.client(); await O.realtimeAuth().catch(() => { });
   const ch = call.ch = sb.channel('call:' + room, { config: { private: true, broadcast: { self: false } } });
   const send = payload => ch.send({ type: 'broadcast', event: 'sig', payload: { ...payload, from: me } });
-  const start = () => { if (started) return; started = true; for (const t of call.local.getTracks()) pc.addTrack(t, call.local); };
+  // Video auf ca. 600 kbit/s begrenzen: schont schwache WLANs, damit Ton und Online-Verbindung nicht abreißen
+  const start = () => { if (started) return; started = true; for (const t of call.local.getTracks()) { const snd = pc.addTrack(t, call.local); if (t.kind === 'video') { try { const pr = snd.getParameters(); pr.encodings = pr.encodings?.length ? pr.encodings : [{}]; pr.encodings[0].maxBitrate = 600000; pr.degradationPreference = 'balanced'; snd.setParameters(pr).catch(() => { }); } catch (e) { } } } };
   pc.onnegotiationneeded = async () => { try { makingOffer = true; await pc.setLocalDescription(); send({ desc: pc.localDescription.toJSON() }); } catch (e) { console.warn('Anruf', e); } finally { makingOffer = false; } };
   pc.onicecandidate = ({ candidate }) => { if (candidate) send({ cand: candidate.toJSON() }); };
   // Gegenüber ohne Kamera: Hinweis statt schwarzem Bild
   const showRemote = st => { const v = w.querySelector('.cwremote'), hasV = st.getVideoTracks().length > 0, wait = w.querySelector('.cwwait'); if (v.srcObject !== st) v.srcObject = st; v.hidden = !hasV;
     if (hasV) wait?.remove(); else if (wait) wait.innerHTML = `🎙️ ${esc(peer?.name || 'Dein Freund')} ist nur mit Ton dabei`; else { const d = document.createElement('div'); d.className = 'cwwait'; d.innerHTML = `🎙️ ${esc(peer?.name || 'Dein Freund')} ist nur mit Ton dabei`; w.querySelector('.cwbody').prepend(d); } };
   pc.ontrack = ({ streams, track }) => { const st = streams[0] || new MediaStream([track]); showRemote(st); st.onaddtrack = () => showRemote(st); };
+  // Netz gewechselt oder kurz weg: ICE neu aushandeln statt aufzugeben (nur eine Seite stößt an)
+  let restartT = null;
+  const restart = () => { if (call.pc !== pc || polite) return; try { pc.restartIce(); } catch (e) { } };
   pc.onconnectionstatechange = () => {
     const s = pc.connectionState;
+    clearTimeout(restartT); if (s === 'disconnected') restartT = setTimeout(restart, 4000); if (s === 'failed') restart();
     if (s === 'connected') sas(pc).then(c => { const e = w.querySelector('.cwsas'); if (c && e) { e.hidden = false; e.innerHTML = `🔒 Sicherheitscode <b class="num">${c}</b> <span class="small">– sieht ${esc(peer?.name || 'dein Freund')} dieselbe Zahl?</span>`; } });
     st({ connecting: 'verbinde …', connected: 'verbunden', disconnected: 'Verbindung wackelt …', failed: 'keine direkte Verbindung', closed: 'beendet' }[s] || s);
     if (s === 'failed') toast('Keine direkte Verbindung möglich (strenges Netzwerk). Tipp: ↗ öffnet den Anruf über Jitsi in einem neuen Fenster.', 7000);

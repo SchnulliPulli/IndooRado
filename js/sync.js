@@ -16,7 +16,8 @@ export const sync = { online: false, cfg: null, busy: false, last: null, error: 
 
 /* ---------- IndooRado Online als Speicherort ----------
    Solange man online angemeldet ist, läuft der Abgleich über den privaten Supabase-Ordner des Kontos;
-   NAS, WebDAV, OneDrive, Google Drive und Dropbox pausieren. Gleiches Verfahren, eigene Versionsnummer. */
+   NAS, WebDAV, OneDrive, Google Drive und Dropbox pausieren – bis auf die Fahrtfotos: Die landen nie in Supabase,
+   sondern nur im verbundenen eigenen Speicher (siehe photoSync), und werden von dort zu den Fahrten nachgeladen. */
 let ON = null; // { sb, uid }
 const META = () => ON ? 'syncMetaOnline' : 'syncMeta';
 export async function setOnlineBackend(o) {
@@ -63,7 +64,7 @@ async function exclusive(fn) { for (let i = 0; i < 100 && sync.busy; i++) await 
 export async function vaultInfo() { if (!ON) return { status: 'off' }; await loadVault(SBK); return { status: vault.status, meta: vault.meta }; }
 // Alle vorhandenen Dateien im Online-Speicher ver- bzw. entschlüsseln (beim Ein- und Ausschalten)
 async function recodeAll(encryptNow, onStep) {
-  const files = ['state.json', 'live.json', ...(await SBK.list('rides/')).map(f => 'rides/' + f), ...(await SBK.list('shots/')).map(f => 'shots/' + f)];
+  const files = ['state.json', 'live.json', ...(await SBK.list('rides/')).map(f => 'rides/' + f)];
   let n = 0;
   for (const f of files) {
     const b = await SBK.getRaw(f); n++; onStep?.(n, files.length); if (!b) continue;
@@ -78,6 +79,7 @@ export async function vaultUnlock(pass) { await loadVault(SBK); await unlockVaul
 export async function vaultDisable(onStep) { if (!ON) return; return exclusive(async () => { await loadVault(SBK); if (vault.status !== 'on') throw new Error('Zum Ausschalten muss der Tresor auf diesem Gerät entsperrt sein'); const n = await recodeAll(false, onStep); await disableVaultMeta(SBK); return n; }); }
 
 // Was online landen darf (Einstellungen › Konto › Daten online)
+// Fotos nie (shots bleibt fest aus): die liegen nur im eigenen NAS bzw. Cloud-Speicher
 export const PREF_DEFAULT = { rides: 'full', hr: false, cad: true, power: true, gps: true, shots: false, leaderboard: true };
 const prefs = async () => ({ ...PREF_DEFAULT, ...(await kv.get('onlinePrefs', {})) });
 async function filterRide(r) {
@@ -115,7 +117,8 @@ export async function saveSyncCfg(cfg) {
   if (key(cfg) !== key(sync.cfg)) { sync.rev = null; sync.last = null; sync.devices = {}; await kv.set('syncMeta', {}); }
   sync.cfg = cfg; sync.dirsOk = false; await kv.set('sync', cfg);
 }
-const configured = () => !!ON || !!(sync.cfg && (isOAuth(sync.cfg.mode) ? sync.cfg.refresh || sync.cfg.access : sync.cfg.mode === 'dsm' ? sync.cfg.host && sync.cfg.folder : sync.cfg.url));
+const extConfigured = () => !!(sync.cfg && (isOAuth(sync.cfg.mode) ? sync.cfg.refresh || sync.cfg.access : sync.cfg.mode === 'dsm' ? sync.cfg.host && sync.cfg.folder : sync.cfg.url));
+const configured = () => !!ON || extConfigured();
 export const isConfigured = configured;
 // Anzeigename des Speichers: Synology, WebDAV, OneDrive, Google Drive, Dropbox
 export const providerName = (m = ON ? 'online' : sync.cfg?.mode) => m === 'online' ? 'IndooRado Online' : PROVIDERS[m]?.name || (m === 'webdav' ? 'WebDAV' : m === 'dsm' ? 'Synology' : 'Cloud');
@@ -228,9 +231,13 @@ const DAV = {
   async del(rel) { await dav('DELETE', rel); },
 };
 const saveTok = c => kv.set('sync', c);
-const B = () => ON ? SBK : isOAuth(sync.cfg.mode) ? backend(sync.cfg, saveTok) : sync.cfg.mode === 'dsm' ? DSM : DAV;
+const EXT = () => isOAuth(sync.cfg.mode) ? backend(sync.cfg, saveTok) : sync.cfg.mode === 'dsm' ? DSM : DAV;
+const B = () => ON ? SBK : EXT();
 async function prep() {
   if (ON) return;
+  await prepExt();
+}
+async function prepExt() {
   if (sync.cfg.mode === 'dsm') await ensureSid();
   else if (isOAuth(sync.cfg.mode)) { try { await fresh(sync.cfg, saveTok); } catch (e) { if (e.login) { sync.needLogin = true; bus.emit('sync'); } throw e; } }
 }
@@ -286,7 +293,7 @@ async function applyRemote(st, how) {
   for (const id of gone) if (haveR.has(id)) { await db.del('rides', id); await db.delByIndex('shots', 'ride', id); changed++; }
   let n = 0;
   for (const f of await B().list('rides/')) { const id = f.replace(/\.json$/, ''); if (f.endsWith('.json') && !haveR.has(id) && !gone.has(id)) { const b = await B().get('rides/' + f); if (b) { await db.put('rides', JSON.parse(await b.text())); n++; } } }
-  for (const f of await B().list('shots/')) {
+  if (!ON) for (const f of await B().list('shots/')) {
     if (!f.endsWith('.json')) continue; const id = f.replace(/\.json$/, ''); if (haveS.has(id) || [...gone].some(g => id.startsWith(g + '-'))) continue;
     const m = await B().get('shots/' + f), img = await B().get('shots/' + id + '.jpg');
     if (m && img) await db.put('shots', { ...JSON.parse(await m.text()), blob: img });
@@ -299,9 +306,15 @@ async function pushFiles() {
   const haveR = new Set(await B().list('rides/')), haveS = new Set(await B().list('shots/')), gone = new Set(await kv.get('deletedRides', []));
   let n = 0, f = 0;
   const P = ON ? await prefs() : null;
+  // Online: Fotos gehören nicht in Supabase. Reste aus älteren Versionen entfernen.
+  // Vorher fehlende Fotos aufs Gerät holen, damit nichts verloren geht (gehen danach in den eigenen Speicher, falls verbunden).
+  if (ON && haveS.size) {
+    for (const f of haveS) { if (!f.endsWith('.json')) continue; const id = f.slice(0, -5); if (await db.get('shots', id) || gone.has(id.replace(/-\d+$/, ''))) continue; const m = await SBK.get('shots/' + f), img = await SBK.get('shots/' + id + '.jpg'); if (m && img) await db.put('shots', { ...JSON.parse(await m.text()), blob: new Blob([img], { type: 'image/jpeg' }) }); }
+    const l = [...haveS].map(x => SBK.p('shots/' + x)); for (let i = 0; i < l.length; i += 100) await ON.sb.storage.from('vault').remove(l.slice(i, i + 100)); haveS.clear();
+  }
   if (!P || P.rides !== 'none') for (const r of await db.all('rides')) if (!haveR.has(r.id + '.json') && !gone.has(r.id) && !r.demo) { await B().put('rides/' + r.id + '.json', JSON.stringify(await filterRide(r)), 'application/json'); n++; }
   // Foto zuerst, Beschreibung danach: fehlt die Beschreibung, wird beim nächsten Mal beides neu geschrieben
-  if (!P || P.shots) for (const s of await db.all('shots')) if (!haveS.has(s.id + '.json') && !gone.has(s.rideId)) { await B().put('shots/' + s.id + '.jpg', s.blob, 'image/jpeg'); await B().put('shots/' + s.id + '.json', JSON.stringify({ ...s, blob: undefined }), 'application/json'); f++; }
+  if (!ON) for (const s of await db.all('shots')) if (!haveS.has(s.id + '.json') && !gone.has(s.rideId)) { await B().put('shots/' + s.id + '.jpg', s.blob, 'image/jpeg'); await B().put('shots/' + s.id + '.json', JSON.stringify({ ...s, blob: undefined }), 'application/json'); f++; }
   for (const id of gone) {
     if (haveR.has(id + '.json')) await B().del('rides/' + id + '.json');
     for (const x of haveS) if (x.startsWith(id + '-')) await B().del('shots/' + x);
@@ -326,6 +339,7 @@ export async function syncAll({ preferRemote = false } = {}) {
     if (again && (again.rev || 0) !== rRev) { const p2 = await applyRemote(again, 'merge'); pulled = { rides: (pulled?.rides || 0) + p2.rides, changed: (pulled?.changed || 0) + p2.changed }; st = again; sync.devices = again.devices || {}; }
   }
   const files = await pushFiles();
+  if (ON) { const ph = await photoSync(); if (ph) { files.shots = ph.up; files.shotsDown = ph.down; } }
   const rev = (st?.rev || 0) + 1, mine = await stateObj(rev);
   await B().put('state.json', JSON.stringify(mine), 'application/json');
   sync.rev = rev; sync.devices = mine.devices;
@@ -380,16 +394,50 @@ export async function getLive() {
   try { return JSON.parse(await b.text()); } catch (e) { return null; }
 }
 
+/* ---------- Fotos im eigenen Speicher, während der Abgleich über IndooRado Online läuft ----------
+   Fahrten liegen in Supabase, die zugehörigen Fotos im NAS bzw. in OneDrive/Google Drive/Dropbox (Ordner shots/).
+   Fehler dort (z. B. abgelaufene NAS-Anmeldung) stören den Online-Abgleich nicht, sie landen in sync.extError. */
+export const photoTarget = () => ON && extConfigured() ? providerName(sync.cfg.mode) : null;
+async function withExt(fn) {
+  if (!extConfigured() || (sync.cfg.mode === 'dsm' && !sync.cfg.sid && !sync.cfg.pass)) { sync.extNeedLogin = extConfigured(); return null; }
+  const nl = sync.needLogin;
+  try { await prepExt(); const r = await fn(EXT()); sync.extError = null; sync.extNeedLogin = false; return r; }
+  catch (e) { sync.extError = e.message === 'Failed to fetch' ? providerName(sync.cfg.mode) + ' nicht erreichbar' : e.message; sync.extNeedLogin = sync.needLogin && !nl; return null; }
+  finally { sync.needLogin = nl; }
+}
+let extDirs = false;
+async function photoSync() {
+  return withExt(async X => {
+    if (!extDirs) { try { await X.mkdir(''); await X.mkdir('shots'); } catch (e) { } extDirs = true; }
+    const have = new Set(await X.list('shots/')), gone = new Set(await kv.get('deletedRides', []));
+    const rides = new Set((await db.keys('rides')).map(String)), local = await db.all('shots'), loc = new Set(local.map(s => s.id));
+    let up = 0, down = 0;
+    for (const s of local) if (!have.has(s.id + '.json') && !gone.has(s.rideId)) { await X.put('shots/' + s.id + '.jpg', s.blob, 'image/jpeg'); await X.put('shots/' + s.id + '.json', JSON.stringify({ ...s, blob: undefined }), 'application/json'); up++; }
+    for (const f of have) {
+      if (!f.endsWith('.json')) continue; const id = f.replace(/\.json$/, ''), rid = id.replace(/-\d+$/, '');
+      if (gone.has(rid)) { await X.del('shots/' + f); await X.del('shots/' + id + '.jpg'); continue; }
+      if (loc.has(id) || !rides.has(rid)) continue;
+      const m = await X.get('shots/' + f), img = await X.get('shots/' + id + '.jpg');
+      if (m && img) { await db.put('shots', { ...JSON.parse(await m.text()), blob: img }); down++; }
+    }
+    return { up, down };
+  });
+}
+
 // Fotos einer Fahrt direkt vom NAS holen, falls sie auf diesem Gerät fehlen (z. B. auf dem Handy)
 export async function fetchShots(rideId, count) {
-  if (!syncReady() || !count) return 0;
-  await prep();
-  let n = 0;
-  for (let k = 0; k < count; k++) {
-    const id = rideId + '-' + k; if (await db.get('shots', id)) continue;
-    const m = await B().get('shots/' + id + '.json'); if (!m) continue;
-    const img = await B().get('shots/' + id + '.jpg'); if (!img) continue;
-    await db.put('shots', { ...JSON.parse(await m.text()), blob: img }); n++;
-  }
-  return n;
+  if (!count) return 0;
+  const run = async X => {
+    let n = 0;
+    for (let k = 0; k < count; k++) {
+      const id = rideId + '-' + k; if (await db.get('shots', id)) continue;
+      const m = await X.get('shots/' + id + '.json'); if (!m) continue;
+      const img = await X.get('shots/' + id + '.jpg'); if (!img) continue;
+      await db.put('shots', { ...JSON.parse(await m.text()), blob: img }); n++;
+    }
+    return n;
+  };
+  if (ON) return (await withExt(run)) || 0; // online: Fotos nur aus dem eigenen Speicher
+  if (!syncReady()) return 0;
+  await prep(); return run(B());
 }
