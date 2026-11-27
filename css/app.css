@@ -1160,3 +1160,12 @@ body.kidmode #nav a[data-k="lobby"], body.kidmode .loginbtn, body.kidmode .msgch
 .kidgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 10px; }
 .kidbtn { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 16px 10px; height: auto; font-size: 16px; white-space: normal; }
 .kidbtn b { font-size: 40px; line-height: 1; }
+
+/* Fernseher-Modus */
+html.tv { font-size: 125%; }
+html.tv :focus-visible, html.tv :focus { outline: 4px solid var(--accent, #ff6a3d) !important; outline-offset: 3px; }
+html.tv .btn { min-height: 48px; }
+/* Handy-Fernbedienung */
+.rmgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0; }
+.rmb { display: flex; flex-direction: column; align-items: center; height: auto; padding: 12px 6px; gap: 2px; }
+.rmb b { font-size: 26px; line-height: 1; }

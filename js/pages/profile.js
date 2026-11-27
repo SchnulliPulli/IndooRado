@@ -228,6 +228,7 @@ export async function render(el, params = []) {
       <label class="f">Thema<select class="inp" id="appTheme">${[['dark', 'Dunkel'], ['light', 'Hell'], ['system', 'Wie das Gerät']].map(([v, l]) => `<option value="${v}" ${theme === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <div class="f">Akzentfarbe<div class="swatches" id="appAcc">${['#ff6a3d', '#3fa7f5', '#4fd18b', '#f5c542', '#b06cf0', '#ef4458', '#00c2c7'].map(c => `<button style="background:${c}" data-c="${c}" aria-pressed="${acc === c}" aria-label="Farbe ${c}"></button>`).join('')}</div></div>
       <p class="small muted">Gilt für Menüs und Seiten. Die Anzeige während der Fahrt hat einen eigenen Stil unter <a href="#/ridesettings">Fahransicht</a>.</p>
+      <label class="switch"><input type="checkbox" id="tvMode" ${profile.tvMode ? 'checked' : ''}><span></span> <div class="swt">📺 Fernseher-Modus<small class="muted">Große Schrift, Bedienung mit den Pfeiltasten der Fernbedienung (Enter = auswählen, Zurück = zurück). Gamepads gehen immer: Steuerkreuz, A, B, Start = Pause, LB/RB = Gang, X = Kamera, Y = Ride On. Handy als Fernbedienung: in der Handy-Ansicht mit demselben Konto.</small></div></label>
       <label class="f">Ansicht der Startseite<select class="inp" id="phoneView">${[['auto', 'Automatisch: auf Handys kompakt'], ['always', 'Immer kompakte Handy-Ansicht'], ['never', 'Immer volle Ansicht']].map(([v, l]) => `<option value="${v}" ${(profile.phoneView || 'auto') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <p class="small muted">Die kompakte Ansicht zeigt nächste Fahrt, Woche, Missionen und eine laufende Fahrt, gut lesbar auf dem Handy. Dieses Gerät wird gerade als ${(await import('../app.js')).isPhone() ? '<b>Handy</b>' : '<b>Tablet oder Computer</b>'} erkannt.</p>
       <h2 style="margin-top:18px">Barrierefreiheit</h2>
@@ -281,6 +282,7 @@ export async function render(el, params = []) {
   on('#phoneView', 'onchange', e => { profile.phoneView = e.target.value; saveProfile(); toast('Gespeichert', 900); });
   el.querySelectorAll('[data-revoke]').forEach(b => b.onclick = async () => { (await import('../consent.js')).revoke(b.dataset.revoke); toast('Einwilligung widerrufen'); b.closest('.row').remove(); });
   on('#appTheme', 'onchange', e => { profile.appTheme = e.target.value; saveProfile(); applyAppTheme(); });
+  on('#tvMode', 'onchange', async e => { profile.tvMode = e.target.checked; saveProfile(); (await import('../tv.js')).applyTv(); });
   on('#fontScale', 'onchange', e => { profile.fontScale = +e.target.value; saveProfile(); applyAppTheme(); });
   on('#highContrast', 'onchange', e => { profile.highContrast = e.target.checked; saveProfile(); applyAppTheme(); });
   on('#reduceMotion', 'onchange', e => { profile.reduceMotion = { on: true, off: false }[e.target.value]; if (e.target.value === 'auto') delete profile.reduceMotion; saveProfile(); applyAppTheme(); });

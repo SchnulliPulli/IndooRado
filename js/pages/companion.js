@@ -31,6 +31,9 @@ export async function render(el) {
     <div class="small ${nas || OC.hasStoredSession() ? 'muted' : 'warn'}" id="cSync">${nas ? syncText() : OC.hasStoredSession() ? '🔄 Online-Konto wird verbunden …' : 'Ohne Cloud-Abgleich siehst du hier nur die Daten dieses Geräts. Unter Einstellungen › Verbindungen einen Cloud-Speicher verbinden (NAS, OneDrive, Google Drive, Dropbox), dann zeigt das Handy deine Fahrten, Pläne und die laufende Fahrt vom PC.'}</div>
 
     <div class="card live" id="cLive" hidden></div>
+    ${OC.loggedIn() ? `<div class="card remote"><div class="row between"><h2>🎮 Fernbedienung</h2><span class="small muted" id="rmSt">für die laufende Fahrt</span></div>
+      <div class="rmgrid">${[['pause', '⏯️', 'Pause'], ['up', '➕', 'Schwerer'], ['cam', '🎥', 'Kamera'], ['left', '⬅️', 'Spur'], ['down', '➖', 'Leichter'], ['right', '➡️', 'Spur'], ['rideon', '👍', 'Ride On'], ['photo', '📷', 'Foto'], ['music', '🎵', 'Musik']].map(([c, i, l]) => `<button class="btn rmb" data-rm="${c}"><b>${i}</b><span>${l}</span></button>`).join('')}</div>
+      <p class="small muted">Steuert die Fahrt auf deinem PC oder Fernseher, wenn dort dasselbe Konto angemeldet ist.</p></div>` : ''}
 
     <div class="card"><div class="row between"><h2>Nächste Fahrt</h2><a class="small" href="#/plans">Plan</a></div>
       ${next ? `<div class="compnext"><div><div class="small muted">${esc(pr.p.name)} · Woche ${next.week}</div><b>${esc(next.name)}</b><div class="small muted num">${fmtDur(wStats(next).dur)} · TSS ${wStats(next).tss}</div></div>${sel.workoutId === next.id ? '<span class="tag">vorgemerkt</span>' : `<button class="btn sm pri" data-pick="${next.id}">Vormerken</button>`}</div>` : '<p class="small muted">Kein Trainingsplan aktiv.</p>'}
@@ -51,11 +54,13 @@ export async function render(el) {
     </div>
   </section>`;
 
+  { const off = bus.on('remoteAck', a => { const st = $('#rmSt', el); if (!st || !el.isConnected) return off?.(); st.textContent = a?.ok ? '✓ angekommen' : '⚠ dort läuft gerade keine Fahrt'; }); }
   el.onchange = e => {
     if (e.target.id === 'cWo') { sel.workoutId = e.target.value || null; saveSel(); toast(nas ? 'Vorgemerkt, wird zum PC übertragen' : 'Vorgemerkt'); render(el); }
     if (e.target.id === 'cRoute') { sel.routeId = e.target.value; saveSel(); toast('Strecke vorgemerkt'); }
   };
   el.onclick = async e => {
+    const rm = e.target.closest('[data-rm]'); if (rm) { const T = await import('../tv.js'); navigator.vibrate?.(15); if (await T.sendRemote(rm.dataset.rm)) { const st = $('#rmSt', el); if (st) st.textContent = 'gesendet …'; } return; }
     const b = e.target.closest('[data-pick]'); if (b) { sel.workoutId = b.dataset.pick; saveSel(); toast('Vorgemerkt'); render(el); return; }
     if (e.target.id === 'cRefresh') {
       e.target.disabled = true; e.target.textContent = '↻ …';
