@@ -27,7 +27,7 @@ export async function gate(el) {
     const off = bus.on('online', () => { if (!el.isConnected) return off(); if (!O.access().mfa) { off(); window.__route?.(); } }); return false;
   }
   if (!A.ok) {
-    const why = A.noProfile ? 'Zu deinem Login gibt es in der Datenbank kein Profil. Das passiert, wenn das Konto angelegt wurde, bevor <code>supabase/schema.sql</code> ausgeführt war. Das Skript erneut ausführen legt fehlende Profile an.' : A.banned ? 'Dein Konto ist gesperrt.' : 'Deine Testphase ist abgelaufen. Ein Admin muss dein Konto freischalten.';
+    const why = A.noProfile ? 'Zu deinem Login gibt es in der Datenbank kein Profil. Das passiert, wenn das Konto angelegt wurde, bevor das Datenbankschema eingespielt war. Bitte den Betreiber kontaktieren.' : A.banned ? 'Dein Konto ist gesperrt.' : 'Deine Testphase ist abgelaufen. Ein Admin muss dein Konto freischalten.';
     el.innerHTML = `<section class="pagehead"><h1>Online</h1></section><section class="card accbox bad"><b>⏳ Kein Online-Zugang</b><p class="small muted">${why}</p><div class="row"><a class="btn sm" href="#/account">Zum Konto (dort: Verbindungstest)</a><button class="btn sm ghost" id="oRetry">Erneut prüfen</button></div>${O.online.profileError ? `<p class="small" style="color:var(--hr)">Fehler beim Laden des Profils: ${esc(O.online.profileError)}</p>` : ''}</section>`;
     el.querySelector('#oRetry').onclick = () => render(el, []); return false;
   }
@@ -133,7 +133,7 @@ async function players(el) {
     const fa = e.target.closest('[data-facc]');
     if (fa) { const { error } = await (await O.client()).rpc('friend_respond', { p_other: fa.dataset.facc, p_accept: true }); if (error) return toast(error.message); toast('🎉 Ihr seid jetzt Freunde'); loadRel(); return; }
     const fr = e.target.closest('[data-fr]');
-    if (fr) { fr.disabled = true; const { data, error } = await (await O.client()).rpc('friend_request', { p_to: fr.dataset.fr }); if (error) { fr.disabled = false; return toast(/function|schema cache/i.test(error.message) ? 'Freunde fehlen in der Datenbank: supabase/schema.sql erneut ausführen' : error.message); } fr.textContent = data === 'friend' ? '✓ Freunde' : '✓ Angefragt'; toast(data === 'friend' ? 'Ihr seid jetzt Freunde' : 'Freundschaftsanfrage gesendet'); loadRel(); return; }
+    if (fr) { fr.disabled = true; const { data, error } = await (await O.client()).rpc('friend_request', { p_to: fr.dataset.fr }); if (error) { fr.disabled = false; return toast(/function|schema cache/i.test(error.message) ? 'Freunde fehlen in der Datenbank: Datenbankschema erneut ausführen' : error.message); } fr.textContent = data === 'friend' ? '✓ Freunde' : '✓ Angefragt'; toast(data === 'friend' ? 'Ihr seid jetzt Freunde' : 'Freundschaftsanfrage gesendet'); loadRel(); return; }
     const iv = e.target.closest('[data-inv]'); if (iv) { sendInvite(iv.dataset.inv, iv.dataset.name); return; } const b = e.target.closest('[data-ride]'); if (!b) return;
     if (!(await (await import('../online/sharedroute.js')).prepareJoin(b.dataset.sid, b.dataset.ride, toast))) return;
     sel.routeId = b.dataset.ride; saveSel(); if (b.dataset.sid) sessionStorage.setItem('joinRider', JSON.stringify({ sid: b.dataset.sid, name: b.dataset.name })); location.hash = '#/ride'; };

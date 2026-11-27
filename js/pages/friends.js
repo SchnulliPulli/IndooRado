@@ -5,7 +5,7 @@ import { avatarSvg } from '../components.js';
 import * as O from '../online/client.js';
 import { gate } from './online.js';
 
-const miss = e => /function|relation|does not exist|schema cache/i.test(e?.message || '') ? 'Freunde und Chat fehlen in der Datenbank: supabase/schema.sql im SQL-Editor erneut ausführen.' : e?.message;
+const miss = e => /function|relation|does not exist|schema cache/i.test(e?.message || '') ? 'Freunde und Chat fehlen in der Datenbank: Datenbankschema im SQL-Editor erneut ausführen.' : e?.message;
 let timers = [], chatT = null;
 export function leave() { timers.forEach(clearInterval); timers = []; clearInterval(chatT); document.querySelector('.frdlg')?.closest('.modal')?.remove(); }
 

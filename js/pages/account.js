@@ -40,7 +40,7 @@ function renderSetup(el) {
   <section class="pagehead"><h1>Konto</h1></section>
   <section class="card form"><h2>IndooRado Online einrichten</h2>
     <p class="muted">Mit einem Konto liegen deine Daten zusätzlich online, du fährst live mit anderen und erscheinst in Bestenlisten. Ohne Konto funktioniert alles wie bisher, nur lokal.</p>
-    <p class="small muted">Für den Betreiber: Supabase-Projekt anlegen, <code>supabase/schema.sql</code> ausführen, dann <code>online.json</code> neben die App legen (Anleitung in <code>docs/ONLINE.md</code>) oder hier eintragen.</p>
+    <p class="small muted">Für den Betreiber: Supabase-Projekt anlegen, das Datenbankschema ausführen, dann <code>online.json</code> neben die App legen oder hier eintragen.</p>
     <label class="f">Projekt-URL<input class="inp" id="cfgUrl" placeholder="https://xxxx.supabase.co"></label>
     <label class="f">Publishable bzw. anon Key<input class="inp" id="cfgKey" placeholder="sb_publishable_…"></label>
     <div class="row"><button class="btn pri" id="cfgSave">Speichern und verbinden</button></div>

@@ -28,7 +28,7 @@ async function fill(box, close) {
   const draw = async () => {
     if (!box.isConnected) { clearInterval(iv); return; }
     const [fl, ms] = await Promise.all([sb.rpc('friend_list'), sb.from('chat_messages').select('id,sender,recipient,body,created_at,read_at').order('created_at', { ascending: false }).limit(60)]);
-    if (fl.error) { box.querySelector('.ibl').innerHTML = `<p class="small muted">${/function|schema cache/i.test(fl.error.message) ? 'Freunde fehlen in der Datenbank: supabase/schema.sql erneut ausführen.' : esc(fl.error.message)}</p>`; return; }
+    if (fl.error) { box.querySelector('.ibl').innerHTML = `<p class="small muted">${/function|schema cache/i.test(fl.error.message) ? 'Freunde fehlen in der Datenbank: Datenbankschema erneut ausführen.' : esc(fl.error.message)}</p>`; return; }
     const fr = new Map(fl.data.map(f => [f.id, f])), req = fl.data.filter(f => f.status === 'pending' && f.incoming), last = new Map();
     for (const m of ms.data || []) { const other = m.sender === me ? m.recipient : m.sender; if (!last.has(other) && fr.get(other)?.status === 'accepted') last.set(other, m); }
     const rows = [...last.entries()].slice(0, 15).map(([id, m]) => {

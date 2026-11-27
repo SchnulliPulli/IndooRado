@@ -1,4 +1,4 @@
-// Live-Mitfahrer: ein privater Realtime-Kanal je Strecke (nur angemeldete Nutzer, siehe Regeln in supabase/schema.sql).
+// Live-Mitfahrer: ein privater Realtime-Kanal je Strecke (nur angemeldete Nutzer, siehe Regeln in Datenbankschema).
 // Jeder sendet einmal pro Sekunde Position, Tempo, W/kg und Aussehen. Keine Nutzer-ID, kein Puls, keine E-Mail.
 // Alles Empfangene wird streng geprüft, bevor es angezeigt wird (fremde Daten sind nie vertrauenswürdig).
 import { online, client, loggedIn, access, realtimeAuth } from './client.js';

@@ -65,7 +65,7 @@ export async function render(el) {
     const { data } = await sb.from('announcements').select('*').order('created_at', { ascending: false }).limit(30);
     $('#anList', el).innerHTML = (data || []).map(a => `<div class="row between anrow"><span><b>${esc(a.title)}</b> <span class="muted">${{ info: 'Info', event: 'Event', warn: 'Warnung' }[a.level]} · ${fmtDate(a.created_at)}${a.visible_until ? ' bis ' + fmtDate(a.visible_until) : ''}</span></span><button class="btn xs ghost danger" data-and="${a.id}">✕</button></div>`).join('') || '<span class="muted">Keine</span>';
   };
-  // Alle Dateien eines Nutzers im Datenpaket (Ordner <id>/…) entfernen; braucht die Admin-Regeln aus schema.sql
+  // Alle Dateien eines Nutzers im Datenpaket (Ordner <id>/…) entfernen; braucht die Admin-Regeln aus Datenbankschema
   const wipeFiles = async uid => {
     const st = sb.storage.from('vault'), files = [];
     const walk = async dir => { const { data, error } = await st.list(dir, { limit: 1000 }); if (error) throw error; for (const f of data || []) { const p = dir + '/' + f.name; if (f.id) files.push(p); else await walk(p); } };
@@ -90,7 +90,7 @@ export async function render(el) {
     if (mf) {
       const id = mf.closest('tr').dataset.id, u = users.find(x => x.id === id);
       if (!(await dialog({ title: `2FA von ${u.display_name} zurücksetzen?`, html: '<p class="muted">Alle Authenticator-Einträge dieses Kontos werden entfernt. Danach meldet sich die Person nur mit Passwort bzw. E-Mail-Code an und sollte unter Konto sofort einen neuen Authenticator einrichten.</p><p class="small warn">Nur tun, wenn du sicher bist, dass die Anfrage wirklich von dieser Person kommt (z. B. Rückfrage über einen bekannten Kontaktweg) – sonst übernimmt womöglich jemand Fremdes das Konto.</p>', buttons: [{ label: 'Abbrechen', value: 0 }, { label: '2FA zurücksetzen', value: 1, cls: 'pri' }] }))) return;
-      const { data, error } = await sb.rpc('admin_reset_mfa', { p_user: id }); if (error) return toast(/function|schema cache/i.test(error.message) ? 'Funktion fehlt: supabase/schema.sql erneut ausführen' : error.message, 6000);
+      const { data, error } = await sb.rpc('admin_reset_mfa', { p_user: id }); if (error) return toast(/function|schema cache/i.test(error.message) ? 'Funktion fehlt: Datenbankschema erneut ausführen' : error.message, 6000);
       toast(data ? `2FA von ${u.display_name} entfernt (${data} Faktor${data === 1 ? '' : 'en'})` : 'Dieses Konto hatte keine 2FA'); return;
     }
     const del = e.target.closest('[data-delacc]');
@@ -113,7 +113,7 @@ export async function render(el) {
         users = users.filter(x => x.id !== id); list(); kpis(); toast(esc(u.display_name) + ' gelöscht');
       } catch (err) {
         del.disabled = false; del.textContent = 'Konto löschen';
-        toast(/admin_delete_user|admin_mark_delete|function/i.test(err.message) ? 'Die Funktion fehlt in der Datenbank: supabase/schema.sql im SQL-Editor erneut ausführen.' : err.message, 7000);
+        toast(/admin_delete_user|admin_mark_delete|function/i.test(err.message) ? 'Die Funktion fehlt in der Datenbank: Datenbankschema im SQL-Editor erneut ausführen.' : err.message, 7000);
       }
       return;
     }
@@ -129,7 +129,7 @@ export async function render(el) {
   $('#anList', el).onclick = async e => { const b = e.target.closest('[data-and]'); if (!b) return; await sb.from('announcements').delete().eq('id', b.dataset.and); anns(); };
   $('#adRefresh', el).onclick = () => { kpis(); loadUsers(); anns(); activity(); evAdm(); clAdm(); lbAdm(); };
   // ---------- Aktivität, Events, Teams, Bestenliste, Massenaktionen ----------
-  const miss = e => /function|relation|does not exist|schema cache/i.test(e?.message || '') ? 'Fehlt in der Datenbank: supabase/schema.sql erneut ausführen.' : e?.message;
+  const miss = e => /function|relation|does not exist|schema cache/i.test(e?.message || '') ? 'Fehlt in der Datenbank: Datenbankschema erneut ausführen.' : e?.message;
   const [{ listRoutes }, { listWorkouts }] = await Promise.all([import('../routes.js'), import('../workouts.js')]);
   const [routes, wos] = await Promise.all([listRoutes(), listWorkouts()]), shared = routes.filter(r => r.builtin);
   $('#evR', el).innerHTML = shared.map(r => `<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('') + (routes.some(r => r.kit) ? `<optgroup label="Eigene Baukasten-Strecken (werden an alle verteilt)">${routes.filter(r => r.kit).map(r => `<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('')}</optgroup>` : '');

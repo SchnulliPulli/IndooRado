@@ -32,15 +32,11 @@ Danach im Browser `http://localhost:8000/` öffnen. Ein Start per Doppelklick (`
 
 Hosting: Der Ordner lässt sich auf jeden statischen Webspace legen, zum Beispiel GitHub Pages, eine Synology Web Station, Netlify oder Cloudflare Pages. `index.html` ist der Einstieg. Weitere Hinweise stehen in `LIESMICH.txt`.
 
-## Online-Funktionen einrichten
+## Online-Funktionen
 
-Die Online-Funktionen sind optional. Ohne `online.json` (oder mit leerer Adresse) läuft die App rein lokal.
+Die Online-Funktionen sind optional. Ohne `online.json` (oder mit leerer Adresse) läuft die App rein lokal. `online.json` enthält nur die Projekt-URL und den **öffentlichen** Schlüssel (publishable key); der Schutz der Daten liegt in den Zugriffsregeln der Datenbank. Datenbankschema, Einrichtung und Datenbank-Tests werden nicht öffentlich gepflegt.
 
-1. In Supabase ein Projekt anlegen und `supabase/schema.sql` im SQL-Editor ausführen.
-2. `online.example.json` nach `online.json` kopieren und dort die Projekt-URL und den **öffentlichen** Schlüssel (publishable/anon key) eintragen.
-3. Die ausführliche Anleitung steht in `docs/ONLINE.md`.
-
-Niemals den `service_role`- bzw. Secret-Key in die App oder ins Repository legen.
+Sicherheitslücke gefunden? Bitte vertraulich an info@indoorado.de melden statt als öffentliches Issue.
 
 ## Aufbau
 
@@ -54,16 +50,14 @@ Niemals den `service_role`- bzw. Secret-Key in die App oder ins Repository legen
 | `js/routes.js`, `js/workouts.js`, `js/plans.js` | Strecken, Workouts, Trainingspläne |
 | `js/online/`, `js/multiplayer.js` | Konto, Anwesenheit, Live-Fahren und Multiplayer-Spiel (Supabase) |
 | `js/sync.js`, `js/cloud.js`, `js/db.js` | Speicherung und Abgleich |
-| `supabase/schema.sql` | Datenbank, Regeln und Funktionen für den Online-Teil |
 | `vendor/` | three.js und supabase-js als lokale Kopien |
 | `sw.js` | Offline-Cache |
 
 ## Tests
 
-Bei jedem Push laufen auf GitHub automatisch drei Prüfungen (`.github/workflows/tests.yml`):
+Bei jedem Push laufen auf GitHub automatisch zwei Prüfungen (`.github/workflows/tests.yml`):
 
 - **Syntax**: alle JavaScript-Module (`tests/syntax.sh`)
-- **Datenbank**: `supabase/schema.sql` in einem echten Postgres zweimal hintereinander, danach Rechte-Tests (fremde Daten unsichtbar, keine Rollen-Eskalation, Admin nur mit 2FA, Teams, Events) (`tests/sql/`)
 - **Browser**: alle Seiten auf Desktop- und Handygröße, eine Demo-Fahrt, Baukasten, Saison und Geister (`tests/smoke.mjs`)
 
 Lokal: `python3 -m http.server 8765` im Projektordner, dann `node tests/smoke.mjs` (Playwright nötig).
