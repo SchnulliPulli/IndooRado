@@ -9,10 +9,10 @@ function crc16(bytes, crc = 0) {
   return crc;
 }
 // Basistypen
-const BT = { enum: [0x00, 1], uint8: [0x02, 1], sint16: [0x83, 2], uint16: [0x84, 2], sint32: [0x85, 4], uint32: [0x86, 4], uint32z: [0x8C, 4] };
+const BT = { enum: [0x00, 1], uint8: [0x02, 1], sint16: [0x83, 2], uint16: [0x84, 2], sint32: [0x85, 4], uint32: [0x86, 4], uint32z: [0x8C, 4], str16: [0x07, 16], str32: [0x07, 32] };
 const INVALID = { enum: 0xFF, uint8: 0xFF, sint16: 0x7FFF, uint16: 0xFFFF, sint32: 0x7FFFFFFF, uint32: 0xFFFFFFFF, uint32z: 0 };
 
-class FitWriter {
+export class FitWriter {
   constructor() { this.buf = []; this.defs = new Map(); this.nextLocal = 0; }
   def(name, global, fields) {
     const local = this.nextLocal++ % 16;
@@ -24,6 +24,11 @@ class FitWriter {
   msg(name, values) {
     const d = this.defs.get(name); const out = [d.local];
     d.fields.forEach(([num, type], i) => {
+      if (type.startsWith('str')) { // Text: UTF-8, mit Nullen aufgefüllt, letztes Byte immer 0
+        const n = BT[type][1], u = new TextEncoder().encode(String(values[i] ?? '')); let len = Math.min(u.length, n - 1);
+        while (len > 0 && (u[len] & 0xC0) === 0x80) len--; // kein halbes Zeichen
+        for (let k = 0; k < n; k++) out.push(k < len ? u[k] : 0); return;
+      }
       let v = values[i]; if (v == null || Number.isNaN(v)) v = INVALID[type];
       v = Math.round(v); const n = BT[type][1];
       if (type.startsWith('sint') && v < 0) v = (n === 2 ? 0x10000 : 0x100000000) + v;

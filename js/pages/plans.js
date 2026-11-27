@@ -1,6 +1,6 @@
 // Trainingspläne: auswählen, Woche für Woche verfolgen
 import { $, esc, fmtDur, dialog, toast, download } from '../util.js';
-import { readFiles, planToJson, parsePlanText } from '../fileio.js';
+import { readFiles, planToJson, parsePlanText, toFitWorkout, zipStore } from '../fileio.js';
 import { profile, sel, saveSel, progress } from '../state.js';
 import { PLANS, CUSTOM, getPlan, plan, startPlan, stopPlan, planProgress, skip, unskip, addCustomPlan, deleteCustomPlan } from '../plans.js';
 import { stats, drawWorkout, parseZwo } from '../workouts.js';
@@ -71,7 +71,13 @@ export async function render(el) {
       if (plan.active) stopPlan();
       startPlan(b.dataset.start); toast('Plan gestartet. Viel Erfolg!'); render(el); window.scrollTo(0, 0);
     }
-    if (b.dataset.expplan) { const p = getPlan(b.dataset.expplan); download(p.name.replace(/[^\wäöüÄÖÜß -]+/g, '').trim() + '.indoorado-plan.json', planToJson(p), 'application/json'); return; }
+    if (b.dataset.expplan) {
+      const p = getPlan(b.dataset.expplan), base = p.name.replace(/[^\wäöüÄÖÜß -]+/g, '').trim() || 'plan';
+      const fmt = await dialog({ title: 'Plan exportieren', html: '<p class="muted"><b>FIT (ZIP)</b>: jedes Workout des Plans als FIT-Datei für deinen Radcomputer, nummeriert in Reihenfolge.</p><p class="muted"><b>IndooRado-Datei</b>: der ganze Plan zum Importieren in IndooRado auf einem anderen Gerät.</p>', buttons: [{ label: 'Abbrechen', value: null }, { label: 'IndooRado-Datei', value: 'json' }, { label: 'FIT (ZIP)', value: 'fit', cls: 'pri' }] });
+      if (fmt === 'json') download(base + '.indoorado-plan.json', planToJson(p), 'application/json');
+      if (fmt === 'fit') { const files = p.all.map((w, i) => ({ name: String(i + 1).padStart(2, '0') + ' ' + (w.name.replace(/[^\wäöüÄÖÜß -]+/g, '').trim() || 'Workout') + '.fit', data: toFitWorkout(w) })); download(base + ' (FIT).zip', zipStore(files), 'application/zip'); }
+      return;
+    }
     if (b.dataset.delplan) { if (await dialog({ title: 'Eigenen Plan löschen?', buttons: [{ label: 'Abbrechen', value: false }, { label: 'Löschen', value: true, cls: 'danger' }] })) { await deleteCustomPlan(b.dataset.delplan); render(el); } return; }
     if (b.dataset.go) { sel.workoutId = b.dataset.go; saveSel(); location.hash = '#/ride'; }
     if (b.dataset.pick) { sel.workoutId = b.dataset.pick; saveSel(); toast('Für die nächste Fahrt ausgewählt'); }

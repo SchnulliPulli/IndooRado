@@ -1,5 +1,6 @@
 // Import und Export von Workouts und Plänen: .zwo, .erg, .mrc, .json (IndooRado) und .zip mit solchen Dateien
 import { parseZwo, parseErg } from './workouts.js';
+import { FitWriter } from './export.js';
 
 // ZIP lesen (ohne Bibliothek): zentrales Verzeichnis, gespeicherte oder "deflate"-komprimierte Einträge
 export async function unzip(blob) {
@@ -114,4 +115,46 @@ export function parsePlanText(text) {
   const weeks = [...new Set(wos.map(w => w.week))].sort((a, b) => a - b);
   const sorted = weeks.flatMap(k => wos.filter(w => w.week === k));
   return { name: name || 'Eingefügter Plan', perWeek: Math.max(...weeks.map(k => wos.filter(w => w.week === k).length)), weeksLayout: weeks.map(k => wos.filter(w => w.week === k).length), wos: sorted.map(({ week, ...w }) => w) };
+}
+
+/* ---------- Export als FIT-Workout (Garmin Edge, Wahoo ELEMNT, Hammerhead u. a.) ----------
+   Leistung in % FTP: das Gerät rechnet mit seiner eigenen FTP. Rampen werden in 1-Minuten-Stufen zerlegt,
+   freie Abschnitte ohne Vorgabe. */
+export function toFitWorkout(w) {
+  const steps = [];
+  w.segs.forEach((g, i) => {
+    const last = i === w.segs.length - 1, avg = g.a == null ? null : (g.a + g.b) / 2;
+    const intensity = g.a == null ? 0 : i === 0 && (g.b > g.a || avg < .6) ? 2 : last && (g.b < g.a || avg < .6) ? 3 : avg < .56 ? 1 : 0;
+    const name = String(g.text || '').slice(0, 15);
+    if (g.a == null) { steps.push({ dur: g.dur, lo: null, name, intensity }); return; }
+    const ramp = Math.abs(g.a - g.b) >= .005, n = ramp ? Math.max(1, Math.round(g.dur / 60)) : 1;
+    for (let k = 0; k < n; k++) {
+      const d = k < n - 1 ? Math.round(g.dur / n) : g.dur - Math.round(g.dur / n) * (n - 1), f = ramp ? g.a + (g.b - g.a) * (k + .5) / n : g.a;
+      const pct = Math.round(f * 100); steps.push({ dur: d, lo: Math.max(1, pct - 3), hi: pct + 3, name: k ? '' : name, intensity });
+    }
+  });
+  const f = new FitWriter(), now = Math.round(Date.now() / 1000) - 631065600;
+  f.def('file_id', 0, [[0, 'enum'], [1, 'uint16'], [2, 'uint16'], [3, 'uint32z'], [4, 'uint32']]);
+  f.msg('file_id', [5, 255, 1, (now % 1e6) + 1, now]);
+  f.def('workout', 26, [[4, 'enum'], [6, 'uint16'], [8, 'str32']]);
+  f.msg('workout', [2, steps.length, w.name || 'IndooRado']);
+  f.def('step', 27, [[254, 'uint16'], [0, 'str16'], [1, 'enum'], [2, 'uint32'], [3, 'enum'], [4, 'uint32'], [5, 'uint32'], [6, 'uint32'], [7, 'enum']]);
+  steps.forEach((s, i) => f.msg('step', [i, s.name, 0, Math.max(1, s.dur) * 1000, s.lo == null ? 2 : 4, 0, s.lo, s.hi, s.intensity]));
+  return f.bytes();
+}
+// Mehrere Dateien als ZIP (ohne Kompression) – für ganze Pläne
+const CRC32 = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+const crc32 = u => { let c = 0xFFFFFFFF; for (const b of u) c = CRC32[(c ^ b) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+export function zipStore(files) {
+  const enc = new TextEncoder(), parts = [], central = []; let off = 0;
+  const le = (n, b) => { const a = []; for (let k = 0; k < b; k++) a.push((n >>> (8 * k)) & 0xFF); return a; };
+  for (const { name, data } of files) {
+    const nm = enc.encode(name), d = data instanceof Uint8Array ? data : enc.encode(String(data)), c = crc32(d);
+    const head = [...le(0x04034b50, 4), ...le(20, 2), ...le(0x0800, 2), ...le(0, 2), ...le(0, 2), ...le(0x21, 2), ...le(c, 4), ...le(d.length, 4), ...le(d.length, 4), ...le(nm.length, 2), ...le(0, 2)];
+    parts.push(new Uint8Array(head), nm, d);
+    central.push(new Uint8Array([...le(0x02014b50, 4), ...le(20, 2), ...le(20, 2), ...le(0x0800, 2), ...le(0, 2), ...le(0, 2), ...le(0x21, 2), ...le(c, 4), ...le(d.length, 4), ...le(d.length, 4), ...le(nm.length, 2), ...le(0, 2), ...le(0, 2), ...le(0, 2), ...le(0, 2), ...le(0, 4), ...le(off, 4)]), nm);
+    off += head.length + nm.length + d.length;
+  }
+  const cSize = central.reduce((a, x) => a + x.length, 0);
+  return new Blob([...parts, ...central, new Uint8Array([...le(0x06054b50, 4), 0, 0, 0, 0, ...le(files.length, 2), ...le(files.length, 2), ...le(cSize, 4), ...le(off, 4), 0, 0])], { type: 'application/zip' });
 }
