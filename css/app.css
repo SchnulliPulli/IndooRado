@@ -1078,3 +1078,6 @@ html.calm .view.swl, html.calm .view.swr { animation: none; }
 #rw [data-drag].lifted { filter: drop-shadow(0 12px 22px rgba(0,0,0,.55)) brightness(1.08); z-index: 50; }
 #rw.lpdrag #editBar { display: none !important; } /* beim schnellen Verschieben keine Bearbeitungsleiste */
 #rw [data-drag] { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+/* Farbwähler: kompaktes Farbfeld statt einer breiten Leiste */
+input[type=color].inp { width: 56px; min-width: 56px; max-width: 56px; height: 40px; padding: 3px; border-radius: 10px; cursor: pointer; flex: none; }
+label.f:has(> input[type=color].inp) { align-items: flex-start; }
