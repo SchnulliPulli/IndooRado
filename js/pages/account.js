@@ -103,7 +103,7 @@ function renderAuth(el, mode = 'in') {
   const body = $('#aBody', el), oauthHtml = provs.length ? `<div class="oauth">${provs.map(p => `<button class="btn" data-oauth="${p}">Mit ${PROV[p]}</button>`).join('')}</div><div class="orline"><span>oder mit E-Mail</span></div>` : '';
   const keepHtml = `<label class="switch"><input type="checkbox" id="aKeep" ${O.remember() ? 'checked' : ''}><span></span> <div class="swt">Angemeldet bleiben<small class="muted">Auf diesem Gerät gespeichert, bis du dich abmeldest. Ohne Haken endet die Anmeldung beim Schließen des Browsers.</small></div></label>`;
   const keep = () => { const on = $('#aKeep', el)?.checked ?? true; O.setRemember(on); const m = $('#aMail', el)?.value.trim(); if (on && m) localStorage.setItem('vvLastEmail', m); else if (!on) localStorage.removeItem('vvLastEmail'); };
-  const wireOauth = () => el.querySelectorAll('[data-oauth]').forEach(b => b.onclick = () => { keep(); O.oauth(b.dataset.oauth).catch(e => toast(errText(e), 5000)); });
+  const wireOauth = () => el.querySelectorAll('[data-oauth]').forEach(b => b.onclick = () => { keep(); if (mode === 'up') localStorage.setItem('vvWant2fa', '1'); O.oauth(b.dataset.oauth).catch(e => toast(errText(e), 5000)); });
   const err = e => toast(errText(e), 5000);
 
   if (mode === 'in') {
@@ -152,6 +152,7 @@ function renderAuth(el, mode = 'in') {
         <details class="small"><summary>Hinweis zu Datenschutz und Nutzung lesen</summary>${NOTICE}<p><a href="#/legal/datenschutz" target="_blank">Vollständige Datenschutzerklärung</a> · <a href="#/legal/nutzung" target="_blank">Nutzungshinweise</a></p></details>
         <label class="switch"><input type="checkbox" id="aOk"><span></span> <div class="swt">Ich habe den Hinweis gelesen und nutze IndooRado Online freiwillig und auf eigene Verantwortung</div></label>
         <label class="switch"><input type="checkbox" id="aHr"><span></span> <div class="swt">Ich willige ein, dass meine Herzfrequenz mit meinen Fahrten in meinem Konto gespeichert wird <small class="muted">Puls zählt als Gesundheitsdatum (Art. 9 DSGVO). Freiwillig und jederzeit unter Konto › Was online gespeichert wird widerrufbar. Ohne Einwilligung bleibt der Puls nur auf deinen Geräten. Tipp: Mit der Tresor-Verschlüsselung kann auch Supabase ihn nicht lesen.</small></div></label>
+        <label class="switch"><input type="checkbox" id="a2fa" checked><span></span> <div class="swt"><i style="font-style:normal">Zwei-Faktor-Anmeldung (2FA) einrichten <b class="prtag">empfohlen</b></i><small class="muted">Schützt dein Konto, auch wenn jemand dein Passwort kennt. Direkt nach der ersten Anmeldung verbindest du eine Authenticator-App (z. B. Google/Microsoft Authenticator, 1Password, Aegis). Dauert etwa eine Minute.</small></div></label>
         ${keepHtml}
         <div class="row end createrow"><small class="fieldhint" id="createHint"></small><button class="btn pri" id="aCreate" disabled>Konto anlegen</button></div>`;
       wirePw(el);
@@ -168,6 +169,7 @@ function renderAuth(el, mode = 'in') {
         keep(); busy = true; const b = $('#aCreate', el); b.disabled = true; b.innerHTML = '<span class="spinner sm"></span> Konto wird angelegt …';
         for (const id of ['aPass', 'aPass2', 'aOk', 'aBack']) { const x = $('#' + id, el); if (x) x.disabled = true; }
         localStorage.setItem('vvHrConsent', $('#aHr', el).checked ? new Date().toISOString() : '0');
+        if ($('#a2fa', el).checked) localStorage.setItem('vvWant2fa', '1'); else localStorage.removeItem('vvWant2fa');
         const done = () => { localStorage.setItem('vvLastEmail', st.mail); localStorage.setItem('vvNoticeOk', new Date().toISOString()); st.step = 3; draw(); };
         try {
           // Der Server wartet, bis die Bestätigungsmail verschickt ist; das kann dauern. Spätestens nach 25 s geht es weiter.
@@ -180,7 +182,7 @@ function renderAuth(el, mode = 'in') {
         }
       };
     } else {
-      body.innerHTML = `${steps()}<div class="sentbox"><div class="big">📬</div><h2>Fast geschafft!</h2><p>Wir haben dir an <b>${esc(st.mail)}</b> einen Bestätigungslink geschickt. Öffne ihn auf diesem Gerät, dann bist du angemeldet.</p>${st.slow ? '<p class="small" style="color:var(--warn)">Der Server hat sehr lange gebraucht. Das Konto ist wahrscheinlich trotzdem angelegt: Schau in dein Postfach. Kommt nichts an, in einer Minute erneut senden.</p>' : ''}<p class="small muted">Nichts angekommen? Spam-Ordner prüfen oder in einer Minute erneut senden.</p>
+      body.innerHTML = `${steps()}<div class="sentbox"><div class="big">📬</div><h2>Fast geschafft!</h2><p>Wir haben dir an <b>${esc(st.mail)}</b> einen Bestätigungslink geschickt. Öffne ihn auf diesem Gerät, dann bist du angemeldet.</p>${localStorage.getItem('vvWant2fa') === '1' ? '<p class="small muted">🔐 Danach richten wir gleich die Zwei-Faktor-Anmeldung ein – halte eine Authenticator-App bereit.</p>' : ''}${st.slow ? '<p class="small" style="color:var(--warn)">Der Server hat sehr lange gebraucht. Das Konto ist wahrscheinlich trotzdem angelegt: Schau in dein Postfach. Kommt nichts an, in einer Minute erneut senden.</p>' : ''}<p class="small muted">Nichts angekommen? Spam-Ordner prüfen oder in einer Minute erneut senden.</p>
         <div class="row" style="justify-content:center"><button class="btn" id="aResend" disabled>Erneut senden (60)</button><button class="btn ghost" id="aToLogin">Zur Anmeldung</button></div></div>`;
       cooldown($('#aResend', el), 60, 'Erneut senden');
       $('#aResend', el).onclick = async e => { try { await O.resendSignup(st.mail); toast('Erneut gesendet'); cooldown(e.target, 60, 'Erneut senden'); } catch (er) { err(er); } };
@@ -314,7 +316,7 @@ async function renderAccount(el) {
     <h3 class="sub">Zwei-Faktor-Anmeldung (2FA)</h3>
     ${verified.length ? `<div class="small factorlist">${verified.map(f => `<div class="row between"><span>🔐 ${esc(f.friendly_name || 'Authenticator-App')} <span class="muted">seit ${new Date(f.created_at).toLocaleDateString('de-DE')}</span></span><button class="btn xs ghost danger" data-unenroll="${esc(f.id)}">Entfernen</button></div>`).join('')}</div>${aal2 ? '' : '<p class="small muted">Zum Entfernen erst mit dem Code bestätigen.</p>'}` : `<p class="small muted">Noch nicht eingerichtet.${O.isAdmin() ? ' <b>Für die Admin-Konsole Pflicht.</b>' : ''} Empfohlen: Google Authenticator, Microsoft Authenticator, 1Password oder Aegis.</p>`}
     ${verified.length === 1 ? '<p class="small warn">💡 Ersatz einrichten: Füge einen zweiten Authenticator hinzu (z. B. auf einem Tablet oder in einem Passwortmanager). Geht das Handy verloren, kommst du damit weiter ins Konto. Sonst hilft nur noch der Admin.</p>' : ''}
-    <div class="row"><button class="btn sm ${verified.length ? 'ghost' : 'pri'}" id="mOn">${verified.length ? '+ Weitere App hinzufügen' : '2FA einrichten'}</button></div><div id="mBox"></div>
+    <div class="row"><button class="btn sm ${verified.length ? 'ghost' : 'pri'}" id="mOn">${verified.length ? '+ Weitere App hinzufügen' : '2FA einrichten'}</button></div><div id="mWant"></div><div id="mBox"></div>
   </section>
   <section class="card form"><div class="row between"><h2>Verbindungstest</h2><button class="btn sm" id="dgGo">Test starten</button></div><p class="small muted">Prüft Schritt für Schritt Anmeldung, Profil, Zugang, Admin, Speicher und Live-Kanäle mit Dauer und genauer Fehlermeldung.</p><div id="dgOut" class="dglist small"></div></section>
   <section class="card form" id="clCard"><div class="row between"><h2>📶 Verbindungsprotokoll</h2><span class="row"><select class="inp sm" id="clMin"><option value="10">10 min</option><option value="30" selected>30 min</option><option value="60">60 min</option><option value="120">2 h</option></select><button class="btn sm pri" id="clGo">Langzeittest starten</button></span></div>
@@ -369,6 +371,14 @@ async function renderAccount(el) {
     if (!(await dialog({ title: '2FA entfernen?', html: `<p class="muted">${verified.length > 1 ? 'Diese App kann sich danach nicht mehr bestätigen.' : 'Dein Konto ist danach nur noch mit dem Passwort geschützt.'}</p>`, buttons: [{ label: 'Abbrechen', value: false }, { label: 'Entfernen', value: true, cls: 'danger' }] }))) return;
     try { await O.mfaRemove(b.dataset.unenroll); toast('Entfernt'); render(el); } catch (e) { toast(e.message, 5000); }
   });
+  // Bei der Registrierung gewählt: 2FA gleich nach der ersten Anmeldung einrichten
+  if (verified.length) localStorage.removeItem('vvWant2fa');
+  else if (localStorage.getItem('vvWant2fa') === '1') setTimeout(() => {
+    const w = $('#mWant', el); if (!w) return;
+    w.innerHTML = '<div class="card accbox"><b>🔐 Fast fertig: Zwei-Faktor-Anmeldung einrichten</b><p class="small muted">Wie bei der Registrierung gewählt. Scanne den QR-Code mit deiner Authenticator-App und gib den Code ein.</p><button class="linkbtn small" id="mLater">Später einrichten</button></div>';
+    $('#mLater', el).onclick = () => { localStorage.removeItem('vvWant2fa'); w.innerHTML = ''; $('#mBox', el).innerHTML = ''; toast('Du findest die 2FA jederzeit hier unter Konto › Sicherheit', 4000); };
+    $('#mOn', el).click(); w.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 300);
   $('#mOn', el).onclick = async () => {
     try {
       for (const f of stale) await O.mfaRemove(f.id).catch(() => { }); // halb eingerichtete Versuche aufräumen
