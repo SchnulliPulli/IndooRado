@@ -1099,3 +1099,10 @@ body[data-page=ride] #rw #bigMap, body[data-page=ride] #rw .tbpop, body[data-pag
 .plrow { padding: 6px 8px; border-radius: 12px; }
 .plrow.isfriend { background: color-mix(in srgb, #3ecf8e 14%, transparent); box-shadow: inset 3px 0 0 #3ecf8e; }
 .frtag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 99px; font-size: 11px; font-weight: 700; background: #3ecf8e; color: #06180e; vertical-align: middle; }
+
+/* Dialoge nie höher als der Bildschirm: Text scrollt, Überschrift und Knöpfe bleiben sichtbar (Handy) */
+.modal { padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
+.dlg { max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); display: flex; flex-direction: column; }
+.dlg > h2 { flex: none; }
+.dlg > .dlg-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.dlg > .row.end { flex: none; }
