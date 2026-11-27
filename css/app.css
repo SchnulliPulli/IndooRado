@@ -1169,3 +1169,20 @@ html.tv .btn { min-height: 48px; }
 .rmgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0; }
 .rmb { display: flex; flex-direction: column; align-items: center; height: auto; padding: 12px 6px; gap: 2px; }
 .rmb b { font-size: 26px; line-height: 1; }
+
+/* Gruppenanruf: Kacheln je Teilnehmer */
+.callwin .cwgrid { position: absolute; inset: 0; display: grid; gap: 2px; grid-template-columns: 1fr; }
+.callwin .cwgrid[data-n="2"] { grid-template-columns: 1fr 1fr; }
+.callwin .cwgrid[data-n="3"] { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.callwin .cwgrid[data-n="3"] .cwtile:first-child { grid-column: 1 / -1; }
+.callwin .cwtile { position: relative; min-height: 0; background: #111; overflow: hidden; }
+.callwin .cwtile video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.callwin .cwtile.audio video { opacity: 0; }
+.callwin .cwtile.audio::before { content: "🎙️"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 28px; }
+.callwin .cwname { position: absolute; left: 6px; bottom: 6px; font-size: 12px; font-weight: 700; color: #fff; background: rgba(0,0,0,.55); padding: 2px 7px; border-radius: 6px; }
+.callwin .cwtsas { position: absolute; right: 6px; top: 6px; font-size: 11px; color: #fff; background: rgba(0,0,0,.55); padding: 2px 6px; border-radius: 6px; }
+.callwin.group .cwlocal { width: 22%; }
+.addlist { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow: auto; }
+.callwin .cwhead > .row { flex-wrap: nowrap; gap: 4px; flex: none; }
+.callwin .cwhead .cwt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.callwin .cwname { bottom: auto; top: 6px; }

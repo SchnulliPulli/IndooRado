@@ -5,7 +5,7 @@ import { $, esc, toast, dialog, bus } from './util.js';
 import { profile, sel } from './state.js';
 import * as O from './online/client.js';
 
-export const CALL_TERMS = 3;
+export const CALL_TERMS = 4;
 // Verbindungshelfer (STUN): verraten den Geräten ihre öffentliche Adresse, damit sie sich direkt erreichen. Kein Bild/Ton läuft darüber.
 const ICE = [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.nextcloud.com:443'] }];
 // Weiterleitung (TURN, Cloudflare), wenn keine direkte Verbindung möglich ist (Gast-WLAN, Mobilfunk, strenge Router).
@@ -21,7 +21,7 @@ async function iceFor(room) {
 const JITSI = 'meet.ffmuc.net'; // Ausweichlösung im eigenen Fenster
 const MARK = /^\[\[call:(IndooRado-[A-Za-z0-9]{24})\]\]$/;
 export const callRoom = body => (MARK.exec(body || '') || [])[1] || null;
-export const call = { room: null, peer: null, win: null, pc: null, ch: null, local: null };
+export const call = { room: null, peer: null, win: null, pc: null, ch: null, local: null, peers: new Map() };
 const rand = n => { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789', u = crypto.getRandomValues(new Uint8Array(n)); return [...u].map(x => a[x % a.length]).join(''); };
 
 async function allowed() {
@@ -33,6 +33,7 @@ async function allowed() {
     <p>Für den Verbindungsaufbau tauschen eure Geräte über IndooRado Online (Supabase) kurz technische Verbindungsdaten aus. Dabei sieht dein Gesprächspartner – wie bei jedem direkten Anruf – deine <b>IP-Adresse</b>. Zum Finden der Verbindung werden die STUN-Server von Cloudflare und Nextcloud angefragt (sie sehen ebenfalls nur die IP-Adresse).</p>
     <p>Klappt keine direkte Verbindung (z. B. Gast-WLAN, Mobilfunk), wird der Anruf über einen <b>Weiterleitungsserver (TURN) von Cloudflare</b> geleitet. Bild und Ton bleiben dabei Ende-zu-Ende-verschlüsselt – Cloudflare kann sie nicht ansehen oder anhören, sieht aber IP-Adressen und Datenmenge.</p>
     <p>Gespeichert wird nur die Einladung als private Chat-Nachricht zwischen euch beiden (Raumname, Zeitpunkt), gelöscht nach 12 Monaten. Kamera und Mikrofon fragt dein Browser jeweils ab.</p>
+    <p><b>Gruppenanrufe</b> (bis zu 4 Personen): Jeder Teilnehmer kann eigene Freunde dazuholen. Dann verbinden sich alle Geräte direkt miteinander – auch Personen, mit denen du selbst nicht befreundet bist, sehen dabei deine IP-Adresse, deinen Anzeigenamen und Bild/Ton.</p>
     <p class="small muted">Bitte nur Freunde anrufen, die das möchten, und keine Gespräche ohne Einverständnis aufnehmen.</p>` });
 }
 // Was teile ich? Bild und Ton, nur Ton oder nur Bild (der Browser fragt nur das jeweils Nötige ab)
@@ -61,23 +62,27 @@ export async function startCall(friend) {
 // Beitreten (aus dem Chat oder beim Klingeln)
 export async function joinCall(room, peer) { if (!/^IndooRado-[A-Za-z0-9]{24}$/.test(room) || !(await allowed())) return; const mode = await pickMode(`Anruf von ${peer?.name || 'Freund'} annehmen`); if (mode) openWindow(room, peer, mode); }
 export async function hangUp(notify = true) {
-  const p = call.peer;
+  const notifyIds = [...new Set([call.peer?.id, ...call.peers.keys()].filter(Boolean))];
   try { call.ch?.send({ type: 'broadcast', event: 'sig', payload: { t: 'bye', from: O.online.user?.id } }); } catch (e) { }
-  try { call.pc?.close(); } catch (e) { } call.local?.getTracks().forEach(t => t.stop());
+  for (const P of call.peers.values()) { try { P.pc.close(); } catch (e) { } }
+  call.local?.getTracks().forEach(t => t.stop());
   try { if (call.ch) (await O.client()).removeChannel(call.ch); } catch (e) { }
-  call.win?.remove(); Object.assign(call, { win: null, room: null, peer: null, pc: null, ch: null, local: null });
-  if (notify && p?.id) { try { (await import('./online/presence.js')).callSignal(p.id, 'callend'); } catch (e) { } }
+  call.win?.remove(); call.peers.clear(); Object.assign(call, { win: null, room: null, peer: null, pc: null, ch: null, local: null });
+  // Klingeln beenden, falls noch niemand abgenommen hat
+  if (notify) { try { const PR = await import('./online/presence.js'); for (const id of notifyIds) PR.callSignal(id, 'callend'); } catch (e) { } }
 }
 
-// Schwebendes, verschieb- und größenveränderbares Anruffenster (auch über der Fahrt) mit direkter WebRTC-Verbindung
+/* ---------- Anruffenster und Verbindungen (bis zu 4 Personen: jeder mit jedem, „Mesh“) ----------
+   Signale laufen über den privaten Kanal call:<Raum> (nur Teilnehmer, siehe call_member). Jede Nachricht trägt
+   from/to; jedes Paar handelt seine eigene WebRTC-Verbindung mit „perfekter Aushandlung“ aus. */
 async function openWindow(room, peer, mode = 'av') {
   await hangUp(false); call.room = room; call.peer = peer; call.mode = mode;
   let g = {}; try { g = JSON.parse(localStorage.getItem('vvCallWin') || '{}'); } catch (e) { }
   const w = document.createElement('div'); w.className = 'callwin'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-label', 'Videoanruf');
   Object.assign(w.style, { width: (g.w || 340) + 'px', height: (g.h || 260) + 'px', left: (g.x ?? Math.max(8, innerWidth - (g.w || 340) - 16)) + 'px', top: (g.y ?? 80) + 'px' });
-  w.innerHTML = `<div class="cwhead"><span class="cwt">📹 ${esc(peer?.name || 'Anruf')} <small class="cwst">verbinde …</small></span><span class="row"><button class="btn xs ghost" data-cw="lobby" title="Zur Gruppenfahrt einladen">👥</button><button class="btn xs ghost" data-cw="jitsi" title="Klappt die direkte Verbindung nicht: über Jitsi in neuem Fenster">↗</button><button class="btn xs danger" data-cw="end" title="Auflegen">✕</button></span></div>
+  w.innerHTML = `<div class="cwhead"><span class="cwt">📹 <span class="cwnames">${esc(peer?.name || 'Anruf')}</span> <small class="cwst">verbinde …</small></span><span class="row"><button class="btn xs ghost" data-cw="add" title="Freund dazuholen (bis zu 4 Personen)">➕</button><button class="btn xs ghost" data-cw="lobby" title="Zur Gruppenfahrt einladen">👥</button><button class="btn xs ghost" data-cw="jitsi" title="Klappt die direkte Verbindung nicht: über Jitsi in neuem Fenster">↗</button><button class="btn xs danger" data-cw="end" title="Auflegen">✕</button></span></div>
     <div class="cwsas" hidden title="Sicherheitscode: Seht ihr beide dieselbe Zahl, ist die Verbindung Ende-zu-Ende verschlüsselt und niemand sitzt dazwischen – auch kein Server."></div>
-    <div class="cwbody"><video class="cwremote" autoplay playsinline></video><video class="cwlocal" autoplay playsinline muted></video><div class="cwwait">Warte auf ${esc(peer?.name || 'deinen Freund')} …</div>
+    <div class="cwbody"><div class="cwgrid"></div><video class="cwlocal" autoplay playsinline muted></video><div class="cwwait">Warte auf ${esc(peer?.name || 'deinen Freund')} …</div>
     <div class="cwctl">${mode !== 'video' ? '<button class="btn xs" data-cw="mic" title="Mikrofon an/aus">🎙️</button>' : ''}${mode !== 'audio' ? '<button class="btn xs" data-cw="cam" title="Kamera an/aus">📷</button>' : ''}</div></div>`;
   document.body.appendChild(w); call.win = w;
   const st = t => { const e = w.querySelector('.cwst'); if (e) e.textContent = t; };
@@ -93,6 +98,7 @@ async function openWindow(room, peer, mode = 'av') {
     if (b.dataset.cw === 'end') return hangUp();
     if (b.dataset.cw === 'jitsi') { window.open(`https://${JITSI}/${encodeURIComponent(room)}`, '_blank', 'noopener'); return; }
     if (b.dataset.cw === 'lobby') return inviteToLobby();
+    if (b.dataset.cw === 'add') return addToCall();
     if (b.dataset.cw === 'mic' || b.dataset.cw === 'cam') { const tr = call.local?.getTracks().filter(t => t.kind === (b.dataset.cw === 'mic' ? 'audio' : 'video')) || []; tr.forEach(t => t.enabled = !t.enabled); b.classList.toggle('off', tr.length && !tr[0].enabled); }
   });
   // Kamera und Mikrofon
@@ -101,49 +107,100 @@ async function openWindow(room, peer, mode = 'av') {
   catch (e) { toast(`Kein Zugriff auf ${mode === 'audio' ? 'das Mikrofon' : mode === 'video' ? 'die Kamera' : 'Kamera/Mikrofon'}: ${e.message}`, 5000); return hangUp(false); }
   if (call.room !== room) return;
   if (mode === 'audio') w.querySelector('.cwlocal').remove(); else w.querySelector('.cwlocal').srcObject = call.local;
-  // Direkte Verbindung mit „perfekter Aushandlung“: der Höflichere (größere Nutzer-ID) gibt bei gleichzeitigen Angeboten nach
   const iceServers = await iceFor(room); if (call.room !== room) return;
   // Test: localStorage.vvRelay = '1' erzwingt die Weiterleitung (prüft, ob TURN eingerichtet ist)
   let relayOnly = false; try { relayOnly = localStorage.getItem('vvRelay') === '1' && iceServers.some(x => /^turns?:/.test([].concat(x.urls)[0] || '')); } catch (e) { }
-  const me = O.online.user.id, polite = me > (peer?.id || ''), pc = call.pc = new RTCPeerConnection({ iceServers, ...(relayOnly ? { iceTransportPolicy: 'relay' } : {}) });
-  let makingOffer = false, ignoreOffer = false, started = false;
+  const me = O.online.user.id, myName = O.online.profile?.display_name || profile.name || 'Fahrer';
   const sb = await O.client(); await O.realtimeAuth().catch(() => { });
   const ch = call.ch = sb.channel('call:' + room, { config: { private: true, broadcast: { self: false } } });
-  const send = payload => ch.send({ type: 'broadcast', event: 'sig', payload: { ...payload, from: me } });
-  // Video auf ca. 600 kbit/s begrenzen: schont schwache WLANs, damit Ton und Online-Verbindung nicht abreißen
-  const start = () => { if (started) return; started = true; for (const t of call.local.getTracks()) { const snd = pc.addTrack(t, call.local); if (t.kind === 'video') { try { const pr = snd.getParameters(); pr.encodings = pr.encodings?.length ? pr.encodings : [{}]; pr.encodings[0].maxBitrate = 600000; pr.degradationPreference = 'balanced'; snd.setParameters(pr).catch(() => { }); } catch (e) { } } } };
-  pc.onnegotiationneeded = async () => { try { makingOffer = true; await pc.setLocalDescription(); send({ desc: pc.localDescription.toJSON() }); } catch (e) { console.warn('Anruf', e); } finally { makingOffer = false; } };
-  pc.onicecandidate = ({ candidate }) => { if (candidate) send({ cand: candidate.toJSON() }); };
-  // Gegenüber ohne Kamera: Hinweis statt schwarzem Bild
-  const showRemote = st => { const v = w.querySelector('.cwremote'), hasV = st.getVideoTracks().length > 0, wait = w.querySelector('.cwwait'); if (v.srcObject !== st) v.srcObject = st; v.hidden = !hasV;
-    if (hasV) wait?.remove(); else if (wait) wait.innerHTML = `🎙️ ${esc(peer?.name || 'Dein Freund')} ist nur mit Ton dabei`; else { const d = document.createElement('div'); d.className = 'cwwait'; d.innerHTML = `🎙️ ${esc(peer?.name || 'Dein Freund')} ist nur mit Ton dabei`; w.querySelector('.cwbody').prepend(d); } };
-  pc.ontrack = ({ streams, track }) => { const st = streams[0] || new MediaStream([track]); showRemote(st); st.onaddtrack = () => showRemote(st); };
-  // Netz gewechselt oder kurz weg: ICE neu aushandeln statt aufzugeben (nur eine Seite stößt an)
-  let restartT = null;
-  const restart = () => { if (call.pc !== pc || polite) return; try { pc.restartIce(); } catch (e) { } };
-  pc.onconnectionstatechange = () => {
-    const s = pc.connectionState;
-    clearTimeout(restartT); if (s === 'disconnected') restartT = setTimeout(restart, 4000); if (s === 'failed') restart();
-    if (s === 'connected') { st('verbunden'); setTimeout(() => route(pc).then(r => { if (call.pc !== pc || !r) return; st(r.relay ? 'verbunden · über Weiterleitung' : 'verbunden · direkt'); if (r.relay) capVideo(pc, 300000); }), 600); }
-    if (s === 'connected') sas(pc).then(c => { const e = w.querySelector('.cwsas'); if (c && e) { e.hidden = false; e.innerHTML = `🔒 Sicherheitscode <b class="num">${c}</b> <span class="small">– sieht ${esc(peer?.name || 'dein Freund')} dieselbe Zahl?</span>`; } });
-    if (s !== 'connected') st({ connecting: 'verbinde …', disconnected: 'Verbindung wackelt …', failed: 'keine direkte Verbindung', closed: 'beendet' }[s] || s);
-    if (s === 'failed') toast('Keine Verbindung möglich (strenges Netzwerk). Tipp: ↗ öffnet den Anruf über Jitsi in einem neuen Fenster.', 7000);
+  const send = (to, payload) => ch.send({ type: 'broadcast', event: 'sig', payload: { ...payload, from: me, to } });
+  const grid = w.querySelector('.cwgrid');
+  const names = () => { const n = [...call.peers.values()].map(P => P.name); w.querySelector('.cwnames').textContent = n.length ? n.join(', ') : (peer?.name || 'Anruf'); w.classList.toggle('group', call.peers.size > 1); grid.dataset.n = call.peers.size; };
+  const bitrate = () => { const k = call.peers.size > 1 ? 400000 : 600000; for (const P of call.peers.values()) if (!P.relay) capVideo(P.pc, k); }; // mehr Teilnehmer = je Verbindung weniger
+  const status = () => {
+    const L = [...call.peers.values()], on = L.filter(P => P.pc.connectionState === 'connected');
+    if (!L.length) { st('verbinde …'); return; }
+    if (!on.length) { st(L.some(P => P.pc.connectionState === 'failed') ? 'keine direkte Verbindung' : L.some(P => P.pc.connectionState === 'disconnected') ? 'Verbindung wackelt …' : 'verbinde …'); return; }
+    st(L.length > 1 ? `${on.length + 1} von ${L.length + 1} verbunden` : on[0].relay ? 'verbunden · über Weiterleitung' : on[0].relay === false ? 'verbunden · direkt' : 'verbunden');
   };
+  // Eine Verbindung je Gegenüber
+  const mk = (uid, name) => {
+    if (call.peers.has(uid)) { const P = call.peers.get(uid); if (name) { P.name = name; P.tile.querySelector('.cwname').textContent = name; names(); } return P; }
+    if (call.peers.size >= 3) return null; // höchstens 4 Personen
+    const pc = new RTCPeerConnection({ iceServers, ...(relayOnly ? { iceTransportPolicy: 'relay' } : {}) });
+    const tile = document.createElement('div'); tile.className = 'cwtile'; tile.innerHTML = `<video autoplay playsinline></video><span class="cwname">${esc(name || 'Freund')}</span><span class="cwtsas" hidden></span>`;
+    grid.appendChild(tile); w.querySelector('.cwwait')?.remove();
+    const P = { uid, name: name || 'Freund', pc, tile, polite: me > uid, makingOffer: false, ignoreOffer: false, started: false, relay: null, restartT: null };
+    call.peers.set(uid, P); if (!call.pc) call.pc = pc; names();
+    P.start = () => { if (P.started) return; P.started = true; for (const t of call.local.getTracks()) { const snd = pc.addTrack(t, call.local); if (t.kind === 'video') { try { const pr = snd.getParameters(); pr.encodings = pr.encodings?.length ? pr.encodings : [{}]; pr.encodings[0].maxBitrate = 600000; pr.degradationPreference = 'balanced'; snd.setParameters(pr).catch(() => { }); } catch (e) { } } } bitrate(); };
+    pc.onnegotiationneeded = async () => { try { P.makingOffer = true; await pc.setLocalDescription(); send(uid, { desc: pc.localDescription.toJSON() }); } catch (e) { console.warn('Anruf', e); } finally { P.makingOffer = false; } };
+    pc.onicecandidate = ({ candidate }) => { if (candidate) send(uid, { cand: candidate.toJSON() }); };
+    pc.ontrack = ({ streams, track }) => {
+      const s = streams[0] || new MediaStream([track]), v = tile.querySelector('video');
+      const upd = () => { if (v.srcObject !== s) v.srcObject = s; const hasV = s.getVideoTracks().length > 0; tile.classList.toggle('audio', !hasV); };
+      upd(); s.onaddtrack = upd;
+    };
+    // Netz gewechselt oder kurz weg: ICE neu aushandeln statt aufzugeben (nur eine Seite stößt an)
+    const restart = () => { if (call.peers.get(uid) !== P || P.polite) return; try { pc.restartIce(); } catch (e) { } };
+    pc.onconnectionstatechange = () => {
+      const s = pc.connectionState; clearTimeout(P.restartT);
+      if (s === 'disconnected') P.restartT = setTimeout(restart, 4000); if (s === 'failed') restart();
+      if (s === 'connected') {
+        setTimeout(() => route(pc).then(r => { if (!r || call.peers.get(uid) !== P) return; P.relay = r.relay; if (r.relay) capVideo(pc, 300000); status(); }), 600);
+        sas(pc).then(c => { if (!c) return; const e = tile.querySelector('.cwtsas'); e.hidden = false; e.textContent = '🔒 ' + c; e.title = `Sicherheitscode mit ${P.name}: sieht ${P.name} dieselbe Zahl?`;
+          if (call.peers.size === 1) { const top = w.querySelector('.cwsas'); top.hidden = false; top.innerHTML = `🔒 Sicherheitscode <b class="num">${c}</b> <span class="small">– sieht ${esc(P.name)} dieselbe Zahl?</span>`; } else w.querySelector('.cwsas').hidden = true; });
+      }
+      status();
+      if (s === 'failed' && call.peers.size === 1) toast('Keine Verbindung möglich (strenges Netzwerk). Tipp: ↗ öffnet den Anruf über Jitsi in einem neuen Fenster.', 7000);
+    };
+    return P;
+  };
+  const drop = (uid, why) => {
+    const P = call.peers.get(uid); if (!P) return; try { P.pc.close(); } catch (e) { } P.tile.remove(); call.peers.delete(uid);
+    if (call.pc === P.pc) call.pc = [...call.peers.values()][0]?.pc || null; names(); bitrate(); status();
+    if (why) toast(why, 3000);
+    if (!call.peers.size) setTimeout(() => { if (call.room === room && !call.peers.size) { toast('📴 Alle haben aufgelegt'); hangUp(false); } }, 1500);
+  };
+  call.dropPeer = drop;
   ch.on('broadcast', { event: 'sig' }, async ({ payload: m }) => {
-    if (!m || m.from !== peer?.id || call.room !== room) return; // nur der eingeladene Freund
+    if (!m?.from || m.from === me || call.room !== room) return;
+    if (m.to && m.to !== me) return; // gilt einem anderen Teilnehmer
     try {
-      if (m.t === 'hello') { if (!m.reply) send({ t: 'hello', reply: true }); start(); return; }
-      if (m.t === 'bye') { toast(`📴 ${peer.name} hat aufgelegt`); return hangUp(false); }
-      if (m.desc) {
-        const collision = m.desc.type === 'offer' && (makingOffer || pc.signalingState !== 'stable');
-        ignoreOffer = !polite && collision; if (ignoreOffer) return;
-        await pc.setRemoteDescription(m.desc);
-        if (m.desc.type === 'offer') { start(); await pc.setLocalDescription(); send({ desc: pc.localDescription.toJSON() }); }
-      } else if (m.cand) { try { await pc.addIceCandidate(m.cand); } catch (e) { if (!ignoreOffer) throw e; } }
+      if (m.t === 'hello') { const P = mk(m.from, m.name); if (!P) { send(m.from, { t: 'full' }); return; } if (!m.reply) send(m.from, { t: 'hello', reply: true, name: myName }); if (!P.polite) P.start(); return; } // nur eine Seite je Paar beginnt, die andere antwortet (keine Kollision)
+      if (m.t === 'bye') return drop(m.from, `📴 ${call.peers.get(m.from)?.name || 'Jemand'} hat aufgelegt`);
+      if (m.t === 'full') { toast('Der Anruf ist voll (höchstens 4 Personen)'); return; }
+      const P = call.peers.get(m.from) || mk(m.from, m.name); if (!P) return;
+      // Signale je Gegenüber streng nacheinander verarbeiten (sonst kann ein Kandidat vor seiner Beschreibung ankommen)
+      P.q = (P.q || Promise.resolve()).then(async () => {
+        if (m.desc) {
+          const collision = m.desc.type === 'offer' && (P.makingOffer || P.pc.signalingState !== 'stable');
+          P.ignoreOffer = !P.polite && collision; if (P.ignoreOffer) return;
+          await P.pc.setRemoteDescription(m.desc);
+          if (m.desc.type === 'offer') { P.start(); await P.pc.setLocalDescription(); send(m.from, { desc: P.pc.localDescription.toJSON() }); }
+        } else if (m.cand) { try { await P.pc.addIceCandidate(m.cand); } catch (e) { if (!P.ignoreOffer) console.warn('Kandidat', e.message); } }
+      }).catch(e => console.warn('Anruf-Signal', e));
     } catch (e) { console.warn('Anruf-Signal', e); }
   });
-  ch.subscribe(stt => { if (stt === 'SUBSCRIBED') send({ t: 'hello' }); else if (stt === 'CHANNEL_ERROR' || stt === 'TIMED_OUT') st('Signal gestört – Datenbankschema aktuell?'); });
+  ch.subscribe(stt => { if (stt === 'SUBSCRIBED') send(null, { t: 'hello', name: myName }); else if (stt === 'CHANNEL_ERROR' || stt === 'TIMED_OUT') st('Signal gestört – Datenbankschema aktuell?'); });
 }
+// Freund dazuholen: Teilnehmer in der Datenbank eintragen, Einladung in seinen Chat, Klingeln
+async function addToCall() {
+  if (!call.room) return;
+  if (call.peers.size >= 3) return toast('Höchstens 4 Personen pro Anruf');
+  const sb = await O.client(), { data, error } = await sb.rpc('friend_list');
+  if (error) return toast(error.message, 4000);
+  const inCall = new Set([...call.peers.keys(), call.peer?.id]), list = (data || []).filter(f => f.status === 'accepted' && !inCall.has(f.id));
+  if (!list.length) return toast('Keine weiteren Freunde zum Dazuholen');
+  const PR = await import('./online/presence.js');
+  const v = await dialog({ title: '➕ Freund dazuholen', html: `<p class="small muted">Bis zu 4 Personen. Bei mehreren Teilnehmern geht jede Verbindung direkt von Gerät zu Gerät, das braucht etwas mehr Upload.</p><div class="addlist">${list.map(f => `<label class="switch"><input type="radio" name="addf" value="${esc(f.id)}"><span></span> <div class="swt">${esc(f.display_name)}${PR.sidsOf(f.id).length ? ' <small class="muted">● online</small>' : ''}</div></label>`).join('')}</div>`, buttons: [{ label: 'Abbrechen', value: null }, { label: 'Anrufen', value: 'ok', cls: 'pri' }] });
+  const id = window.__addPick; window.__addPick = null; if (v !== 'ok' || !id) return;
+  const f = list.find(x => x.id === id); if (!f) return;
+  const r = await sb.rpc('call_add', { p_room: call.room, p_friend: f.id }); if (r.error) return toast(r.error.message, 4000);
+  const ins = await sb.from('chat_messages').insert({ recipient: f.id, body: `[[call:${call.room}]]` }); if (ins.error) return toast(ins.error.message, 4000);
+  const n = await PR.callSignal(f.id, 'call');
+  toast(n ? `📞 Es klingelt bei ${f.display_name} …` : `${f.display_name} ist gerade nicht online – die Einladung liegt im Chat`, 4000);
+}
+document.addEventListener('change', e => { if (e.target.name === 'addf') window.__addPick = e.target.value; });
 // Läuft die Verbindung direkt oder über den Weiterleitungsserver (TURN)?
 async function route(pc) {
   try {
@@ -168,9 +225,10 @@ async function sas(pc) {
 }
 // Während des Anrufs zur Gruppenfahrt einladen (legt bei Bedarf eine an: gewählte Strecke, Start in 3 Minuten)
 async function inviteToLobby() {
-  const p = call.peer; if (!p?.id) return;
-  const PR = await import('./online/presence.js'), sids = PR.sidsOf(p.id);
-  if (!sids.length) return toast(`${p.name} ist gerade nicht in IndooRado online`);
+  const ppl = call.peers.size ? [...call.peers.values()].map(P => ({ id: P.uid, name: P.name })) : call.peer?.id ? [call.peer] : []; if (!ppl.length) return;
+  const p = { name: ppl.map(x => x.name).join(', ') };
+  const PR = await import('./online/presence.js'), sids = ppl.flatMap(x => PR.sidsOf(x.id));
+  if (!sids.length) return toast(`${p.name} ${ppl.length > 1 ? 'sind' : 'ist'} gerade nicht in IndooRado online`);
   if (!PR.inviteOffer()) {
     const { getRaw } = await import('./routes.js'), r = await getRaw(sel.routeId), kit = await (await import('./online/sharedroute.js')).kitOf(sel.routeId);
     PR.createLobby({ title: `Fahrt mit ${p.name}`, route: sel.routeId, routeName: r?.name || 'Strecke', minutes: 3, race: false, settings: {}, kit });
@@ -181,7 +239,7 @@ async function inviteToLobby() {
 
 // Klingeln und Auflegen vom Gegenüber
 bus.on('callsignal', async s => {
-  if (s.kind === 'callend') { if (call.peer?.id === s.uid) { toast(`📴 ${s.name} hat aufgelegt`); hangUp(false); } return; }
+  if (s.kind === 'callend') { if (call.peers.has(s.uid)) call.dropPeer?.(s.uid, `📴 ${s.name} hat aufgelegt`); else if (call.peer?.id === s.uid && !call.peers.size) { toast(`📴 ${s.name} hat aufgelegt`); hangUp(false); } return; }
   if (call.room) return; // schon im Gespräch
   // Einladung aus dem privaten Chat holen (nur Freunde können sie schreiben); älter als 3 Minuten = verpasst
   const sb = await O.client(), me = O.online.user?.id; if (!me) return;
