@@ -229,7 +229,7 @@ export async function render(el, params = []) {
       <div class="f">Akzentfarbe<div class="swatches" id="appAcc">${['#ff6a3d', '#3fa7f5', '#4fd18b', '#f5c542', '#b06cf0', '#ef4458', '#00c2c7'].map(c => `<button style="background:${c}" data-c="${c}" aria-pressed="${acc === c}" aria-label="Farbe ${c}"></button>`).join('')}</div></div>
       <p class="small muted">Gilt für Menüs und Seiten. Die Anzeige während der Fahrt hat einen eigenen Stil unter <a href="#/ridesettings">Fahransicht</a>.</p>
       <label class="f">Mapillary-Schlüssel für Straßenbilder <span class="muted small">(optional)</span><input class="inp" id="mlyTok" autocomplete="off" spellcheck="false" placeholder="MLY|…" value="${esc(profile.mlyToken || '')}"><small class="muted">Öffentlicher Client-Schlüssel von mapillary.com › Developers (kostenlos). Ohne Eintrag gilt der Schlüssel des Betreibers, falls vorhanden.</small></label>
-      <label class="switch"><input type="checkbox" id="tvMode" ${profile.tvMode ? 'checked' : ''}><span></span> <div class="swt">📺 Fernseher-Modus<small class="muted">Große Schrift, Bedienung mit den Pfeiltasten der Fernbedienung (Enter = auswählen, Zurück = zurück). Gamepads gehen immer: Steuerkreuz, A, B, Start = Pause, LB/RB = Gang, X = Kamera, Y = Ride On. Handy als Fernbedienung: in der Handy-Ansicht mit demselben Konto.</small></div></label>
+      <label class="switch"><input type="checkbox" id="tvMode" ${localStorage.getItem('vvTv') === '1' ? 'checked' : ''}><span></span> <div class="swt">📺 Fernseher-Modus <span class="muted small">(nur dieses Gerät)</span><small class="muted">Große Schrift, Bedienung mit den Pfeiltasten der Fernbedienung (Enter = auswählen, Zurück = zurück). Gamepads gehen immer: Steuerkreuz, A, B, Start = Pause, LB/RB = Gang, X = Kamera, Y = Ride On. Handy als Fernbedienung: in der Handy-Ansicht mit demselben Konto.</small></div></label>
       <label class="f">Ansicht der Startseite<select class="inp" id="phoneView">${[['auto', 'Automatisch: auf Handys kompakt'], ['always', 'Immer kompakte Handy-Ansicht'], ['never', 'Immer volle Ansicht']].map(([v, l]) => `<option value="${v}" ${(profile.phoneView || 'auto') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <p class="small muted">Die kompakte Ansicht zeigt nächste Fahrt, Woche, Missionen und eine laufende Fahrt, gut lesbar auf dem Handy. Dieses Gerät wird gerade als ${(await import('../app.js')).isPhone() ? '<b>Handy</b>' : '<b>Tablet oder Computer</b>'} erkannt.</p>
       <h2 style="margin-top:18px">Barrierefreiheit</h2>
@@ -247,7 +247,7 @@ export async function render(el, params = []) {
       <p class="small muted">Belegt: ${u ? (u.usage / 1048576).toFixed(1).replace('.', ',') + ' MB' : 'unbekannt'} · Dauerhafter Speicher: ${pers ? 'ja' : 'nicht bestätigt'}</p>
       <label class="switch"><input type="checkbox" id="bkSec"><span></span> <div class="swt">Anmeldungen mitsichern<small class="muted">Strava, Cloud-Speicher und NAS, mit einem Passwort verschlüsselt. So bist du nach dem Einspielen sofort wieder angemeldet.</small></div></label>
       <div class="row"><button class="btn" id="bk">Sicherung herunterladen</button><label class="btn">Sicherung einspielen<input type="file" id="rs" accept=".json" hidden></label></div>
-      <div class="row"><button class="btn ghost danger" id="wp">Alle lokalen Daten löschen</button></div>
+      <div class="row"><button class="btn ghost danger" id="wp">App zurücksetzen (alle lokalen Daten löschen)</button></div>
     </div>
   </section>
   <section class="card form"><h2>Einwilligungen</h2>
@@ -284,7 +284,7 @@ export async function render(el, params = []) {
   el.querySelectorAll('[data-revoke]').forEach(b => b.onclick = async () => { (await import('../consent.js')).revoke(b.dataset.revoke); toast('Einwilligung widerrufen'); b.closest('.row').remove(); });
   on('#appTheme', 'onchange', e => { profile.appTheme = e.target.value; saveProfile(); applyAppTheme(); });
   on('#mlyTok', 'onchange', e => { const v = e.target.value.trim(); if (v && !/^MLY\|[\w|]{10,200}$/.test(v)) { toast('Das sieht nicht wie ein Mapillary-Client-Schlüssel (MLY|…) aus'); return; } profile.mlyToken = v; saveProfile(); toast(v ? 'Mapillary-Schlüssel gespeichert' : 'Mapillary-Schlüssel entfernt'); });
-  on('#tvMode', 'onchange', async e => { profile.tvMode = e.target.checked; saveProfile(); (await import('../tv.js')).applyTv(); });
+  on('#tvMode', 'onchange', async e => { (await import('../tv.js')).setTv(e.target.checked); if (profile.tvMode) { delete profile.tvMode; saveProfile(); } });
   on('#fontScale', 'onchange', e => { profile.fontScale = +e.target.value; saveProfile(); applyAppTheme(); });
   on('#highContrast', 'onchange', e => { profile.highContrast = e.target.checked; saveProfile(); applyAppTheme(); });
   on('#reduceMotion', 'onchange', e => { profile.reduceMotion = { on: true, off: false }[e.target.value]; if (e.target.value === 'auto') delete profile.reduceMotion; saveProfile(); applyAppTheme(); });
@@ -310,7 +310,7 @@ export async function render(el, params = []) {
   on('#rs', 'onchange', async e => { try { await restore(await e.target.files[0].text(), { askPass: () => askPass('Sicherung enthält Anmeldungen: Passwort eingeben') }); toast('Sicherung eingespielt, App wird neu geladen'); setTimeout(() => location.reload(), 1200); } catch (err) { toast('Fehler: ' + err.message, 5000); } });
   on('#wp', 'onclick', async () => {
     const nas = sync.cfg?.url;
-    if (!(await dialog({ title: 'Alle lokalen Daten löschen?', html: `<p>In diesem Browser werden unwiderruflich gelöscht: Fahrten, Fotos, Fortschritt, Pläne, eigene Strecken und Workouts, Einstellungen, Geräte, NAS- und Strava-Zugang sowie der App-Cache.</p><p class="muted small">${nas ? 'Die Daten auf dem NAS bleiben erhalten und lassen sich danach mit „Vom NAS laden“ zurückholen.' : 'Ohne Sicherungsdatei oder NAS sind die Daten danach weg.'}</p>`, buttons: [{ label: 'Abbrechen', value: false }, { label: 'Endgültig löschen', value: true, cls: 'danger' }] }))) return;
+    if (!(await dialog({ title: 'Alle lokalen Daten löschen?', html: `<p>Die App wird auf diesem Gerät in den <b>Auslieferungszustand</b> zurückgesetzt. Unwiderruflich gelöscht werden: alle Fahrten und Fotos, Fortschritt, Pläne, eigene Strecken und Workouts, Einstellungen, Geräte, <b>alle Familienprofile</b>, die Anmeldung aller IndooRado-Konten auf diesem Gerät, NAS-, Cloud- und Strava-Zugang sowie der App-Cache. Danach startet die App neu wie beim ersten Öffnen.</p><p class="muted small">Was in deinem IndooRado-Konto online gespeichert ist, bleibt erhalten und kommt nach erneuter Anmeldung zurück.</p><p class="muted small">${nas ? 'Die Daten auf dem NAS bleiben erhalten und lassen sich danach mit „Vom NAS laden“ zurückholen.' : 'Ohne Sicherungsdatei oder NAS sind die Daten danach weg.'}</p>`, buttons: [{ label: 'Abbrechen', value: false }, { label: 'Endgültig löschen', value: true, cls: 'danger' }] }))) return;
     await wipeAll(); location.replace(location.pathname + '#/');
     setTimeout(() => location.reload(), 50);
   });

@@ -7,9 +7,16 @@ import { bus, toast } from './util.js';
 
 const inRide = () => document.body.dataset.page === 'ride';
 const typing = t => t?.closest?.('input,textarea,select,[contenteditable]');
-const key = (k, extra = {}) => document.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...extra }));
+const key = (k, extra = {}) => (document.body || document).dispatchEvent(new KeyboardEvent('keydown', { key: k, code: k === ' ' ? 'Space' : k.length === 1 ? 'Key' + k.toUpperCase() : k, bubbles: true, cancelable: true, ...extra }));
 
-export function applyTv() { document.documentElement.classList.toggle('tv', !!profile.tvMode); }
+// Fernseher-Modus gilt nur für dieses Gerät (nicht über das Konto auf Handy & Co. übertragen)
+export const tvOn = () => { try { return localStorage.getItem('vvTv') === '1'; } catch (e) { return false; } };
+export function setTv(on) { try { localStorage.setItem('vvTv', on ? '1' : '0'); } catch (e) { } applyTv(); }
+export function applyTv() {
+  // frühere, kontoweite Einstellung einmalig übernehmen – nur auf Geräten ohne Touch (Fernseher, PC), nicht aufs Handy
+  try { if (profile.tvMode && localStorage.getItem('vvTv') == null && !matchMedia('(pointer: coarse)').matches) localStorage.setItem('vvTv', '1'); } catch (e) { }
+  document.documentElement.classList.toggle('tv', tvOn());
+}
 
 /* ---------- Räumliche Navigation mit Pfeiltasten ---------- */
 const focusables = () => [...document.querySelectorAll('.modal.on button, .modal.on a[href], .modal.on input, .modal.on select, .tour button')].filter(vis).length
@@ -31,7 +38,7 @@ function move(dir) {
   if (best) { best.focus({ preventScroll: true }); best.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' }); }
 }
 document.addEventListener('keydown', e => {
-  if (!profile.tvMode || e.defaultPrevented || inRide() || typing(e.target)) return;
+  if (!tvOn() || e.defaultPrevented || inRide() || typing(e.target)) return;
   if (e.key.startsWith('Arrow')) { e.preventDefault(); move(e.key); }
   else if ((e.key === 'Backspace' || e.key === 'BrowserBack' || e.key === 'GoBack') && !document.querySelector('.modal.on')) { e.preventDefault(); history.back(); }
 });
@@ -79,10 +86,11 @@ async function open_(O) {
   rch.on('broadcast', { event: 'cmd' }, ({ payload }) => {
     if (!inRide() || !payload?.c) return;
     const c = payload.c, k = REMOTE[c];
-    if (k) key(k); else if (CMDS.includes(c)) bus.emit('remoteCmd', c); else return;
-    rch.send({ type: 'broadcast', event: 'ack', payload: { ok: true, c, dev: navigator.userAgent.includes('Android') ? 'Android' : '' } });
+    if (!k && !CMDS.includes(c)) return;
+    rch.send({ type: 'broadcast', event: 'ack', payload: { ok: true, c } }); // erst bestätigen, dann ausführen
+    try { bus.emit('remoteCmd', c); } catch (e) { console.warn('Fernbedienung', e); } // die Fahrt führt alles direkt aus (ride.js)
   });
-  rch.on('broadcast', { event: 'ack' }, ({ payload }) => bus.emit('remoteAck', payload));
+  rch.on('broadcast', { event: 'ack' }, ({ payload }) => { if (payload?.ok) bus.emit('remoteAck', payload); }); // Absagen älterer App-Stände ignorieren
   // Live-Stand einer Fahrt auf einem anderen Gerät desselben Kontos (sofort, ohne Umweg über den Speicher)
   rch.on('broadcast', { event: 'live' }, ({ payload }) => { if (payload) { lastLive = { ...payload, hist: payload.hist || lastLive?.hist, rx: Date.now() }; bus.emit('liveRt', lastLive); } }); // Verlauf kommt nur alle 5 s mit
   const c = rch; let st = '';

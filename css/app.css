@@ -1163,7 +1163,7 @@ body.kidmode #nav a[data-k="lobby"], body.kidmode .loginbtn, body.kidmode .msgch
 
 /* Fernseher-Modus */
 html.tv { font-size: 125%; }
-html.tv :focus-visible, html.tv :focus { outline: 4px solid var(--accent, #ff6a3d) !important; outline-offset: 3px; }
+html.tv :focus-visible { outline: 4px solid var(--accent, #ff6a3d) !important; outline-offset: 3px; }
 html.tv .btn { min-height: 48px; }
 /* Handy-Fernbedienung */
 .rmgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0; }

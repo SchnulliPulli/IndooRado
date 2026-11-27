@@ -452,7 +452,7 @@ function bindUi() {
     if ((e.key === 'o' || e.key === 'O') && !e.target.closest?.('input,textarea')) { photoMode(S, !S.world.photo); return; }
     if ((e.key === 'v' || e.key === 'V') && S.videoToggle && !e.target.closest?.('input,textarea')) { S.videoToggle(); return; }
     const sk = steerKey(S, e); if (sk === 'pup') { usePup(S, flash); return; } if (sk) { e.preventDefault(); return; }
-    if (e.target.matches('input,select,textarea')) return;
+    if (e.target.matches?.('input,select,textarea')) return; // Fernbedienung: Ziel ist das Dokument
     if (S.demoKey?.(e)) { e.preventDefault(); return; }
     if (e.key === 'ArrowUp' || e.key === '+') { shift(1); e.preventDefault(); }
     else if (e.key === 'ArrowDown' || e.key === '-') { shift(-1); e.preventDefault(); }
@@ -477,6 +477,15 @@ function bindUi() {
     if (c === 'next') { if (wi && !wi.done) { S.wT += wi.left + .01; flash('⏭ Nächstes Intervall', 1400); } else flash('Kein Workout aktiv', 1200); }
     else if (c === 'prev' || c === 'restart') { if (!wi || wi.done) { flash('Kein Workout aktiv', 1200); return; } if (c === 'prev' && S.wT - wi.start < 5 && wi.start > 0) { const p = woAt(S.wo, wi.start - .5); S.wT = p.start + .01; flash('⏮ Vorheriges Intervall', 1400); } else { S.wT = wi.start + .01; flash('↺ Intervall von vorn', 1400); } }
     else if (c === 'harder' || c === 'easier') { S.wOff = clamp(S.wOff + (c === 'harder' ? 2 : -2), -40, 40); flash(`Intensität ${100 + S.wOff} %`, 1200); }
+    else if (c === 'pause') togglePause();
+    else if (c === 'up' || c === 'down') shift(c === 'up' ? 1 : -1);
+    else if (c === 'left' || c === 'right') S.latT = clamp((S.latT ?? 1.5) + (c === 'right' ? .6 : -.6), .3, 3.2);
+    else if (c === 'cam') $('#tView', S.el)?.click();
+    else if (c === 'photo') shot('Foto');
+    else if (c === 'rideon') giveRideOn();
+    else if (c === 'music') nextTrack();
+    else if (c === 'map') { if ($('#bigMap').hidden) openMap(); else closeMap(); }
+    else if (c === 'pup') usePup(S, flash);
     else if (c === 'end') endRide();
     else if (c === 'endsave') { document.querySelector('.modal.on .enddlg')?.closest('.modal')?.remove(); endRide(false, 'save'); }
   }));
