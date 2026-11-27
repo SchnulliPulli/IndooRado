@@ -63,6 +63,8 @@ addEventListener('gamepaddisconnected', () => { pads = Math.max(0, pads - 1); })
 /* ---------- Handy als Fernbedienung ----------
    Beide Geräte mit demselben Konto angemeldet. Privater Realtime-Kanal „remote:<Nutzer-ID>“ (nur dieses Konto).
    Der Fernseher/PC hört nur zu, während eine Fahrt läuft. */
+// Befehle, die die Fahrt selbst auswertet (Workout, Beenden): siehe ride.js „remoteCmd“
+export const CMDS = ['next', 'prev', 'restart', 'harder', 'easier', 'end', 'endsave'];
 export const REMOTE = { pause: ' ', up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', cam: 'c', rideon: 'r', photo: 'p', map: 'k', pup: 'u', music: 't' };
 let rch = null, rchP = null, lastLive = null; export const remote = { err: null, ok: false };
 async function channel() {
@@ -73,10 +75,16 @@ async function channel() {
 async function open_(O) {
   const sb = await O.client(); await O.realtimeAuth().catch(() => { });
   rch = sb.channel('remote:' + O.online.user.id, { config: { private: true, broadcast: { self: false } } });
-  rch.on('broadcast', { event: 'cmd' }, ({ payload }) => { if (!inRide()) { rch.send({ type: 'broadcast', event: 'ack', payload: { ok: false, why: 'keine Fahrt' } }); return; } const k = REMOTE[payload?.c]; if (k) { key(k); rch.send({ type: 'broadcast', event: 'ack', payload: { ok: true, c: payload.c } }); } });
+  // Nur das Gerät mit laufender Fahrt reagiert und antwortet; alle anderen Geräte des Kontos schweigen
+  rch.on('broadcast', { event: 'cmd' }, ({ payload }) => {
+    if (!inRide() || !payload?.c) return;
+    const c = payload.c, k = REMOTE[c];
+    if (k) key(k); else if (CMDS.includes(c)) bus.emit('remoteCmd', c); else return;
+    rch.send({ type: 'broadcast', event: 'ack', payload: { ok: true, c, dev: navigator.userAgent.includes('Android') ? 'Android' : '' } });
+  });
   rch.on('broadcast', { event: 'ack' }, ({ payload }) => bus.emit('remoteAck', payload));
   // Live-Stand einer Fahrt auf einem anderen Gerät desselben Kontos (sofort, ohne Umweg über den Speicher)
-  rch.on('broadcast', { event: 'live' }, ({ payload }) => { if (payload) { lastLive = { ...payload, rx: Date.now() }; bus.emit('liveRt', lastLive); } });
+  rch.on('broadcast', { event: 'live' }, ({ payload }) => { if (payload) { lastLive = { ...payload, hist: payload.hist || lastLive?.hist, rx: Date.now() }; bus.emit('liveRt', lastLive); } }); // Verlauf kommt nur alle 5 s mit
   const c = rch; let st = '';
   await new Promise(res => { c.subscribe(s => { st = s; if (s === 'SUBSCRIBED' || s === 'CHANNEL_ERROR' || s === 'TIMED_OUT') res(); }); setTimeout(res, 8000); });
   remote.ok = st === 'SUBSCRIBED'; remote.err = remote.ok ? null : st === 'CHANNEL_ERROR' ? 'Kanal abgelehnt – Datenbankschema aktualisieren (schema.sql erneut ausführen)' : 'keine Verbindung zum Server';
@@ -84,7 +92,13 @@ async function open_(O) {
   return c;
 }
 export async function listenRemote() { try { await channel(); } catch (e) { } }
-export async function sendRemote(c) { const O = await import('./online/client.js'); if (!O.loggedIn()) { toast('Fernbedienung braucht ein angemeldetes Konto'); return false; } const ch = await channel(); if (!ch) { toast('Fernbedienung: ' + (remote.err || 'keine Verbindung'), 5000); return false; } ch.send({ type: 'broadcast', event: 'cmd', payload: { c } }); return true; }
+let ackT = null;
+bus.on('remoteAck', () => { clearTimeout(ackT); ackT = null; });
+export async function sendRemote(c) {
+  clearTimeout(ackT); ackT = setTimeout(() => bus.emit('remoteAck', { ok: false, why: 'none' }), 3000); // keine Antwort = keine laufende Fahrt gefunden
+  return sendRemote_(c);
+}
+async function sendRemote_(c) { const O = await import('./online/client.js'); if (!O.loggedIn()) { toast('Fernbedienung braucht ein angemeldetes Konto'); return false; } const ch = await channel(); if (!ch) { toast('Fernbedienung: ' + (remote.err || 'keine Verbindung'), 5000); return false; } ch.send({ type: 'broadcast', event: 'cmd', payload: { c } }); return true; }
 // Fahrt-Gerät: Live-Stand an die anderen Geräte desselben Kontos senden
 export async function sendLive(obj) { const ch = await channel().catch(() => null); ch?.send({ type: 'broadcast', event: 'live', payload: { ...obj, ts: Date.now() } }); }
 // Anzeige-Gerät: frischester Live-Stand (Echtzeitkanal, sonst Speicher)

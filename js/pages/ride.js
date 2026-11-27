@@ -470,6 +470,16 @@ function bindUi() {
   };
   document.addEventListener('keydown', S.key);
   S.offs.push(bus.on('shift', d => shift(d)));
+  // Handy als Fernbedienung: Workout-Steuerung und Beenden
+  S.offs.push(bus.on('remoteCmd', c => {
+    if (!S?.alive) return;
+    const wi = S.wo ? woAt(S.wo, S.wT) : null;
+    if (c === 'next') { if (wi && !wi.done) { S.wT += wi.left + .01; flash('⏭ Nächstes Intervall', 1400); } else flash('Kein Workout aktiv', 1200); }
+    else if (c === 'prev' || c === 'restart') { if (!wi || wi.done) { flash('Kein Workout aktiv', 1200); return; } if (c === 'prev' && S.wT - wi.start < 5 && wi.start > 0) { const p = woAt(S.wo, wi.start - .5); S.wT = p.start + .01; flash('⏮ Vorheriges Intervall', 1400); } else { S.wT = wi.start + .01; flash('↺ Intervall von vorn', 1400); } }
+    else if (c === 'harder' || c === 'easier') { S.wOff = clamp(S.wOff + (c === 'harder' ? 2 : -2), -40, 40); flash(`Intensität ${100 + S.wOff} %`, 1200); }
+    else if (c === 'end') endRide();
+    else if (c === 'endsave') { document.querySelector('.modal.on .enddlg')?.closest('.modal')?.remove(); endRide(false, 'save'); }
+  }));
   // Click-Controller: drei schnelle Klicks auf dieselbe Taste überspringen das Intervall, einzelne Klicks schalten
   S.offs.push(bus.on('clickpress', id => {
     const now = performance.now(), P = S.presses = (S.presses || []).filter(p => now - p.t < 900 && p.id === id);
@@ -779,17 +789,18 @@ function note(txt) { S.adapt.note = txt; S.adapt.noteT = performance.now(); if (
 // Live-Fahrt für die Companion-Ansicht (läuft im Simulationstakt, also auch bei verdecktem Fenster)
 function liveShare() {
   if (S?.offline) return;
-  if (performance.now() - (S.liveT || 0) < 5000) return;
-  S.liveT = performance.now();
+  // jede Sekunde an die eigenen anderen Geräte (Echtzeitkanal), alle 5 s auch in den Speicher (Rückfall)
+  const nowP = performance.now(); if (nowP - (S.liveT || 0) < 1000) return;
+  S.liveT = nowP; const store = nowP - (S.liveStoreT || 0) >= 5000; if (store) S.liveStoreT = nowP;
   const me = { dev: syncState.device?.id, devName: syncState.device?.name, tab: TAB };
   // Verlauf für die Live-Ansicht: alle 15 s ein Punkt, höchstens eine Stunde
   const H = S.liveHist ||= []; if (S.state === 'riding' && (!H.length || S.t - H.at(-1)[0] >= 15)) { const p3n = S.p3.length ? S.p3.reduce((a, b) => a + b, 0) / S.p3.length : 0; H.push([Math.round(S.t), Math.round(p3n), live.heart ?? null, live.cadence != null ? Math.round(live.cadence) : null, +(S.v * 3.6).toFixed(1)]); if (H.length > 240) H.shift(); }
   // Ohne Teilen nur die Belegung melden (Sperre für andere Geräte), keine Werte
-  if (profile.liveShare === false) { putLive({ state: S.state, route: S.route.name, t: Math.round(S.t), ...me }); return; }
+  if (profile.liveShare === false) { if (store) putLive({ state: S.state, route: S.route.name, t: Math.round(S.t), ...me }); return; }
   const R = S.route, wi = S.wi, p3 = S.p3.length ? S.p3.reduce((a, b) => a + b, 0) / S.p3.length : 0, np = S.np.n ? Math.pow(S.np.s4 / S.np.n, .25) : p3;
   putLive({ state: S.state, route: R.name, routeId: R.id, total: R.total, loop: R.loop, pos: S.dist, odo: Math.round(S.odo), t: Math.round(S.t), p: Math.round(p3), hr: live.heart, cad: live.cadence != null ? Math.round(live.cadence) : null, v: +(S.v * 3.6).toFixed(1), asc: Math.round(S.asc), kj: Math.round(S.kj), np: Math.round(np), grade: +R.gradeAt(S.dist).toFixed(1),
     wo: S.wo ? { name: S.wo.name, i: wi && !wi.done ? wi.i + 1 : null, n: S.wo.segs.length, left: wi && !wi.done ? Math.round(wi.left) : 0, target: S.target ? Math.round(S.target) : null, done: Math.round(S.wT), total: woTotal(S.wo) } : null,
-    ghost: S.ghost ? Math.round(S.ghostGap) : null, place: S.npcOn ? S.field.filter(n => gapOf(R, n.d, S.dist) > 0).length + 1 : null, hist: S.liveHist, ...me });
+    ghost: S.ghost ? Math.round(S.ghostGap) : null, place: S.npcOn ? S.field.filter(n => gapOf(R, n.d, S.dist) > 0).length + 1 : null, hist: S.liveHist, ...me }, { store });
   watchPush(p3);
   // Alle 20 s prüfen, ob trotzdem woanders eine Fahrt läuft (beide fast gleichzeitig gestartet)
   if (!S.dupCheckAt || performance.now() > S.dupCheckAt) { S.dupCheckAt = performance.now() + 20000; setTimeout(async () => { const L = await getLive().catch(() => null); if (S?.alive && L && L.tab && L.tab !== TAB && L.state !== 'ended' && Date.now() - L.ts < 4000 && !S.dupWarned) { S.dupWarned = true; flash(`⚠️ Auf „${L.devName || 'einem anderen Gerät'}“ läuft ebenfalls eine Fahrt mit deinem Konto. Bitte eine davon beenden.`, 6000); } }, 2500); }
@@ -1198,7 +1209,7 @@ function shot(caption) {
 }
 
 /* ---------- Ende ---------- */
-async function endRide(auto = false) {
+async function endRide(auto = false, forced = null) {
   if (!S) return;
   auto = auto === true; // als Klick-Handler kommt hier ein Event an
   const prevState = S.state; if (S.state === 'riding') S.state = 'paused';
@@ -1212,7 +1223,8 @@ async function endRide(auto = false) {
   const buttons = demo || empty
     ? [{ label: '⏹ Beenden', value: 'quit', cls: 'pri big' }, { label: '▶ Weiterfahren', value: 'back' }, { label: '🏠 Zum Menü – Fahrt bleibt pausiert', value: 'menu', cls: 'ghost' }]
     : [{ label: '💾 Speichern und Auswertung', value: 'save', cls: 'pri big' }, { label: '▶ Weiterfahren', value: 'back' }, { label: '🏠 Zum Menü – Fahrt bleibt pausiert', value: 'menu' }, { label: '🗑 Verwerfen', value: 'drop', cls: 'ghost danger' }];
-  const v = await dialog({ title: auto ? '🏁 Ziel erreicht!' : 'Fahrt beenden?', html: `${tiles}<p class="small muted endnote">${note}</p>`, buttons, cls: 'enddlg' });
+  if (forced && (demo || empty) && forced === 'save') forced = 'quit';
+  const v = forced || await dialog({ title: auto ? '🏁 Ziel erreicht!' : 'Fahrt beenden?', html: `${tiles}<p class="small muted endnote">${note}</p>`, buttons, cls: 'enddlg' });
   // Ins Menü, ohne zu beenden: Fahrt wird pausiert geparkt und lässt sich über „Zurück zur Fahrt“ fortsetzen
   if (v === 'menu') { if (S) S.state = 'paused'; location.hash = '#/'; return; }
   if (v === 'quit') { leave(); location.hash = '#/'; return; }

@@ -85,7 +85,7 @@ const T = [
     <li><b>Wischen</b>: Seitlich über die Seite wischen springt zum nächsten bzw. vorherigen Reiter (z. B. Profil → Avatar → Fahrt & Ton).</li>
     <li>Als App installieren: im Browser-Menü „Zum Startbildschirm hinzufügen“.</li>
     <li><b>Live-Ansicht</b>: Läuft auf einem anderen Gerät deines Kontos eine Fahrt, siehst du sie live auf der Startseite. Pro Konto läuft immer nur eine Fahrt gleichzeitig.</li>    <li><b>👨‍👩‍👧 Familienprofile</b>: Unter Einstellungen › Profil mehrere Personen anlegen, jede mit eigenen Fahrten und Fortschritt. Kinderprofile haben sanften Widerstand, kurze bunte Fahrten und keinen Online-Bereich.</li>
-    <li><b>📺 Fernseher-Modus</b> (App &amp; Daten): große Schrift, Bedienung mit Pfeiltasten der Fernbedienung. Gamepads gehen immer. Das Handy wird mit demselben Konto in der Handy-Ansicht zur Fernbedienung.</li>
+    <li><b>📺 Fernseher-Modus</b> (App &amp; Daten): große Schrift, Bedienung mit Pfeiltasten der Fernbedienung. Gamepads gehen immer. Das Handy wird mit demselben Konto in der Handy-Ansicht zur Fernbedienung: Pause, Gänge, Kamera, Ride On, Foto, Musik sowie Workout (Intervall zurück/neu/weiter, Intensität ±2 %) und Beenden mit Speichern.</li>
 </ul>`],
   ['probleme', '🛠️', 'Wenn etwas nicht klappt', `<ul class="tips">
     <li><b>Ruckelt die Fahrt?</b> Die App senkt die Auflösung selbst. Zusätzlich hilft Einstellungen › App & Daten › Grafik „Mittel“ oder „Niedrig“.</li>

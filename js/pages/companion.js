@@ -1,5 +1,5 @@
 // Companion: Handy-Ansicht zum Planen, Nachsehen und Mitverfolgen einer laufenden Fahrt (über den NAS-Abgleich)
-import { $, esc, fmtKm, fmtDur, fmtT, fmtDate, toast, bus } from '../util.js';
+import { $, esc, fmtKm, fmtDur, fmtT, fmtDate, toast, bus, dialog } from '../util.js';
 import { profile, sel, saveSel, progress, levelOf, loadState } from '../state.js';
 import { db } from '../db.js';
 import { totals, fitness } from '../analysis.js';
@@ -33,7 +33,9 @@ export async function render(el) {
     <div class="card live" id="cLive" hidden></div>
     ${OC.loggedIn() ? `<div class="card remote"><div class="row between"><h2>🎮 Fernbedienung</h2><span class="small muted" id="rmSt">für die laufende Fahrt</span></div>
       <div class="rmgrid">${[['pause', '⏯️', 'Pause'], ['up', '➕', 'Schwerer'], ['cam', '🎥', 'Kamera'], ['left', '⬅️', 'Spur'], ['down', '➖', 'Leichter'], ['right', '➡️', 'Spur'], ['rideon', '👍', 'Ride On'], ['photo', '📷', 'Foto'], ['music', '🎵', 'Musik']].map(([c, i, l]) => `<button class="btn rmb" data-rm="${c}"><b>${i}</b><span>${l}</span></button>`).join('')}</div>
-      <p class="small muted">Steuert die Fahrt auf deinem PC oder Fernseher, wenn dort dasselbe Konto angemeldet ist.</p></div>` : ''}
+      <h3 class="sub">Workout</h3>
+      <div class="rmgrid">${[['prev', '⏮️', 'Zurück'], ['restart', '↺', 'Neu starten'], ['next', '⏭️', 'Weiter'], ['easier', '🔽', 'Leichter %'], ['harder', '🔼', 'Härter %'], ['end', '⏹️', 'Beenden']].map(([c, i, l]) => `<button class="btn rmb ${c === 'end' ? 'danger' : ''}" data-rm="${c}"><b>${i}</b><span>${l}</span></button>`).join('')}</div>
+      <p class="small muted">Steuert die laufende Fahrt auf deinem PC oder Fernseher, wenn dort dasselbe Konto angemeldet ist. ⏮️ springt an den Anfang des Intervalls, zweimal schnell ins vorherige.</p></div>` : ''}
 
     <div class="card"><div class="row between"><h2>Nächste Fahrt</h2><a class="small" href="#/plans">Plan</a></div>
       ${next ? `<div class="compnext"><div><div class="small muted">${esc(pr.p.name)} · Woche ${next.week}</div><b>${esc(next.name)}</b><div class="small muted num">${fmtDur(wStats(next).dur)} · TSS ${wStats(next).tss}</div></div>${sel.workoutId === next.id ? '<span class="tag">vorgemerkt</span>' : `<button class="btn sm pri" data-pick="${next.id}">Vormerken</button>`}</div>` : '<p class="small muted">Kein Trainingsplan aktiv.</p>'}
@@ -54,13 +56,18 @@ export async function render(el) {
     </div>
   </section>`;
 
-  { const off = bus.on('remoteAck', a => { const st = $('#rmSt', el); if (!st || !el.isConnected) return off?.(); st.textContent = a?.ok ? '✓ angekommen' : '⚠ dort läuft gerade keine Fahrt'; }); }
+  { const off = bus.on('remoteAck', a => { const st = $('#rmSt', el); if (!st || !el.isConnected) return off?.(); st.textContent = a?.ok ? '✓ angekommen' : '⚠ keine laufende Fahrt gefunden – ist dort dasselbe Konto angemeldet und die Fahrt geöffnet?'; }); }
   el.onchange = e => {
     if (e.target.id === 'cWo') { sel.workoutId = e.target.value || null; saveSel(); toast(nas ? 'Vorgemerkt, wird zum PC übertragen' : 'Vorgemerkt'); render(el); }
     if (e.target.id === 'cRoute') { sel.routeId = e.target.value; saveSel(); toast('Strecke vorgemerkt'); }
   };
   el.onclick = async e => {
-    const rm = e.target.closest('[data-rm]'); if (rm) { const T = await import('../tv.js'); navigator.vibrate?.(15); if (await T.sendRemote(rm.dataset.rm)) { const st = $('#rmSt', el); if (st) st.textContent = 'gesendet …'; } return; }
+    const rm = e.target.closest('[data-rm]');
+    if (rm) {
+      let c = rm.dataset.rm;
+      if (c === 'end') { const v = await dialog({ title: 'Fahrt beenden?', html: '<p class="muted">Die Fahrt auf dem anderen Gerät wird beendet.</p>', buttons: [{ label: 'Abbrechen', value: null }, { label: 'Dort nachfragen', value: 'end' }, { label: '💾 Speichern und beenden', value: 'endsave', cls: 'pri' }] }); if (!v) return; c = v; }
+      const T = await import('../tv.js'); navigator.vibrate?.(15); if (await T.sendRemote(c)) { const st = $('#rmSt', el); if (st) st.textContent = 'gesendet …'; } return;
+    }
     const b = e.target.closest('[data-pick]'); if (b) { sel.workoutId = b.dataset.pick; saveSel(); toast('Vorgemerkt'); render(el); return; }
     if (e.target.id === 'cRefresh') {
       e.target.disabled = true; e.target.textContent = '↻ …';

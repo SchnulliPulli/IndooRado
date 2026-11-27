@@ -375,8 +375,10 @@ export function schedulePush(ms = 4000) {
 /* ---------- Live-Fahrt für die Companion-Ansicht (kleine Datei live.json im NAS-Ordner) ---------- */
 export const syncReady = () => configured() && !sync.needLogin && (ON || sync.cfg.mode !== 'dsm' || sync.cfg.sid || sync.cfg.pass);
 let liveBusy = false;
-export async function putLive(obj) {
-  if (ON) import('./tv.js').then(m => m.sendLive(obj)).catch(() => { }); // zusätzlich sofort über den Echtzeitkanal des Kontos
+// store = false: nur über den Echtzeitkanal (jede Sekunde), in den Speicher nur alle paar Sekunden
+export async function putLive(obj, { store = true } = {}) {
+  if (ON) import('./tv.js').then(m => m.sendLive(store ? obj : { ...obj, hist: undefined })).catch(() => { }); // sofort über den Echtzeitkanal des Kontos
+  if (!store) return;
   if (!syncReady() || liveBusy) return;
   liveBusy = true;
   try { await prep(); await B().put('live.json', JSON.stringify({ ...obj, ts: Date.now() }), 'application/json'); } catch (e) { } finally { liveBusy = false; }
