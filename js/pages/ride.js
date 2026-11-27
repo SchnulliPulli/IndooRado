@@ -117,6 +117,7 @@ export async function render(el) {
       <button class="tbtn" id="tSnd" title="Ton (M)">${ICON.sound}<span id="tSndL">Ton</span></button>
       <button class="tbtn" id="tLayout" title="Anzeige anordnen">${ICON.layout}<span>Anordnen</span></button>
       <button class="tbtn" id="tFull" title="Vollbild">${ICON.full}<span>Vollbild</span></button>
+      <button class="tbtn" id="tWatch" title="Zuschauer-Link: Freunde sehen live zu und feuern an"><b class="dots">📺</b><span id="tWatchL">Zuschauer</span></button>
       <button class="tbtn" id="tBuddy" title="Trainingsbuddy, der dich pusht"><b class="dots">🤝</b><span id="tBuddyL">Buddy</span></button>
       <button class="tbtn" id="tTour" title="Kurze Einführung in die Anzeigen"><b class="dots">🎓</b><span>Einführung</span></button>
       <button class="tbtn" id="tKeys" title="Tastenkürzel (Taste ?)"><b class="dots">⌨️</b><span>Tastenkürzel</span></button>
@@ -324,6 +325,7 @@ function bindUi() {
   $('#tPause', el).onclick = togglePause;
   $('#tView', el).onclick = () => flash('Kamera: ' + VIEWS[S.world.cycleView()]);
   $('#tShot', el).onclick = () => shot('Foto');
+  $('#tWatch', el).onclick = async () => { const M = await import('../watch.js'); await M.startWatch(online?.profile?.display_name || profile.name); $('#tWatchL', el).textContent = M.W.token ? 'Zuschauer an' : 'Zuschauer'; };
   $('#tMode', el).onclick = cycleMode;
   $('#tNpc', el).onclick = toggleNpcs;
   $('#tFull', el).onclick = toggleFullscreen;
@@ -690,6 +692,13 @@ function endHint(on) {
   b.classList.toggle('pulse', on);
   if (on) { try { b.focus({ preventScroll: true }); } catch (e) { } } else if (document.activeElement === b) b.blur();
 }
+/* ---------- Zuschauer-Link: Stand senden, Anfeuerungen zeigen ---------- */
+async function watchPush(p3) {
+  const M = window.__watchMod ||= await import('../watch.js'); if (!M.W.token) return;
+  const R = S.route; if (!R.prof) { R.prof = []; for (let i = 0; i <= 80; i++) R.prof.push(Math.round(R.eleAt(R.total * i / 80))); }
+  const cheers = await M.pushWatch({ state: S.finished ? 'ended' : S.state, route: R.name, total: Math.round(R.total), loop: !!R.loop, d: Math.round(S.dist), odo: Math.round(S.odo), t: Math.round(S.t), p: Math.round(p3), v: +(S.v * 3.6).toFixed(1), asc: Math.round(S.asc), grade: +R.gradeAt(S.dist).toFixed(1), hr: live.heart ?? null, cad: live.cadence != null ? Math.round(live.cadence) : null, prof: R.prof, wo: S.wo ? S.wo.name : null });
+  for (const [i, c] of cheers.entries()) setTimeout(() => { if (!S?.alive) return; flash(`${c.e} ${c.n ? c.n + ' feuert dich an!' : 'Anfeuerung!'}`, 2200); const f = document.createElement('div'); f.className = 'cheerfly'; f.textContent = c.e; f.style.left = (20 + Math.random() * 60) + '%'; S.el.querySelector('.ridewrap')?.appendChild(f); setTimeout(() => f.remove(), 2600); }, i * 900);
+}
 /* ---------- Videofahrt: eigenes Video statt 3D-Welt ---------- */
 async function videoSetup(S, el) {
   const V = await import('../video.js'), R = S.route, vid = $('#rideVid', el), box = document.createElement('div');
@@ -771,6 +780,7 @@ function liveShare() {
   putLive({ state: S.state, route: R.name, routeId: R.id, total: R.total, loop: R.loop, pos: S.dist, odo: Math.round(S.odo), t: Math.round(S.t), p: Math.round(p3), hr: live.heart, cad: live.cadence != null ? Math.round(live.cadence) : null, v: +(S.v * 3.6).toFixed(1), asc: Math.round(S.asc), kj: Math.round(S.kj), np: Math.round(np), grade: +R.gradeAt(S.dist).toFixed(1),
     wo: S.wo ? { name: S.wo.name, i: wi && !wi.done ? wi.i + 1 : null, n: S.wo.segs.length, left: wi && !wi.done ? Math.round(wi.left) : 0, target: S.target ? Math.round(S.target) : null, done: Math.round(S.wT), total: woTotal(S.wo) } : null,
     ghost: S.ghost ? Math.round(S.ghostGap) : null, place: S.npcOn ? S.field.filter(n => gapOf(R, n.d, S.dist) > 0).length + 1 : null, hist: S.liveHist, ...me });
+  watchPush(p3);
   // Alle 20 s prüfen, ob trotzdem woanders eine Fahrt läuft (beide fast gleichzeitig gestartet)
   if (!S.dupCheckAt || performance.now() > S.dupCheckAt) { S.dupCheckAt = performance.now() + 20000; setTimeout(async () => { const L = await getLive().catch(() => null); if (S?.alive && L && L.tab && L.tab !== TAB && L.state !== 'ended' && Date.now() - L.ts < 4000 && !S.dupWarned) { S.dupWarned = true; flash(`⚠️ Auf „${L.devName || 'einem anderen Gerät'}“ läuft ebenfalls eine Fahrt mit deinem Konto. Bitte eine davon beenden.`, 6000); } }, 2500); }
 }
@@ -1213,6 +1223,7 @@ document.addEventListener('visibilitychange', () => { if (S?.alive && document.v
 
 export function leave() {
   if (!S) return;
+  if (window.__watchMod?.W.token) { const M = window.__watchMod; M.W.lastPush = 0; M.pushWatch({ state: 'ended', route: S.route.name, total: Math.round(S.route.total), d: Math.round(S.dist), odo: Math.round(S.odo), t: Math.round(S.t), asc: Math.round(S.asc), p: 0, v: 0, prof: S.route.prof }); }
   S.alive = false; S.vbox?.remove(); if (S.vurl) { const v = $('#rideVid', S.el); v?.pause(); URL.revokeObjectURL(S.vurl); } setTimeout(() => bus.emit('rideEnded'), 1500); S.live?.leave(); window.__presence?.setStatus({ where: 'menu', route: null, routeName: null, kit: null }); sound.silence(); music.stop(); hush(); putLive({ state: 'ended', t: Math.round(S.t), odo: Math.round(S.odo), route: S.route.name }); clearInterval(S.timer); cancelAnimationFrame(S.raf); S.ro?.disconnect();
   document.removeEventListener('keydown', S.key); S.offs.forEach(f => f());
   try { S.world.dispose(); } catch (e) { }

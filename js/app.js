@@ -18,6 +18,7 @@ const PAGES = {
   avatar: () => import('./pages/avatar.js'),
   legal: () => import('./pages/legal.js'),
   live: () => import('./pages/live.js'),
+  watch: () => import('./pages/watch.js'), // Zuschauer-Link (ohne Konto nutzbar)
   events: () => import('./pages/community.js').then(m => ({ ...m, render: el => m.render(el, ['events']) })), clubs: () => import('./pages/community.js').then(m => ({ ...m, render: el => m.render(el, ['clubs']) })),
   lobby: () => import('./pages/online.js'), players: () => import('./pages/online.js').then(m => ({ ...m, render: el => m.render(el, ['players']) })), account: () => import('./pages/account.js'), admin: () => import('./pages/admin.js'),
   sound: () => import('./pages/ridesettings.js').then(m => ({ ...m, render: el => m.render(el, ['sound']) })),
@@ -371,7 +372,7 @@ async function init() {
   // Handy erkannt: beim App-Start gleich die Handy-Ansicht öffnen (Einstellung unter App)
   window.addEventListener('hashchange', route);
   await route();
-  import('./onboard.js').then(m => m.onboarding()).catch(e => console.error(e));
+  if (!/^#\/watch\//.test(location.hash)) import('./onboard.js').then(m => m.onboarding()).catch(e => console.error(e)); // Zuschauer sehen keine Einführung
   import('./eggs.js').then(m => m.initEggs()).catch(e => console.error(e));
   reconnectKnown().catch(() => { });
   // Barrierefreiheit: Sprunglink zum Inhalt (ohne den Hash-Router zu stören), Tastenkürzel-Übersicht mit ?

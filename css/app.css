@@ -1119,3 +1119,21 @@ body[data-page=ride] #rw #bigMap, body[data-page=ride] #rw .tbpop, body[data-pag
 .ridewrap.vmode > canvas#gl { visibility: hidden; }
 .vidload { position: fixed; left: 50%; top: 18%; transform: translateX(-50%); z-index: 30; display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; max-width: min(92vw, 420px); }
 .vinfo { margin: 8px 0; padding: 8px 10px; border-radius: 10px; background: var(--panel2, rgba(255,255,255,.05)); gap: 8px; flex-wrap: wrap; }
+
+/* Anfeuerungen (Zuschauer-Link) */
+.cheerfly { position: absolute; bottom: 18%; font-size: 54px; z-index: 40; pointer-events: none; animation: cheerUp 2.6s ease-out forwards; }
+@keyframes cheerUp { 0% { transform: translateY(0) scale(.6); opacity: 0; } 15% { opacity: 1; transform: translateY(-20px) scale(1.15); } 100% { transform: translateY(-260px) scale(1); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .cheerfly { animation: none; opacity: 0; } }
+
+/* Zuschauerseite */
+body.watching .nav, body.watching .subnav, body.watching .topbar .chips, body.watching .topbar .ridebtn, body.watching .msgchip { display: none !important; }
+body.watching .view { margin-left: 0 !important; }
+.watch { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+.watch h1 { margin: 2px 0; }
+.wlive { font-weight: 700; font-size: 13px; padding: 4px 10px; border-radius: 99px; background: #e5343d; color: #fff; white-space: nowrap; }
+.wlive.pause { background: var(--warn, #f5b400); color: #2a2005; }
+.wlive.off { background: var(--panel3, #333); color: var(--muted, #aaa); }
+.wtiles { margin: 10px 0; }
+.emorow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
+.emob { font-size: 30px; height: 64px; }
+.emob.pop { transform: scale(1.15); transition: transform .15s; }
