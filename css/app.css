@@ -1073,3 +1073,8 @@ html.calm .view.swl, html.calm .view.swr { animation: none; }
   .topbar .logo { margin-right: auto; }
   .topbar .logo { min-width: 0; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; }
 }
+/* Lange drücken zum Verschieben (wie auf dem Handy-Startbildschirm) */
+#rw [data-drag].pressing { transition: filter .45s; filter: brightness(1.3); }
+#rw [data-drag].lifted { filter: drop-shadow(0 12px 22px rgba(0,0,0,.55)) brightness(1.08); z-index: 50; }
+#rw.lpdrag #editBar { display: none !important; } /* beim schnellen Verschieben keine Bearbeitungsleiste */
+#rw [data-drag] { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }

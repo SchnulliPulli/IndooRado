@@ -15,7 +15,7 @@ const T = [
     <li><b>Demo-Modus als Minispiel</b>: Mit Demo-Geräten erscheint links in der Fahrt eine Steuerung – Trittfrequenz und Watt mit − / + (gedrückt halten zählt schnell), 🛑 Bremse halten, 🚀 Sprint, Spur ⬅ ➡. Tastatur: Bild ↑/↓ = Watt, Pos1/Ende = Trittfrequenz.</li></ul>`],
   ['fahren', '🚴', 'Fahren', `<ul class="tips">
     <li><b>Widerstand</b>: virtuelle Gänge (Gang × Kadenz × Steigung ergibt die Leistung, Schaltbereich unter Fahransicht), Steigung, ERG fix oder Puls-Ziel. Umschalten über den Modus-Knopf.</li>
-    <li><b>Anzeigen</b>: Watt mit Zonenfarbe und FTP-Ring, Tempo, Strecke, Zeit, Höhenmeter, Puls, Kadenz, Höhenprofil, Karte, Mitfahrerliste. Mit <b>Anordnen</b> verschiebst, vergrößerst, versteckst und ergänzt du Anzeigen – getrennt für Computer, Handy hochkant und Handy quer.</li>
+    <li><b>Anzeigen</b>: Watt mit Zonenfarbe und FTP-Ring, Tempo, Strecke, Zeit, Höhenmeter, Puls, Kadenz, Höhenprofil, Karte, Mitfahrerliste. Eine Anzeige <b>lange gedrückt halten</b> hebt sie an – direkt an die neue Stelle ziehen und loslassen (wie Apps auf dem Handy). Mit <b>Anordnen</b> verschiebst, vergrößerst, versteckst und ergänzt du Anzeigen – getrennt für Computer, Handy hochkant und Handy quer.</li>
     <li><b>Karte</b> (Taste K oder Minikarte antippen): zoomen, verschieben und an jede Stelle <b>beamen</b>. Gebeamte Fahrten zählen nicht als Streckenbestzeit.</li>
     <li><b>Kamera</b> (Tasten 1–5, C), <b>Fotomodus</b> (O), Fotos (P) und automatische Fotos an Gipfeln und im Ziel.</li>
     <li><b>Wetter und Tageszeit</b> (W): Morgen bis Nacht, klar bis Regen, oder automatisch.</li>

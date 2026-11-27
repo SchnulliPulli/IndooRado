@@ -385,6 +385,33 @@ function bindUi() {
     if (t.closest('#startCard')) { $('#startCard', el).hidden = true; return; }
   });
   $('#tLayout', el).onclick = () => { closeMap(); $('#envPanel', el).hidden = true; editMode($('#rw', el), true, () => layout()); };
+  // Lange drücken auf eine Anzeige: anheben und direkt verschieben (wie Apps auf dem Handy-Startbildschirm).
+  // Loslassen legt sie ab und beendet das Anordnen wieder.
+  { const rw = $('#rw', el); let lp = null;
+    // Anzeigen lassen Klicks oft zur 3D-Welt durch (pointer-events: none) – darum über die Lage suchen; die kleinste Treffer-Anzeige gewinnt
+    const widgetAt = (x, y) => { let best = null, ba = Infinity; for (const w of rw.querySelectorAll('[data-drag]')) { if (w.classList.contains('w-hidden') || w.hidden || !w.getClientRects().length) continue; const r = w.getBoundingClientRect(); if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom && r.width * r.height < ba) { ba = r.width * r.height; best = w; } } return best; };
+    const cancel = () => { if (lp) { clearTimeout(lp.t); lp.w?.classList.remove('pressing'); lp = null; } };
+    el.addEventListener('pointerdown', e => {
+      cancel(); if (rw.classList.contains('hudedit') || e.button > 0 || e.target.closest('button,a,input,select,.toolbar,.demopad,.callwin,#bigMap:not([hidden])')) return;
+      const w = widgetAt(e.clientX, e.clientY); if (!w) return;
+      lp = { w, x: e.clientX, y: e.clientY, id: e.pointerId, type: e.pointerType };
+      w.classList.add('pressing');
+      lp.t = setTimeout(() => {
+        const L = lp; if (!L) return; lp = null; L.w.classList.remove('pressing');
+        try { navigator.vibrate?.(25); } catch (er) { }
+        closeMap(); $('#envPanel', el).hidden = true;
+        editMode(rw, true, () => layout()); rw.classList.add('lpdrag'); L.w.classList.add('lifted');
+        // Den Griff an die Anordnen-Logik übergeben: gleicher Finger, gleiche Stelle
+        L.w.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerId: L.id, pointerType: L.type, clientX: L.x, clientY: L.y, isPrimary: true, button: 0, buttons: 1 }));
+        const done = () => { removeEventListener('pointerup', done, true); removeEventListener('pointercancel', done, true);
+          setTimeout(() => { L.w.classList.remove('lifted'); rw.classList.remove('lpdrag'); if (rw.classList.contains('hudedit')) { editMode(rw, false); layout(); } }, 250); };
+        addEventListener('pointerup', done, true); addEventListener('pointercancel', done, true);
+      }, 480);
+    }, true);
+    el.addEventListener('pointermove', e => { if (lp && e.pointerId === lp.id && Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 10) cancel(); }, true);
+    for (const ev of ['pointerup', 'pointercancel']) el.addEventListener(ev, e => { if (lp && e.pointerId === lp.id) cancel(); }, true);
+    el.addEventListener('contextmenu', e => { if (widgetAt(e.clientX, e.clientY)) e.preventDefault(); }); // kein Kontextmenü beim langen Drücken
+  }
   $('#rw', el).addEventListener('hudresize', () => { S.miniCache = null; hud(); });
   $('#tMenu', el).onclick = () => { if (!S.samples.length) { leave(); location.hash = '#/'; return; } location.hash = '#/'; };
   $('#tEnv', el).onclick = () => { $('#envPanel', el).hidden = !$('#envPanel', el).hidden; };
