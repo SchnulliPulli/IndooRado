@@ -83,6 +83,7 @@ function missionRings(ms) {
 let off = [];
 export async function render(el) {
   const routes = await listRoutes(), wos = await listWorkouts(), rides = (await db.all('rides')).sort((a, b) => b.date.localeCompare(a.date));
+  const LG = await import('../league.js'), frz = LG.maintainStreak(rides);
   const t = totals(rides), wk = Date.now() - 7 * 864e5, week = rides.filter(r => +new Date(r.date) > wk);
   const wkSum = week.reduce((a, r) => ({ d: a.d + r.sum.dist, t: a.t + r.sum.dur, tss: a.tss + r.sum.tss }), { d: 0, t: 0, tss: 0 });
   if (!routes.find(r => r.id === sel.routeId)) sel.routeId = 'b-hills';
@@ -100,7 +101,7 @@ export async function render(el) {
   <div id="featR">${featuredRoute(routes.find(r => r.id === sel.routeId) || routes[0])}</div>
   <section class="grid2">
     <div class="card"><div class="row between"><h2>Trainingsplan</h2><a href="#/plans" class="small">Alle Pläne</a></div>${planCard()}</div>
-    <div class="card"><div class="row between"><h2>Wochenmissionen</h2><span class="small muted">${t.streak ? '🔥 ' + t.streak + ' Tage Serie' + (streakBonus(t.streak) ? ' · +' + Math.round(streakBonus(t.streak) * 100) + ' % XP' : '') : 'Heute fahren startet eine Serie'}</span></div>${missionRings(missionState(rides))}</div>
+    <div class="card"><div class="row between"><h2>Wochenmissionen</h2><span class="small muted">${t.streak ? '🔥 ' + t.streak + ' Tage Serie' + (streakBonus(t.streak) ? ' · +' + Math.round(streakBonus(t.streak) * 100) + ' % XP' : '') : 'Heute fahren startet eine Serie'}${frz ? ` · <span title="Serien-Schutz: überbrückt automatisch einen fehlenden Tag. Neu für jede Woche mit 3 Fahrtagen, höchstens 2.">🧊 ${frz}</span>` : ''}</span></div>${missionRings(missionState(rides))}</div>
   </section>
   <section class="card"><div class="row between"><h2>Geräte</h2><a href="#/devices" class="small">Details und Tasten anlernen</a></div><div id="devs"></div></section>
   <section class="card">

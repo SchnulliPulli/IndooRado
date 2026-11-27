@@ -10,6 +10,7 @@ import { applyFtp } from '../ridesave.js';
 
 export async function render(el) {
   const rides = (await db.all('rides')).sort((a, b) => a.date.localeCompare(b.date));
+  const LG = await import('../league.js'), frz = LG.maintainStreak(rides);
   const t = totals(rides), fit = fitness(rides, 90), all = bestCurve(rides), recent = bestCurve(rides, 42), b90 = bestCurve(rides, 90);
   const est = b90[1200] ? Math.round(b90[1200].w * .95) : null;
   const last = fit[fit.length - 1] || { ctl: 0, atl: 0, tsb: 0 };
@@ -20,6 +21,10 @@ export async function render(el) {
   el.innerHTML = `
   <section class="pagehead"><h1>Fortschritt</h1></section>
   <section class="card">${levelBar()}<div style="margin-top:12px">${statTiles([[t.rides, 'Fahrten'], [fmtKm(t.dist), 'km gesamt'], [fmtDur(t.dur), 'Fahrzeit'], [Math.round(t.asc).toLocaleString('de-DE'), 'Höhenmeter'], [Math.round(t.kj).toLocaleString('de-DE'), 'kJ'], [t.streak, 'Tage am Stück']])}</div></section>
+  <section class="grid2">
+    <div class="card" id="lgCard"><h2>🏆 Wochenliga</h2><div class="spinner"></div></div>
+    <div class="card"><h2>🔥 Serie</h2><div class="tiles">${[[t.streak, 'Tage am Stück'], ['🧊 ' + frz, 'Serien-Schutz']].map(([v, l]) => `<div class="tile"><b class="num">${v}</b><span>${l}</span></div>`).join('')}</div><p class="small muted">Serien-Schutz überbrückt automatisch einen Tag ohne Fahrt, damit deine Serie (und der XP-Bonus bis +50 %) nicht reißt. Du bekommst einen für jede Woche mit mindestens 3 Fahrtagen, höchstens 2 auf Vorrat.</p></div>
+  </section>
   <section class="grid2">
     <div class="card"><div class="row between"><h2>Wochen</h2><div class="seg sm" id="wkSeg"><button data-k="h" aria-pressed="true">Stunden</button><button data-k="km" aria-pressed="false">km</button><button data-k="tss" aria-pressed="false">TSS</button></div></div><canvas id="wk" class="barc"></canvas></div>
     <div class="card"><h2>Form</h2>
@@ -39,6 +44,7 @@ export async function render(el) {
   const drawWk = k => barChart($('#wk', el), weeks.map(w => ({ l: w.l, v: w[k], hl: w.hl })), { fmt: v => k === 'h' ? v.toFixed(1).replace('.', ',') : Math.round(v) });
   drawWk('h');
   $('#wkSeg', el).onclick = e => { const b = e.target.closest('[data-k]'); if (!b) return; for (const x of $('#wkSeg', el).children) x.setAttribute('aria-pressed', String(x === b)); drawWk(b.dataset.k); };
+  { const lb = $('#lgCard', el); if (lb) LG.leagueCard(lb).catch(() => lb.remove()); }
   multiChart($('#fit', el), { x: fit.map((_, i) => i), xFmt: v => { const d = fit[Math.round(v)]; return d ? new Date(d.day).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' }) : ''; }, tracks: [{ label: 'CTL / ATL', y: fit.map(f => f.ctl), color: '#3fa7f5', min: 0, max: Math.max(10, ...fit.map(f => Math.max(f.ctl, f.atl))) }, { label: 'TSB', y: fit.map(f => f.tsb), color: '#4fd18b' }] });
   const a = {}, r = {}; for (const k in all) a[k] = all[k].w; for (const k in recent) r[k] = recent[k].w;
   curveChart($('#curve', el), [{ data: a, color: '#94a1ad', dash: true }, { data: r, color: '#ff6a3d' }], curveLabel);

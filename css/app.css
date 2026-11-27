@@ -1137,3 +1137,11 @@ body.watching .view { margin-left: 0 !important; }
 .emorow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
 .emob { font-size: 30px; height: 64px; }
 .emob.pop { transform: scale(1.15); transition: transform .15s; }
+
+/* Wochenliga */
+.league { list-style: none; padding: 0; margin: 8px 0; display: flex; flex-direction: column; gap: 3px; }
+.league li { display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; align-items: center; padding: 6px 10px; border-radius: 8px; background: var(--panel2, rgba(255,255,255,.04)); border-left: 3px solid transparent; }
+.league li.up { border-left-color: #2fbf71; }
+.league li.down { border-left-color: #e5343d; }
+.league li.me { background: rgba(255,106,61,.16); }
+.league li > .num:first-child { color: var(--muted, #9aa7b3); }

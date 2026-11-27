@@ -96,10 +96,13 @@ export const BADGES = [
   { id: 'night', name: 'Nachteule', desc: 'Eine Fahrt nach 21 Uhr begonnen', test: (s, t, x) => x.hour >= 21 },
 ];
 
+// Mit Serien-Schutz überbrückte Tage (siehe league.js): zählen für die Serie, nicht als Fahrt
+export const FROZEN = new Set();
 export function totals(rides) {
   const t = { rides: rides.length, dist: 0, dur: 0, asc: 0, kj: 0, streak: 0, workouts: 0 };
   const days = new Set();
   for (const r of rides) { if (r.workoutDone) t.workouts++; t.dist += r.sum.dist; t.dur += r.sum.dur; t.asc += r.sum.asc; t.kj += r.sum.kj; days.add(r.date.slice(0, 10)); }
+  for (const d of FROZEN) days.add(d);
   let st = 0, d = new Date(); d.setHours(12);
   if (!days.has(d.toISOString().slice(0, 10))) d.setDate(d.getDate() - 1);
   while (days.has(d.toISOString().slice(0, 10))) { st++; d.setDate(d.getDate() - 1); }

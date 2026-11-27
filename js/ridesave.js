@@ -48,6 +48,7 @@ export async function saveRide(S) {
   };
 
   // XP: Basis + Serienbonus + Plan + Missionen
+  (await import('./league.js')).maintainStreak([...rides, ride]); // Serien-Schutz verdienen/einsetzen
   const tAll = totals([...rides, ride]);
   let xp = xpFor(sum, { workoutDone, climbs: S.climbLog.length, prs: prs.length + climbPrs + sprintPrs });
   xp += (S.overtakes || 0) + (S.sprintLog?.length || 0) * 20 + (S.gates || 0) * 5 + (S.rideOnsGot || 0) * 2 + (S.rideOnsGiven || 0);
@@ -89,6 +90,7 @@ export async function saveRide(S) {
   for (const s of S.shots) await db.put('shots', { id: id + '-' + (k++), rideId: id, blob: s.blob, caption: s.caption, t: s.t, d: s.d });
   await saveProgress();
   bus.emit('rideSaved', id);
+  import('./league.js').then(m => m.leagueAdd(xp)).catch(() => { }); // Wochenliga
   return id;
 }
 
