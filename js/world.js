@@ -620,41 +620,62 @@ export class World {
     this.far = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, fog: false, side: THREE.DoubleSide, depthWrite: false })); this.far.renderOrder = -5; this.scene.add(this.far);
   }
   // Echtes Gelände in der Ferne: grobes Netz aus dem Höhenmodell (liegt etwas tiefer als die Nahkacheln)
-  // Echte Gebäude (OpenStreetMap): Wände und flache Dächer, je 600-m-Kachel eine Geometrie (wird außerhalb der Sicht ausgeblendet)
+  // Echte Gebäude (OpenStreetMap): Wände mit Fensterreihen, flache oder geneigte Dächer; je 600-m-Kachel eine Geometrie
   buildOsm() {
-    const R = this.route, G = R.geo, M = 111320, clear = R.roadW / 2 + 2.5, tiles = new Map(), col = new THREE.Color();
-    const WALL = [['#e9e1d3', '#f1ece2', '#d8cbb6', '#efe6d6', '#c9b79c'], ['#a9adb2', '#b7b2a8', '#9aa0a6'], ['#cfc7b8', '#bfb6a5'], ['#d9dde2', '#c4ccd4', '#e4ddd2', '#b8c2cc']];
-    const ROOF = [['#9c4a3a', '#7d3b31', '#5f5a55', '#8a4f3c'], ['#6f747a', '#80868c'], ['#5b6470', '#4f5966'], ['#6b7077', '#585e66', '#7a8088']];
+    const R = this.route, G = R.geo, M = 111320, clear = R.roadW / 2 + 3, tiles = new Map(), col = new THREE.Color();
+    const WALL = [['#efe7d8', '#f4efe6', '#e2d4bd', '#f1e6d2', '#d9c9ae', '#e8dccb'], ['#b9bcc0', '#c4bfb4', '#a8adb2'], ['#d8cfbf', '#cbc1ae'], ['#dfe3e8', '#cdd5dd', '#e9e2d6', '#c3ccd6', '#f0ece4']];
+    const ROOF = [['#9c4a3a', '#7d3b31', '#a5553f', '#5f5a55', '#8a4f3c', '#6b3a32'], ['#6f747a', '#80868c'], ['#5b6470', '#4f5966'], ['#6b7077', '#585e66', '#7a8088']];
     const hash = (a, b) => { const v = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return v - Math.floor(v); };
-    let n = 0;
+    const inPoly = (px, pz, P) => { let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const [xi, zi] = P[i], [xj, zj] = P[j]; if ((zi > pz) !== (zj > pz) && px < (xj - xi) * (pz - zi) / (zj - zi) + xi) c = !c; } return c; };
+    // Fenster-Muster: ein Feld = 3 m breit, 3,1 m hoch (ein Stockwerk); Wandfarbe kommt über die Vertex-Farbe dazu
+    const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64; const c2 = cv.getContext('2d');
+    c2.fillStyle = '#ffffff'; c2.fillRect(0, 0, 64, 64); c2.fillStyle = '#ece6dc'; c2.fillRect(0, 56, 64, 8);
+    c2.fillStyle = '#5e6f80'; c2.fillRect(18, 14, 28, 30); c2.fillStyle = '#8fa3b6'; c2.fillRect(20, 16, 11, 12); c2.fillRect(33, 16, 11, 12); c2.fillStyle = '#d9d2c6'; c2.fillRect(16, 44, 32, 3);
+    const tex = new THREE.CanvasTexture(cv); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+    let n = 0, skipped = 0;
     import('./osm.js').then(({ footprints }) => {
       for (const f of footprints(R.osm)) {
         const pts = f.p.map(([la, lo]) => [(lo - G.lon0) * G.kx, -(la - G.lat0) * M]);
         let cx = 0, cz = 0; for (const [x, z] of pts) { cx += x; cz += z; } cx /= pts.length; cz /= pts.length;
         const nn = R.nearest(cx, cz); if (!nn || nn.dist > 420) continue;
-        if (pts.some(([x, z]) => { const q = R.nearest(x, z); return q && q.dist < clear; })) continue; // nicht auf der Straße
+        // Straße frei halten: kein Punkt der Kanten zu nah an der Straße, und die Straße darf nicht durch den Grundriss laufen
+        let hit = false;
+        for (let k = 0; k < pts.length && !hit; k++) { const [x1, z1] = pts[k], [x2, z2] = pts[(k + 1) % pts.length], L = Math.hypot(x2 - x1, z2 - z1), st = Math.max(1, Math.ceil(L / 2));
+          for (let q = 0; q < st; q++) { const t = q / st, w = R.nearest(x1 + (x2 - x1) * t, z1 + (z2 - z1) * t); if (w && w.dist < clear) { hit = true; break; } } }
+        if (!hit) for (let k = Math.max(0, nn.i - 80); k <= Math.min(R.N, nn.i + 80); k += 2) if (inPoly(R.x[k], R.z[k], pts)) { hit = true; break; }
+        if (hit) { skipped++; continue; }
         let base = Infinity; for (const [x, z] of pts) base = Math.min(base, R.heightAt(x, z)); if (!Number.isFinite(base)) continue;
-        base -= .6; const top = base + .6 + f.h, key = Math.floor(cx / 600) + ',' + Math.floor(cz / 600);
-        const T = tiles.get(key) || tiles.set(key, { pos: [], colr: [] }).get(key), r = hash(cx, cz);
+        base -= .4; const top = base + .4 + f.h, key = Math.floor(cx / 600) + ',' + Math.floor(cz / 600);
+        const T = tiles.get(key) || tiles.set(key, { wp: [], wc: [], wu: [], rp: [], rc: [] }).get(key), r = hash(cx, cz);
         const wc = col.set(WALL[f.kind][Math.floor(r * WALL[f.kind].length)]).clone(), rc = new THREE.Color(ROOF[f.kind][Math.floor(hash(cz, cx) * ROOF[f.kind].length)]);
-        // Umlaufsinn prüfen (Wände nach außen)
-        let area = 0; for (let i = 0; i < pts.length; i++) { const [x1, z1] = pts[i], [x2, z2] = pts[(i + 1) % pts.length]; area += x1 * z2 - x2 * z1; }
-        const P = area < 0 ? pts : pts.slice().reverse();
-        for (let i = 0; i < P.length; i++) {
-          const [x1, z1] = P[i], [x2, z2] = P[(i + 1) % P.length], shade = .82 + .18 * Math.abs(Math.cos(Math.atan2(z2 - z1, x2 - x1)));
-          T.pos.push(x1, base, z1, x2, base, z2, x2, top, z2, x1, base, z1, x2, top, z2, x1, top, z1);
-          for (let k = 0; k < 6; k++) T.colr.push(wc.r * shade, wc.g * shade, wc.b * shade);
+        let area = 0; for (let k = 0; k < pts.length; k++) { const [x1, z1] = pts[k], [x2, z2] = pts[(k + 1) % pts.length]; area += x1 * z2 - x2 * z1; }
+        const P = area < 0 ? pts : pts.slice().reverse(); area = Math.abs(area) / 2;
+        // Wände mit Fenster-Koordinaten (u = Meter entlang der Fassade / 3, v = Höhe / 3,1)
+        let u0 = 0; const vTop = f.h / 3.1;
+        for (let k = 0; k < P.length; k++) {
+          const [x1, z1] = P[k], [x2, z2] = P[(k + 1) % P.length], L = Math.hypot(x2 - x1, z2 - z1), u1 = u0 + Math.max(1, Math.round(L / 3)) , shade = .84 + .16 * Math.abs(Math.cos(Math.atan2(z2 - z1, x2 - x1)));
+          T.wp.push(x1, base, z1, x2, base, z2, x2, top, z2, x1, base, z1, x2, top, z2, x1, top, z1);
+          T.wu.push(u0, 0, u1, 0, u1, vTop, u0, 0, u1, vTop, u0, vTop); u0 = u1;
+          for (let q = 0; q < 6; q++) T.wc.push(wc.r * shade, wc.g * shade, wc.b * shade);
         }
-        const tri = THREE.ShapeUtils.triangulateShape(P.map(([x, z]) => new THREE.Vector2(x, z)), []);
-        for (const [a, b, c] of tri) { for (const i of [a, c, b]) { T.pos.push(P[i][0], top, P[i][1]); T.colr.push(rc.r, rc.g, rc.b); } }
+        // Dach: geneigt (Walmdach) bei Häusern bzw. laut OSM, sonst flach
+        const pitched = f.roof === 1 || (f.roof === -1 && f.kind === 0 && area < 400) || (f.roof === -1 && f.kind === 2);
+        if (pitched && area < 2500) {
+          const rise = Math.min(f.kind === 2 ? 12 : 6, Math.sqrt(area) * (f.kind === 2 ? .7 : .42));
+          for (let k = 0; k < P.length; k++) { const [x1, z1] = P[k], [x2, z2] = P[(k + 1) % P.length]; T.rp.push(x1, top, z1, cx, top + rise, cz, x2, top, z2); for (let q = 0; q < 3; q++) T.rc.push(rc.r * (q === 1 ? 1.12 : 1), rc.g * (q === 1 ? 1.12 : 1), rc.b * (q === 1 ? 1.12 : 1)); }
+        } else {
+          const tri = THREE.ShapeUtils.triangulateShape(P.map(([x, z]) => new THREE.Vector2(x, z)), []);
+          for (const [a, b, c] of tri) for (const q of [a, c, b]) { T.rp.push(P[q][0], top, P[q][1]); T.rc.push(rc.r, rc.g, rc.b); }
+          // Dachrand
+          for (let k = 0; k < P.length; k++) { const [x1, z1] = P[k], [x2, z2] = P[(k + 1) % P.length]; T.rp.push(x1, top, z1, x2, top, z2, x2, top + .5, z2, x1, top, z1, x2, top + .5, z2, x1, top + .5, z1); for (let q = 0; q < 6; q++) T.rc.push(wc.r * .8, wc.g * .8, wc.b * .8); }
+        }
         n++;
       }
-      const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }); this.osmGroup = new THREE.Group();
-      for (const T of tiles.values()) {
-        const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(T.pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(T.colr, 3)); g.computeVertexNormals(); g.computeBoundingSphere();
-        const m = new THREE.Mesh(g, mat); m.castShadow = this.qKey === 'high'; m.receiveShadow = true; this.osmGroup.add(m);
-      }
-      this.scene.add(this.osmGroup); this.osmCount = n;
+      const wallMat = new THREE.MeshLambertMaterial({ vertexColors: true, map: tex, side: THREE.DoubleSide }), roofMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+      this.osmGroup = new THREE.Group();
+      const mk = (pos, colr, uv, mat) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(colr, 3)); if (uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.computeVertexNormals(); g.computeBoundingSphere(); const m = new THREE.Mesh(g, mat); m.castShadow = this.qKey === 'high'; m.receiveShadow = true; return m; };
+      for (const T of tiles.values()) { if (T.wp.length) this.osmGroup.add(mk(T.wp, T.wc, T.wu, wallMat)); if (T.rp.length) this.osmGroup.add(mk(T.rp, T.rc, null, roofMat)); }
+      this.scene.add(this.osmGroup); this.osmCount = n; this.osmSkipped = skipped;
     }).catch(e => console.warn('OSM-Gebäude', e));
   }
   buildDemFar() {

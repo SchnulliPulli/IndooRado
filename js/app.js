@@ -425,29 +425,45 @@ init();
   });
 }
 
-// Handy: seitlich wischen wechselt zwischen den Reitern eines Bereichs (z. B. Profil ↔ Avatar ↔ Fahrt & Ton …)
+// Handy: seitlich wischen wechselt zwischen den Reitern eines Bereichs. Die Seite folgt dem Finger,
+// ab ~50 px oder bei schnellem Wisch wird umgeschaltet, sonst federt sie zurück.
 {
   let st = null;
   const small = () => matchMedia('(max-width: 900px)').matches;
   const scrollsX = el => { for (let n = el; n && n !== document.body; n = n.parentElement) { if (n.scrollWidth > n.clientWidth + 4 && /auto|scroll/.test(getComputedStyle(n).overflowX)) return true; } return false; };
   const view = document.getElementById('view');
+  const tabsNow = () => { const grp = groupOf(currentKey); if (!grp?.tabs) return null; const tabs = grp.tabs.filter(([k]) => k !== 'admin' || document.body.classList.contains('is-admin')); const i = tabs.findIndex(([k]) => k === currentKey); return i < 0 ? null : { tabs, i }; };
+  const reset = (anim = true) => { view.style.transition = anim ? 'transform .22s ease-out, opacity .22s' : ''; view.style.transform = ''; view.style.opacity = ''; setTimeout(() => { view.style.transition = ''; }, 240); };
   view.addEventListener('touchstart', e => {
     st = null;
     if (!small() || e.touches.length !== 1 || currentKey === 'ride' || document.querySelector('.modal')) return;
     const t = e.target; if (t.closest('input,textarea,select,canvas,[contenteditable],[data-noswipe],.leaflet-container,.kitpal,.chat') || scrollsX(t)) return;
-    const p = e.touches[0]; st = { x: p.clientX, y: p.clientY, t: performance.now() };
+    const T = tabsNow(); if (!T) return;
+    const p = e.touches[0]; st = { x: p.clientX, y: p.clientY, t: performance.now(), lock: null, dx: 0, T };
   }, { passive: true });
-  view.addEventListener('touchend', e => {
-    if (!st) return; const p = e.changedTouches[0], dx = p.clientX - st.x, dy = p.clientY - st.y, dt = performance.now() - st.t; st = null;
-    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 2 || dt > 700) return;
-    const grp = groupOf(currentKey); if (!grp?.tabs) return;
-    const tabs = grp.tabs.filter(([k]) => k !== 'admin' || document.body.classList.contains('is-admin'));
-    const i = tabs.findIndex(([k]) => k === currentKey); if (i < 0) return;
-    const j = i + (dx < 0 ? 1 : -1); if (j < 0 || j >= tabs.length) { view.animate([{ transform: `translateX(${dx < 0 ? -12 : 12}px)` }, { transform: 'none' }], { duration: 220 }); return; }
-    view.classList.remove('swl', 'swr'); void view.offsetWidth; view.classList.add(dx < 0 ? 'swl' : 'swr');
-    location.hash = '#/' + tabs[j][0];
-    document.querySelector('#subnav a.on')?.scrollIntoView({ inline: 'center', block: 'nearest' });
-  }, { passive: true });
+  view.addEventListener('touchmove', e => {
+    if (!st) return; const p = e.touches[0], dx = p.clientX - st.x, dy = p.clientY - st.y;
+    if (!st.lock) { if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return; st.lock = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'x' : 'y'; }
+    if (st.lock !== 'x') { st = null; return; }
+    e.preventDefault(); // waagrecht: Seite nicht senkrecht scrollen
+    const edge = (dx > 0 && st.T.i === 0) || (dx < 0 && st.T.i === st.T.tabs.length - 1); // am Rand: nur leicht nachgeben
+    st.dx = dx; view.style.transition = ''; view.style.transform = `translateX(${edge ? dx * .25 : dx * .9}px)`; view.style.opacity = String(1 - Math.min(.35, Math.abs(dx) / 900));
+  }, { passive: false });
+  const end = e => {
+    if (!st) return; const s0 = st; st = null; if (s0.lock !== 'x') return;
+    const dt = performance.now() - s0.t, v = Math.abs(s0.dx) / Math.max(1, dt), j = s0.T.i + (s0.dx < 0 ? 1 : -1);
+    if ((Math.abs(s0.dx) > 50 || (v > .35 && Math.abs(s0.dx) > 20)) && j >= 0 && j < s0.T.tabs.length) {
+      const dir = s0.dx < 0 ? -1 : 1;
+      view.style.transition = 'transform .14s ease-in, opacity .14s'; view.style.transform = `translateX(${dir * innerWidth * .35}px)`; view.style.opacity = '0';
+      setTimeout(() => {
+        view.style.transition = ''; view.style.transform = `translateX(${-dir * 40}px)`; // neue Seite kommt von der anderen Seite herein
+        location.hash = '#/' + s0.T.tabs[j][0];
+        requestAnimationFrame(() => requestAnimationFrame(reset));
+        document.querySelector('#subnav a.on')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+      }, 140);
+    } else reset();
+  };
+  view.addEventListener('touchend', end, { passive: true }); view.addEventListener('touchcancel', end, { passive: true });
   // Aktiven Reiter in der Leiste sichtbar halten
   addEventListener('hashchange', () => setTimeout(() => document.querySelector('#subnav a.on')?.scrollIntoView({ inline: 'center', block: 'nearest' }), 50));
 }

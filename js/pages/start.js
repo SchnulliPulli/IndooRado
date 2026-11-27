@@ -90,7 +90,7 @@ export async function render(el) {
   el.innerHTML = `
   <section class="hero">
     <div><h1>Hallo ${esc(profile.name)}${profile.title ? ` <span class="prtag">🏷️ ${esc(profile.title)}</span>` : ''}</h1><p class="muted">FTP ${profile.ftp} W · ${String(profile.kg).replace('.', ',')} kg · ${(profile.ftp / profile.kg).toFixed(2).replace('.', ',')} W/kg</p></div>
-    <div class="hero-lv"><button class="btn sm msgbtn" data-inbox hidden>💬 Nachrichten</button>${levelBar()}<a class="small seasonlink" href="#/season">${(() => { const z = seasonOf(), st = seasonState(z); return `${z.emoji} ${esc(z.name)} · Stufe ${st.tier}/25${tokensFree() > 0 ? ` · 🔧 ${tokensFree()} Gutschein${tokensFree() === 1 ? '' : 'e'} frei` : ''}`; })()}</a></div>
+    <div class="hero-lv">${levelBar()}<a class="small seasonlink" href="#/season">${(() => { const z = seasonOf(), st = seasonState(z); return `${z.emoji} ${esc(z.name)} · Stufe ${st.tier}/25${tokensFree() > 0 ? ` · 🔧 ${tokensFree()} Gutschein${tokensFree() === 1 ? '' : 'e'} frei` : ''}`; })()}</a></div>
   </section>
   ${(() => { const e = estimateFtp(rides); if (!e || Math.abs(e.ftp - profile.ftp) < Math.max(8, profile.ftp * .04) || profile.ftpHintOff === e.ftp) return ''; const up = e.ftp > profile.ftp;
     return `<section class="card ftphint ${up ? 'up' : 'down'}" role="status"><div><b>${up ? '📈 Du bist stärker geworden!' : '📉 Deine FTP ist vielleicht zu hoch'}</b><div class="small muted">Geschätzte FTP <b>${e.ftp} W</b> statt ${profile.ftp} W · ${e.from} (${new Date(e.date).toLocaleDateString('de-DE')})${e.sure ? '' : ' · ohne 20-min-Wert etwas ungenauer'}. Die FTP bestimmt deine Trainingszonen und Workout-Watt.</div></div>

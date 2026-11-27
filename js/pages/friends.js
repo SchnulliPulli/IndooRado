@@ -69,7 +69,7 @@ async function openFriend(sb, me, f, redraw) {
   if (!f) return;
   const w = document.createElement('div'); w.className = 'modal on';
   w.innerHTML = `<div class="card dlg frdlg" role="dialog" aria-modal="true" aria-label="${esc(f.display_name)}"><div class="row between"><div class="row">${avatarSvg(f.avatar || {}, 44)}<div><h2 style="margin:0">${esc(f.display_name)}</h2><div class="small muted" id="fpSub">Level ${f.level}</div></div></div><button class="btn sm ghost" data-x aria-label="Schließen">✕</button></div>
-    <div class="row between"><div class="frtabs seg sm"><button aria-pressed="true" data-tab="chat">💬 Chat</button><button aria-pressed="false" data-tab="prof">📊 Profil</button></div><button class="btn sm pri" data-call title="Videoanruf über Jitsi">📹 Anrufen</button></div>
+    <div class="row between"><div class="frtabs seg sm"><button aria-pressed="true" data-tab="chat">💬 Chat</button><button aria-pressed="false" data-tab="prof">📊 Profil</button></div><span class="row"><button class="btn sm ghost" data-clear title="Chat löschen">🗑</button><button class="btn sm pri" data-call title="Videoanruf">📹 Anrufen</button></span></div>
     <div data-pane="chat"><div class="chat" id="chLog"><div class="pageload"><div class="spinner"></div></div></div>
       <form class="chatin" id="chForm"><input class="inp" id="chTxt" maxlength="1000" placeholder="Nachricht schreiben …" autocomplete="off"><button class="btn pri" type="submit">Senden</button></form></div>
     <div data-pane="prof" hidden><div id="fpBody"><div class="pageload"><div class="spinner"></div></div></div>
@@ -108,6 +108,11 @@ async function openFriend(sb, me, f, redraw) {
   w.addEventListener('click', async e => {
     if (e.target === w || e.target.closest('[data-x]')) return close();
     if (e.target.closest('[data-call]')) { (await import('../call.js')).startCall(f); return; }
+    if (e.target.closest('[data-clear]')) {
+      const v = await dialog({ title: `Chat mit ${f.display_name} löschen?`, html: '<p class="muted"><b>Nur für mich:</b> Der Verlauf verschwindet bei dir, dein Freund behält seine Kopie.<br><b>Meine Nachrichten für beide:</b> Was du geschrieben hast, wird auch bei deinem Freund entfernt; seine Nachrichten werden bei dir ausgeblendet.</p>', buttons: [{ label: 'Abbrechen', value: 0 }, { label: 'Nur für mich', value: 1 }, { label: 'Meine Nachrichten für beide', value: 2, cls: 'danger' }] });
+      if (!v) return; const { error } = await sb.rpc('chat_clear', { p_other: f.id, p_for_both: v === 2 }); if (error) return toast(miss(error));
+      last = ''; loadChat(); toast('Chat gelöscht'); return;
+    }
     const jn = e.target.closest('[data-join]'); if (jn) { (await import('../call.js')).joinCall(jn.dataset.join, { id: f.id, name: f.display_name }); return; }
     const tb = e.target.closest('[data-tab]'); if (tb) { w.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-pressed', String(b === tb))); w.querySelectorAll('[data-pane]').forEach(p => p.hidden = p.dataset.pane !== tb.dataset.tab); if (tb.dataset.tab === 'prof') loadProf(); return; }
     if (e.target.closest('[data-rm]')) { if (await dialog({ title: `Freundschaft mit ${f.display_name} beenden?`, html: '<p class="muted">Ihr seht dann keine Profile mehr und könnt nicht mehr chatten. Bisherige Nachrichten bleiben bei euch beiden gespeichert, bis ihr sie löscht oder sie nach 12 Monaten entfernt werden.</p>', buttons: [{ label: 'Abbrechen', value: 0 }, { label: 'Beenden', value: 1, cls: 'danger' }] })) { await sb.rpc('friend_remove', { p_other: f.id }); close(); } return; }

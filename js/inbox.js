@@ -45,5 +45,8 @@ async function fill(box, close) {
     const j = e.target.closest('[data-join]'); if (j) { e.stopPropagation(); close(); const f = (await sb.rpc('friend_list')).data?.find(x => x.id === j.dataset.peer); C.joinCall(j.dataset.join, { id: j.dataset.peer, name: f?.display_name || 'Freund' }); return; }
     const r = e.target.closest('[data-open]'); if (r) { close(); location.hash = '#/friends?open=' + encodeURIComponent(r.dataset.open); }
   });
-  await draw(); bus.emit('inbox'); iv = setInterval(() => document.hidden || draw(), 20e3); return iv;
+  await draw();
+  // Einmal angezeigt = gelesen (die Hervorhebung bleibt bis zum nächsten Öffnen sichtbar)
+  try { const { data } = await sb.rpc('friend_list'); await Promise.all((data || []).filter(f => f.status === 'accepted' && +f.unread > 0).map(f => sb.rpc('chat_read', { p_other: f.id }))); } catch (e) { }
+  bus.emit('inbox'); iv = setInterval(() => document.hidden || draw(), 20e3); return iv;
 }

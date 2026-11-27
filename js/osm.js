@@ -35,19 +35,20 @@ export async function loadBuildings(raw, onProgress = () => { }) {
       if (w.type !== 'way' || seen.has(w.id) || !Array.isArray(w.geometry) || w.geometry.length < 4) continue; seen.add(w.id);
       const g = w.geometry, tags = w.tags || {}, lat0 = Math.round(g[0].lat * 1e6), lon0 = Math.round(g[0].lon * 1e6), d = [];
       let pl = lat0, pn = lon0; for (let k = 1; k < g.length - 1; k++) { const la = Math.round(g[k].lat * 1e6), lo = Math.round(g[k].lon * 1e6); d.push(la - pl, lo - pn); pl = la; pn = lo; }
-      b.push([Math.round(heightOf(tags) * 10) / 10, KIND(tags.building || ''), lat0, lon0, d]);
+      const rs = tags['roof:shape'] || '', roof = rs === 'flat' ? 0 : /gabled|hipped|pyramidal|gambrel|mansard|half|saltbox|skillion|round|dome/.test(rs) ? 1 : -1;
+      b.push([Math.round(heightOf(tags) * 10) / 10, KIND(tags.building || ''), lat0, lon0, d, roof]);
       if (b.length >= MAXB) break;
     }
     if (b.length >= MAXB) break;
     if (i < parts.length - 1) await new Promise(f => setTimeout(f, 1200)); // fair zur kostenlosen Schnittstelle
   }
-  raw.osm = { v: 1, at: new Date().toISOString(), n: b.length, b };
+  raw.osm = { v: 2, at: new Date().toISOString(), n: b.length, b };
   return b.length;
 }
 // Gebäude als Grundriss [[lat, lon], …] + Höhe + Art
 export function* footprints(osm) {
-  for (const [h, kind, la, lo, d] of osm?.b || []) {
+  for (const [h, kind, la, lo, d, roof = -1] of osm?.b || []) {
     const p = [[la / 1e6, lo / 1e6]]; let a = la, o = lo; for (let k = 0; k < d.length; k += 2) { a += d[k]; o += d[k + 1]; p.push([a / 1e6, o / 1e6]); }
-    yield { h, kind, p };
+    yield { h, kind, p, roof };
   }
 }

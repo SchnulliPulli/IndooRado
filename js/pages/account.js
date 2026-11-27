@@ -193,7 +193,7 @@ function renderAuth(el, mode = 'in') {
 function codeEntry(el, mail, slow = false) {
   $('#aBody', el).innerHTML = `<div class="sentbox"><div class="big">✉️</div><h2>Code eingeben</h2>
     <p>Wir haben einen Anmeldecode an <b>${esc(mail)}</b> geschickt.${slow ? ' <span class="small" style="color:var(--warn)">(Der Versand dauerte ungewöhnlich lange, die Mail kommt vermutlich trotzdem.)</span>' : ''}</p>
-    <input class="inp codeinp" id="cCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="••••••" aria-label="Anmeldecode">
+    <input class="inp codeinp" id="cCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="${'•'.repeat(+localStorage.getItem('vvOtpLen') || 8)}" aria-label="Anmeldecode">
     <div class="row" style="justify-content:center"><button class="btn pri" id="cGo" disabled>Anmelden</button></div>
     <p class="small muted">Der Code gilt etwa eine Stunde. Alternativ den Link in der Mail auf diesem Gerät öffnen. Nichts angekommen? Spam-Ordner prüfen.</p>
     <div class="row" style="justify-content:center"><button class="btn sm" id="cResend" disabled>Neuen Code senden (60)</button><button class="btn sm ghost" id="cBack">Andere E-Mail</button></div></div>`;
@@ -202,10 +202,12 @@ function codeEntry(el, mail, slow = false) {
   const verify = async () => {
     const code = inp.value.replace(/\D/g, ''); if (code.length < 6) return;
     go.disabled = true; inp.disabled = true; go.innerHTML = '<span class="spinner sm"></span> Prüfe …';
-    try { await O.verifyCode(mail, code); localStorage.setItem('vvLastEmail', mail); toast('Angemeldet ✅', 1500); window.__loginUpd?.(); render(el); }
+    try { await O.verifyCode(mail, code); localStorage.setItem('vvLastEmail', mail); localStorage.setItem('vvOtpLen', String(code.length)); toast('Angemeldet ✅', 1500); window.__loginUpd?.(); render(el); }
     catch (e) { inp.disabled = false; go.textContent = 'Anmelden'; go.disabled = false; inp.select(); toast(/expired|invalid|token/i.test(e.message) ? 'Code falsch oder abgelaufen' : errText(e), 5000); }
   };
-  inp.oninput = () => { inp.value = inp.value.replace(/\D/g, '').slice(0, 10); go.disabled = inp.value.length < 6; if (inp.value.length === 6) verify(); };
+  // Automatisch prüfen erst bei voller Länge (E-Mail-Codes haben bei Supabase meist 8 Ziffern; gelernt aus der letzten Anmeldung)
+  const want = +localStorage.getItem('vvOtpLen') || 8;
+  inp.oninput = () => { inp.value = inp.value.replace(/\D/g, '').slice(0, 10); go.disabled = inp.value.length < 6; if (inp.value.length === want) verify(); };
   inp.onkeydown = e => { if (e.key === 'Enter') verify(); };
   go.onclick = verify;
   $('#cResend', el).onclick = async e => { try { await O.emailCode(mail); toast('Neuer Code gesendet'); cooldown(e.target, 60, 'Neuen Code senden'); } catch (er) { toast(errText(er), 5000); } };
