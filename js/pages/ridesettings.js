@@ -130,6 +130,7 @@ export async function render(el, params = []) {
       ${RNG('p', 'simDiff', 'Steigungsgefühl im Steigungsmodus', 10, 100, 5, profile.simDiff, FMT.simDiff)}
       ${SW('p', 'autoPause', 'Automatische Pause, wenn du aufhörst zu treten')}
       ${SW('p', 'askForm', 'Vor Workouts nach der Tagesform fragen', 'Müde, Beine schwer oder wenig Zeit: das Workout passt sich an')}
+      ${SW('p', 'streetImgs', 'Echte Straßenbilder bei GPX-Strecken', 'Fotos der echten Straße (Mapillary) neben der Fahrt. Nur mit Konto und Einwilligung; Schlüssel unter App &amp; Daten')}
       ${SW('p', 'drinkTips', 'Ans Trinken erinnern')}
       ${RNG('p', 'drinkEvery', 'Erinnerung alle', 5, 40, 5, profile.drinkEvery ?? 15, FMT.drinkEvery)}
       ${SW('p', 'autoShots', 'Automatische Fotos')}

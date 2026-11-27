@@ -209,6 +209,13 @@ async function start(el) {
   if (S.wo && !S.group && !sessionStorage.getItem('quickStart') && profile.askForm !== false) await dayForm(S);
   if (route.video) videoSetup(S, el);
   if (loggedIn()) import('../tv.js').then(m => m.listenRemote()); // Handy als Fernbedienung
+  // Echte Straßenbilder (Mapillary) bei GPX-Strecken: nur mit Konto, Schlüssel und Einwilligung
+  import('../streetimg.js').then(async M => {
+    if (!(await M.possible(route)) || !(await M.askConsent()) || !S?.alive) return;
+    const box = document.createElement('div'); box.className = 'streetimg'; box.hidden = true; box.innerHTML = M.boxHtml(); document.body.appendChild(box);
+    box.querySelector('.sibig').onclick = () => box.classList.toggle('big');
+    S.si = new M.StreetImages(route, box); const iv = setInterval(() => { if (!S?.alive || !S.si) return clearInterval(iv); S.si.update(S.dist); }, 1000);
+  }).catch(() => { });
   // Kinderfahrt: Ziel 10 Minuten, dann Lob und Bonus (weiterfahren geht)
   { const km = +sessionStorage.getItem('kidRide') || 0; sessionStorage.removeItem('kidRide'); if (km) { S.kidMin = km; $('#startCard', el).innerHTML = `<b>🧒 ${km} Minuten Abenteuer</b><span>Tritt los! Sammle Glocken und überhol die anderen.</span>`; const iv = setInterval(() => { if (!S?.alive) return clearInterval(iv); if (S.t >= km * 60) { clearInterval(iv); S.bonusXp = (S.bonusXp || 0) + 50; flash(`🎉 Super, ${km} Minuten geschafft! +50 XP`, 4000); sound.fanfare?.(); } }, 1000); } }
 
@@ -1227,7 +1234,7 @@ document.addEventListener('visibilitychange', () => { if (S?.alive && document.v
 export function leave() {
   if (!S) return;
   if (window.__watchMod?.W.token) { const M = window.__watchMod; M.W.lastPush = 0; M.pushWatch({ state: 'ended', route: S.route.name, total: Math.round(S.route.total), d: Math.round(S.dist), odo: Math.round(S.odo), t: Math.round(S.t), asc: Math.round(S.asc), p: 0, v: 0, prof: S.route.prof }); }
-  S.alive = false; S.vbox?.remove(); if (S.vurl) { const v = $('#rideVid', S.el); v?.pause(); URL.revokeObjectURL(S.vurl); } setTimeout(() => bus.emit('rideEnded'), 1500); S.live?.leave(); window.__presence?.setStatus({ where: 'menu', route: null, routeName: null, kit: null }); sound.silence(); music.stop(); hush(); putLive({ state: 'ended', t: Math.round(S.t), odo: Math.round(S.odo), route: S.route.name }); clearInterval(S.timer); cancelAnimationFrame(S.raf); S.ro?.disconnect();
+  S.alive = false; S.vbox?.remove(); S.si?.destroy(); S.si = null; if (S.vurl) { const v = $('#rideVid', S.el); v?.pause(); URL.revokeObjectURL(S.vurl); } setTimeout(() => bus.emit('rideEnded'), 1500); S.live?.leave(); window.__presence?.setStatus({ where: 'menu', route: null, routeName: null, kit: null }); sound.silence(); music.stop(); hush(); putLive({ state: 'ended', t: Math.round(S.t), odo: Math.round(S.odo), route: S.route.name }); clearInterval(S.timer); cancelAnimationFrame(S.raf); S.ro?.disconnect();
   document.removeEventListener('keydown', S.key); S.offs.forEach(f => f());
   try { S.world.dispose(); } catch (e) { }
   // Speicher freigeben: Streckendaten, Caches der Karte, Testverweis

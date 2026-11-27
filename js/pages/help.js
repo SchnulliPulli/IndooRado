@@ -34,18 +34,24 @@ const T = [
     <li><b>Workout-Editor</b> und <b>Plan-Editor</b>: eigene Workouts aus Bausteinen, eigene Pläne Woche für Woche. Import von .zwo, .erg, .mrc und Plänen als Text.</li>
     <li><b>Trainingspläne</b> führen Woche für Woche, passen die Intensität an deine Leistung an und zeigen die nächste Einheit auf der Startseite.</li>
     <li><b>FTP-Schätzung</b>: aus deinen besten 20, 10 oder 5 Minuten der letzten 90 Tage. Weicht sie deutlich ab, schlägt die Startseite die neue FTP vor. Genauer ist ein FTP-Test (unter Workouts).</li>
-    <li><b>Empfehlung für heute</b> nach deiner Frische (TSB) und dem Plan.</li></ul>`],
+    <li><b>Empfehlung für heute</b> nach deiner Frische (TSB) und dem Plan.</li>    <li><b>Tagesform</b>: Vor einem Workout fragt die App „Wie fühlst du dich heute?“ – Müde oder Beine schwer senkt die Intensität, Wenig Zeit kürzt das Workout auf 20–60 Minuten (abschaltbar unter Fahrt &amp; Ton).</li>
+    <li><b>Export für den Radcomputer</b>: Workout › Export › .fit (Garmin, Wahoo, Hammerhead; Leistung in % FTP). Ganze Pläne als ZIP mit einer FIT-Datei je Einheit.</li>
+</ul>`],
   ['strecken', '🗺️', 'Strecken und Baukasten', `<ul class="tips">
     <li>Fast 30 eingebaute Welten von Hügelland bis Weltall, Tiefsee, Lava-Insel, Wolken und Zuckerland. Jede Strecke zeigt ein Vorschaubild.</li>
     <li><b>🧱 Strecken-Baukasten</b> (Strecken › Baukasten): Bausteine antippen – Geraden, Kurven, Spitzkehren, Serpentinen, Anstiege, Steilwände, Abfahrten, Achterbahn, Korkenzieher und mehr. Jeden Baustein in Länge, Steilheit und Richtung anpassen, Landschaft und Belag wählen, als Rundkurs schließen, speichern und fahren. Vorlagen und 🎲 Zufall helfen beim Start.</li>
     <li><b>🏙️ Echte Gebäude</b> (bei importierten echten Strecken, mit Anmeldung): Häuser, Kirchen und Hallen entlang der Strecke aus OpenStreetMap, in echter Form und Höhe. Laden auf der Seite der Strecke.</li>
     <li><b>GPX und Strava-Routen</b> importieren; auf Wunsch mit <b>echtem Gelände</b> aus einem frei verfügbaren Höhenmodell.</li>
-    <li>Einmal die ganze Strecke fahren bringt das <b>Routen-Abzeichen</b> 🏅 (+100 XP).</li></ul>`],
+    <li>Einmal die ganze Strecke fahren bringt das <b>Routen-Abzeichen</b> 🏅 (+100 XP).</li>    <li><b>🎬 Videofahrt</b>: Eigene Aufnahme (GoPro, Handy) plus GPX der Ausfahrt laden. Das Video läuft so schnell, wie du trittst, der Widerstand folgt dem Anstieg. Das Video bleibt auf deinem Gerät. Taste V wechselt zwischen Video und 3D-Welt.</li>
+    <li><b>Echte Straßenbilder</b>: Bei eigenen GPX-Strecken zeigt die App Fotos der echten Straße (Mapillary), mit Konto und Einwilligung. Schlüssel unter App &amp; Daten.</li>
+</ul>`],
   ['fortschritt', '🏆', 'Level, Saison und Werkstatt', `<ul class="tips">
     <li><b>XP</b> gibt es für Kilometer, Zeit, Höhenmeter, Gipfel, Sprints, Zieltore, Überholen, Bestwerte, Missionen, Plan-Einheiten und Multiplayer. Level schalten Trikotfarben, Räder, Tiere und Extras im <b>Avatar</b> frei.</li>
     <li><b>Wochenmissionen</b> und <b>Serien</b> (mehrere Tage in Folge geben Bonus-XP).</li>
     <li><b>Saison</b> (Aktivitäten › Fortschritt & Saison): jedes Quartal ein Belohnungspfad mit 25 Stufen – Saisonfarben für den Avatar, Titel, XP und am Ende ein Pokal mit Gold-Lack.</li>
-    <li><b>Werkstatt</b>: jede dritte Saisonstufe bringt einen Teile-Gutschein 🔧 für bessere Laufräder, Rahmen, Reifen und Bekleidung. Sie machen dich ein wenig schneller; sobald echte Mitfahrer auf der Strecke sind, gelten für alle gleiche Bedingungen.</li></ul>`],
+    <li><b>Werkstatt</b>: jede dritte Saisonstufe bringt einen Teile-Gutschein 🔧 für bessere Laufräder, Rahmen, Reifen und Bekleidung. Sie machen dich ein wenig schneller; sobald echte Mitfahrer auf der Strecke sind, gelten für alle gleiche Bedingungen.</li>    <li><b>🏆 Wochenliga</b> (mit Konto, freiwillig): 20 Fahrer auf deiner Stufe sammeln eine Woche lang Erfahrungspunkte. Die besten 5 steigen auf (Bronze bis Diamant), wer nicht fährt, steigt ab.</li>
+    <li><b>🧊 Serien-Schutz</b>: Für jede Woche mit 3 Fahrtagen gibt es einen (höchstens 2). Er überbrückt automatisch einen fehlenden Tag, damit deine Serie und der XP-Bonus bleiben.</li>
+</ul>`],
   ['online', '🌐', 'Online: Mitfahren, Events und Teams', `<ul class="tips">
     <li><b>Konto</b> (Online › Konto): Anmeldung mit Passwort oder <b>Code per E-Mail</b>, empfohlen mit <b>Zwei-Faktor</b> (Authenticator-App) – richte am besten eine zweite App als Ersatz ein. Ist alles verloren, kann der Admin die 2FA zurücksetzen. Mehrere Konten lassen sich über das Avatar-Menü oben wechseln.</li>
     <li><b>Freunde</b> (Online › Freunde): Spieler suchen, Anfrage schicken – erst wenn beide zustimmen, seht ihr Level, Wochen- und Gesamtstatistik und könnt <b>chatten</b>. Einzelne Fahrten sieht ein Freund nur, wenn du es erlaubst. Puls, Gewicht oder Alter sieht nie jemand. Freundschaft beenden und Blockieren geht jederzeit.</li>
@@ -56,7 +62,9 @@ const T = [
     <li><b>Lobby</b>: Gruppenfahrten und Rennen mit gemeinsamem Start, gleichem Wetter und optional einem gemeinsamen Workout oder Plan.</li>
     <li><b>📅 Events</b> (Online › Events & Teams): geplante Gruppenfahrten. Anmelden, zur Startzeit „Jetzt beitreten“. Die Startseite erinnert dich.</li>
     <li><b>🛡️ Teams</b>: gründen oder beitreten (ein Team pro Person) und gemeinsam Kilometer sammeln, gewertet über die letzten 7 Tage.</li>
-    <li>Ride Ons gehen auch an echte Mitspieler; beim gemeinsamen Fahren zählt die gemeinsame Zeit, es gibt Duelle und Gruppenbonus.</li></ul>`],
+    <li>Ride Ons gehen auch an echte Mitspieler; beim gemeinsamen Fahren zählt die gemeinsame Zeit, es gibt Duelle und Gruppenbonus.</li>    <li><b>📺 Zuschauer-Link</b>: In der Fahrt unter ⋯ › Zuschauer. Freunde und Familie sehen dich live im Browser – auch ohne Konto – und feuern mit Emojis an.</li>
+    <li><b>Gruppenanruf</b>: Im Anruffenster mit ➕ weitere Freunde dazuholen, bis zu 4 Personen.</li>
+</ul>`],
   ['ton', '🎵', 'Ton, Musik und Sprachansagen', `<ul class="tips">
     <li><b>Geräusche</b> (Einstellungen › Fahrt & Ton): Fahrtwind, Reifen, Kette, Natur, Countdown, Fanfaren – jedes mit eigenem Regler. Taste M schaltet alles stumm.</li>
     <li><b>Musik</b>: zehn Stile (Chill, Lo-Fi, Ambient, Synthwave, House, Drive, Techno, Rock, Drum & Bass, 8-Bit) mit mehreren Stücken. Tempo nach Stil, fest oder <b>im Takt deiner Trittfrequenz</b>. Wird mit Leistung oder Puls intensiver. Nächstes Stück: Taste T oder Mehr › Nächstes Stück. Oder eigene Musikdateien.</li>
@@ -75,7 +83,9 @@ const T = [
     <li>Auf dem Handy wählt die App automatisch eine kompakte Ansicht. Die Fahrtanzeige passt sich hochkant und quer an, jede Lage hat ihre eigene Anordnung.</li>
     <li><b>Wischen</b>: Seitlich über die Seite wischen springt zum nächsten bzw. vorherigen Reiter (z. B. Profil → Avatar → Fahrt & Ton).</li>
     <li>Als App installieren: im Browser-Menü „Zum Startbildschirm hinzufügen“.</li>
-    <li><b>Live-Ansicht</b>: Läuft auf einem anderen Gerät deines Kontos eine Fahrt, siehst du sie live auf der Startseite. Pro Konto läuft immer nur eine Fahrt gleichzeitig.</li></ul>`],
+    <li><b>Live-Ansicht</b>: Läuft auf einem anderen Gerät deines Kontos eine Fahrt, siehst du sie live auf der Startseite. Pro Konto läuft immer nur eine Fahrt gleichzeitig.</li>    <li><b>👨‍👩‍👧 Familienprofile</b>: Unter Einstellungen › Profil mehrere Personen anlegen, jede mit eigenen Fahrten und Fortschritt. Kinderprofile haben sanften Widerstand, kurze bunte Fahrten und keinen Online-Bereich.</li>
+    <li><b>📺 Fernseher-Modus</b> (App &amp; Daten): große Schrift, Bedienung mit Pfeiltasten der Fernbedienung. Gamepads gehen immer. Das Handy wird mit demselben Konto in der Handy-Ansicht zur Fernbedienung.</li>
+</ul>`],
   ['probleme', '🛠️', 'Wenn etwas nicht klappt', `<ul class="tips">
     <li><b>Ruckelt die Fahrt?</b> Die App senkt die Auflösung selbst. Zusätzlich hilft Einstellungen › App & Daten › Grafik „Mittel“ oder „Niedrig“.</li>
     <li><b>Gerät wird nicht gefunden?</b> Chrome oder Edge verwenden, Bluetooth am Gerät einschalten, andere Apps (z. B. auf dem Handy) vom Trainer trennen.</li>
