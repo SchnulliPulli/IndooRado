@@ -2,7 +2,7 @@
 import { dialog } from './util.js';
 export const RIDE = [
   ['Leertaste', 'Pause / weiter'], ['↑ / +', 'Hochschalten (schwerer)'], ['↓ / −', 'Runterschalten (leichter)'], ['← / →', 'Spur wechseln, überholen'],
-  ['1 – 5', 'Kamera-Ansicht'], ['C', 'Nächste Kamera'], ['K', 'Karte öffnen / schließen (beamen)'], ['W', 'Tageszeit und Wetter'],
+  ['1 – 6', 'Kamera-Ansicht (6 = Rückblick)'], ['C', 'Nächste Kamera'], ['K', 'Karte öffnen / schließen (beamen)'], ['W', 'Tageszeit und Wetter'],
   ['N', 'Mitfahrer (Bots) an/aus'], ['R', 'Ride On geben'], ['U', 'Power-up benutzen'], ['P', 'Foto speichern'], ['O', 'Fotomodus'],
   ['M', 'Ton an/aus'], ['T', 'Nächstes Musikstück'], ['Esc', 'Karte und Menüs schließen'], ['?', 'Diese Übersicht'],
 ];

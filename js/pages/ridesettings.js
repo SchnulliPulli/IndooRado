@@ -90,7 +90,7 @@ export async function render(el, params = []) {
       ${SW('p', 'fx', 'Tempo-Effekte', 'Sichtfeld weitet sich bei hohem Tempo, Tempolinien bei schnellen Abfahrten')}
     </div>
     <div class="card form"><h2>Kamera</h2>
-      ${SEL('p', 'camView', 'Standardansicht', [[0, 'Verfolger'], [1, 'Weit'], [2, 'Seite'], [3, 'Vogel'], [4, 'Fahrer (Ich-Perspektive)']], 0)}
+      ${SEL('p', 'camView', 'Standardansicht', [[0, 'Verfolger'], [1, 'Weit'], [2, 'Seite'], [3, 'Vogel'], [4, 'Fahrer (Ich-Perspektive)'], [6, 'Rückblick (nach hinten aufs Feld)']], 0)}
       ${SW('p', 'gateCam', 'Kameraschwenk am Zieltor', 'Kurz von vorn auf dich, wenn ein Intervall endet')}
       ${SW('p', 'sprintCam', 'Kameraschwenk beim Sprint', 'Zu Beginn einer Sprintwertung kurz von vorn')}
       ${SW('p', 'steerTilt', 'Lenken durch Neigen (Tablet)', 'Gerät nach links oder rechts kippen wechselt die Spur, z. B. in den Windschatten. Am Computer: Pfeiltasten ← →', false)}

@@ -39,7 +39,7 @@ export function resolveEnv() {
 }
 const ENV_L = { morning: 'Morgen', day: 'Tag', evening: 'Abend', night: 'Nacht', clear: 'klar', cloudy: 'bewölkt', rain: 'Regen', fog: 'Nebel' };
 
-const VIEWS = ['Verfolger', 'Weit', 'Seite', 'Vogel', 'Fahrer'];
+const VIEWS = { 0: 'Verfolger', 1: 'Weit', 2: 'Seite', 3: 'Vogel', 4: 'Fahrer', 6: 'Rückblick' };
 const SPEED = +new URLSearchParams(location.search).get('speed') || 1; // nur zum Testen
 const NPC_COUNT = { high: 14, medium: 10, low: 6 };
 let S = null;
@@ -199,7 +199,7 @@ async function start(el) {
   // Freunde-Geister dieser Strecke (bis zu 5)
   { const fg = (await ghostsFor(route.id)).slice(0, 5); if (fg.length) { S.fg = fg.map((g, i) => ({ g, tr: track(g), name: g.name, lat: [.9, 2.1, 3, 1.4, 2.6][i], d: 0, v: 0, crank: 0, gap: 0, lead: null })); world.setFriendGhosts(S.fg.map(f => ({ ...f.g.look, name: '👻 ' + f.name }))); } }
   world.setPacer(!!S.pacer, S.pacer?.buddy ? BUDDY_LOOK : null, S.pacer?.name);
-  world.view = clamp(profile.camView ?? 0, 0, 4); world.showNames = profile.npcNames !== false;
+  world.view = VIEWS[profile.camView] ? +profile.camView : 0; world.showNames = profile.npcNames !== false;
   if (profile.fsOnRide && !document.fullscreenElement) toggleFullscreen();
   if (SPEED !== 1) { window.__tw = S; window.__twHud = () => hud(); window.__twMp = () => { mpInit(S); S.live.onMp = m => mpOnMsg(S, MPH, m); }; window.__twSync = () => syncRemote(); } // Testhilfe
   const plan = wo?.planId ? getPlan(wo.planId) : null;
@@ -450,7 +450,7 @@ function bindUi() {
     else if (e.key === 'k' || e.key === 'K') { if ($('#bigMap').hidden) openMap(); else closeMap(); }
     else if (e.key === 'w' || e.key === 'W') $('#tEnv').click();
     else if (e.key === 'Escape') { closeMap(); $('#envPanel').hidden = true; }
-    else if (e.key >= '1' && e.key <= '5') { S.world.view = +e.key - 1; S.world.camInit = false; flash('Kamera: ' + VIEWS[S.world.view]); }
+    else if (e.key >= '1' && e.key <= '6') { S.world.view = e.key === '6' ? 6 : +e.key - 1; S.world.camInit = false; flash('Kamera: ' + VIEWS[S.world.view]); }
   };
   document.addEventListener('keydown', S.key);
   S.offs.push(bus.on('shift', d => shift(d)));

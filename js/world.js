@@ -970,7 +970,7 @@ export class World {
   takeBell(i) { const b = this.bells?.find(x => x.userData.i === i); if (b) b.visible = false; }
   takePickup(i) { const p = this.pickups?.[i]; if (p) p.visible = false; }
   resetPickups() { this.pickups?.forEach(p => p.visible = true); }
-  cycleView() { this.view = (this.view + 1) % 5; this.camInit = false; return this.view; }
+  cycleView() { const order = [0, 1, 2, 3, 4, 6]; this.view = order[(order.indexOf(this.view) + 1) % order.length]; this.camInit = false; return this.view; }
   // Kurzer Kameraschwenk (z. B. am Zieltor), danach zurück zur gewählten Ansicht
   cinematic(sec = 3, view = 2) { if (document.documentElement.classList.contains('calm')) return; this.cine = { until: performance.now() + sec * 1000, view }; this.camInit = false; }
 
@@ -1048,6 +1048,7 @@ export class World {
     let cp, look;
     switch (view) {
       case 5: cp = pt(d + 9, L - 3.7, 1.4); look = pt(d - 1, L, 1.1); break;
+      case 6: cp = pt(d + 7, L - .15, 2.3); look = pt(d - 16, L, .9); break; // Rückblick: vor dem Fahrer, Blick nach hinten aufs Feld
       case 0: cp = pt(d - 5.2, L - .2, 2.05); look = pt(d + 7, L - .1, 1.05); break;
       case 1: cp = pt(d - 12, L - .3, 4.8); look = pt(d + 12, L - .1, .8); break;
       case 2: cp = rp.clone().addScaledVector(right, 4.2).addScaledVector(fwd, 1.2).add(new THREE.Vector3(0, 1.3, 0)); look = rp.clone().add(new THREE.Vector3(0, .9, 0)); break;
