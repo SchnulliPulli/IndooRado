@@ -9,7 +9,7 @@ const miss = e => /function|relation|does not exist|schema cache/i.test(e?.messa
 let timers = [], chatT = null;
 export function leave() { timers.forEach(clearInterval); timers = []; clearInterval(chatT); document.querySelector('.frdlg')?.closest('.modal')?.remove(); }
 
-export async function render(el) {
+export async function render(el, params = [], query = '') {
   leave();
   if (!(await gate(el))) return;
   const sb = await O.client(), me = O.online.user.id;
@@ -60,7 +60,8 @@ export async function render(el) {
   };
   const loadCode = async (fresh = false) => { const { data, error } = await sb.rpc('my_friend_code', { p_new: fresh }); $('#frMy', el).textContent = error ? '–' : String(data).replace(/^(.{4})/, '$1-'); if (error) toast(miss(error)); };
   $('#frCode', el).onkeydown = e => { if (e.key === 'Enter') $('#frCodeGo', el).click(); };
-  loadCode(); draw(); timers.push(setInterval(() => el.isConnected ? draw() : leave(), 30e3));
+  const openId = new URLSearchParams(query || '').get('open');
+  loadCode(); draw().then(() => { const f = openId && list.find(x => x.id === openId && x.status === 'accepted'); if (f) openFriend(sb, me, f, draw); }); timers.push(setInterval(() => el.isConnected ? draw() : leave(), 30e3));
 }
 
 // Profil eines Freundes mit Chat

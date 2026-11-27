@@ -143,6 +143,7 @@ export async function render(el) {
     </div>
   </section>`;
   off.push(deviceCards($('#devs', el)));
+  import('../inbox.js').then(m => m.mountInbox(el.querySelector('.hero'))).catch(() => { }); // Nachrichten, Anfragen, Anrufe (nur angemeldet)
   el.onclick = (e => {
     if (e.target.closest('[data-quick]')) { sessionStorage.setItem('quickStart', '1'); location.hash = '#/ride'; return; }
     const fs = e.target.closest('[data-ftpset]'); if (fs) { profile.ftp = +fs.dataset.ftpset; saveProfile(); bus.emit('toast', 'FTP auf ' + profile.ftp + ' W gesetzt'); render(el); return; }
