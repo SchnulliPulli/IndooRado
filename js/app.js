@@ -404,3 +404,30 @@ init();
     lostT = setTimeout(() => { lostT = null; if (PR.P.ready || !navigator.onLine || !PR.P.ch || document.hidden) return; lost = Date.now(); show('⚠️ <b>Verbindung zum Server unterbrochen</b> · wird neu aufgebaut …', 'srv'); }, 15000);
   });
 }
+
+// Handy: seitlich wischen wechselt zwischen den Reitern eines Bereichs (z. B. Profil ↔ Avatar ↔ Fahrt & Ton …)
+{
+  let st = null;
+  const small = () => matchMedia('(max-width: 900px)').matches;
+  const scrollsX = el => { for (let n = el; n && n !== document.body; n = n.parentElement) { if (n.scrollWidth > n.clientWidth + 4 && /auto|scroll/.test(getComputedStyle(n).overflowX)) return true; } return false; };
+  const view = document.getElementById('view');
+  view.addEventListener('touchstart', e => {
+    st = null;
+    if (!small() || e.touches.length !== 1 || currentKey === 'ride' || document.querySelector('.modal')) return;
+    const t = e.target; if (t.closest('input,textarea,select,canvas,[contenteditable],[data-noswipe],.leaflet-container,.kitpal,.chat') || scrollsX(t)) return;
+    const p = e.touches[0]; st = { x: p.clientX, y: p.clientY, t: performance.now() };
+  }, { passive: true });
+  view.addEventListener('touchend', e => {
+    if (!st) return; const p = e.changedTouches[0], dx = p.clientX - st.x, dy = p.clientY - st.y, dt = performance.now() - st.t; st = null;
+    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 2 || dt > 700) return;
+    const grp = groupOf(currentKey); if (!grp?.tabs) return;
+    const tabs = grp.tabs.filter(([k]) => k !== 'admin' || document.body.classList.contains('is-admin'));
+    const i = tabs.findIndex(([k]) => k === currentKey); if (i < 0) return;
+    const j = i + (dx < 0 ? 1 : -1); if (j < 0 || j >= tabs.length) { view.animate([{ transform: `translateX(${dx < 0 ? -12 : 12}px)` }, { transform: 'none' }], { duration: 220 }); return; }
+    view.classList.remove('swl', 'swr'); void view.offsetWidth; view.classList.add(dx < 0 ? 'swl' : 'swr');
+    location.hash = '#/' + tabs[j][0];
+    document.querySelector('#subnav a.on')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }, { passive: true });
+  // Aktiven Reiter in der Leiste sichtbar halten
+  addEventListener('hashchange', () => setTimeout(() => document.querySelector('#subnav a.on')?.scrollIntoView({ inline: 'center', block: 'nearest' }), 50));
+}

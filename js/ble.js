@@ -271,6 +271,7 @@ export function setDemo(on) {
       live.cadSensor = cad; live.cadT = now;
       let want = control.target != null ? control.target : (cad > 20 ? cad * 2.1 * demo.effort : 0);
       if (control.grade != null && control.target == null) want = cad > 20 ? Math.max(60, 150 + control.grade * 25) * demo.effort : 0;
+      if (demo.wSet != null) want = demo.wSet; // in der Demo-Steuerung fest eingestellte Watt haben Vorrang
       if (cad < 20) want = 0;
       demo.pw += (want - demo.pw) * 0.3;
       live.power = Math.max(0, Math.round(demo.pw + (Math.random() - 0.5) * 10)); live.powerT = now;

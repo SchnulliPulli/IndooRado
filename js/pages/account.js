@@ -314,6 +314,10 @@ async function renderAccount(el) {
     <div class="row"><button class="btn sm ${verified.length ? 'ghost' : 'pri'}" id="mOn">${verified.length ? '+ Weitere App hinzufügen' : '2FA einrichten'}</button></div><div id="mBox"></div>
   </section>
   <section class="card form"><div class="row between"><h2>Verbindungstest</h2><button class="btn sm" id="dgGo">Test starten</button></div><p class="small muted">Prüft Schritt für Schritt Anmeldung, Profil, Zugang, Admin, Speicher und Live-Kanäle mit Dauer und genauer Fehlermeldung.</p><div id="dgOut" class="dglist small"></div></section>
+  <section class="card form" id="clCard"><div class="row between"><h2>📶 Verbindungsprotokoll</h2><span class="row"><select class="inp sm" id="clMin"><option value="10">10 min</option><option value="30" selected>30 min</option><option value="60">60 min</option><option value="120">2 h</option></select><button class="btn sm pri" id="clGo">Langzeittest starten</button></span></div>
+    <p class="small muted">Läuft immer im Hintergrund mit (auch während der Fahrt) und hält jeden Abriss mit Uhrzeit und Grund fest. Der Langzeittest fragt zusätzlich alle 10 Sekunden beim Server an und misst die Antwortzeit. Alles bleibt nur auf diesem Gerät.</p>
+    <div class="kpis" id="clKpi"></div><div class="cllog" id="clLog"></div>
+    <div class="row"><button class="btn sm" id="clCopy">📋 Protokoll kopieren</button><button class="btn sm ghost" id="clClear">Leeren</button></div></section>
   <section class="card"><details><summary><b>Hinweis zu Datenschutz und Nutzung</b></summary>${NOTICE}</details></section>
   <section class="card form dangerzone"><h2>Daten und Konto löschen</h2>
     <div class="row"><button class="btn sm ghost danger" id="dData">Online-Daten löschen</button><button class="btn sm danger" id="dAcc">Konto löschen</button></div>
@@ -332,6 +336,21 @@ async function renderAccount(el) {
   $('#cOld', el).addEventListener('input', chk); $('#cNew', el).addEventListener('input', chk);
   $('#cGo', el).onclick = async () => { try { await O.verifyPassword($('#cOld', el).value); if (await changePw($('#cNew', el).value)) { toast('Passwort geändert ✅'); $('#cOld', el).value = $('#cNew', el).value = ''; chk(); } } catch (e) { toast(errText(e), 5000); } };
   $('#pAvMode', el).onchange = async e => { profile.onlineAvatar = e.target.value; saveProfile(); (await import('../online/presence.js')).setStatus({}); toast('Gespeichert', 900); };
+  // Verbindungsprotokoll
+  { const CL = await import('../online/connlog.js'), fmt = t => new Date(t).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const ico = { ok: '🟢', info: '⚪', warn: '🟠', bad: '🔴' };
+    const draw = () => {
+      if (!el.isConnected || !$('#clLog', el)) { off(); return; }
+      const all = CL.entries(), day = all.filter(x => x.t > Date.now() - 864e5), drops = day.filter(x => x.lvl === 'bad').length, T = CL.test;
+      $('#clKpi', el).innerHTML = [[drops, 'Störungen (24 h)'], [day.filter(x => x.src === 'Server' && x.lvl === 'ok').length, 'Neuverbindungen (24 h)'], [CL.heartbeatsOk(), 'Herzschläge ok (seit Start)'], ...(T.on || T.n ? [[`${T.n - T.fail}/${T.n}`, T.on ? `Test läuft · noch ${Math.max(0, Math.ceil((T.until - Date.now()) / 60e3))} min` : 'letzter Test ok'], [T.n - T.fail ? Math.round(T.sum / (T.n - T.fail)) + ' ms' : '–', 'Ø Antwortzeit']] : [])].map(([v, l]) => `<div class="kpi"><b class="num">${v}</b><span>${l}</span></div>`).join('');
+      $('#clLog', el).innerHTML = all.slice(-80).reverse().map(x => `<div class="clrow ${x.lvl}"><span>${ico[x.lvl] || '⚪'}</span><span class="num">${fmt(x.t)}</span><b>${esc(x.src)}</b><span>${esc(x.msg)}</span></div>`).join('') || '<p class="muted small">Noch keine Einträge.</p>';
+      $('#clGo', el).textContent = T.on ? 'Test stoppen' : 'Langzeittest starten';
+    };
+    const off = CL.onChange(draw); const iv = setInterval(() => el.isConnected ? draw() : clearInterval(iv), 15000); draw();
+    $('#clGo', el).onclick = () => { if (CL.test.on) CL.stopTest(); else CL.startTest(+$('#clMin', el).value, O.client); draw(); };
+    $('#clClear', el).onclick = () => CL.clear();
+    $('#clCopy', el).onclick = async () => { const txt = CL.entries().map(x => `${fmt(x.t)}\t${x.lvl}\t${x.src}\t${x.msg}`).join('\n'); try { await navigator.clipboard.writeText(txt); toast('Protokoll kopiert – du kannst es mir einfach schicken'); } catch (e) { toast('Kopieren nicht möglich'); } };
+  }
   $('#dgGo', el).onclick = async e => {
     const out = $('#dgOut', el); out.innerHTML = ''; e.target.disabled = true;
     await O.diagnose(r => { out.insertAdjacentHTML('beforeend', `<div class="row between dgrow ${r.ok ? 'ok' : 'bad'}"><span>${r.ok ? '✅' : '❌'} ${esc(r.name)}</span><span class="muted">${esc(String(r.info ?? ''))} · ${r.ms} ms</span></div>`); });

@@ -75,8 +75,9 @@ export async function joinPresence() {
   const c = P.ch;
   c.subscribe(async st => {
     if (c !== P.ch) return;
-    if (st === 'SUBSCRIBED') { P.ready = true; fastSend(); await push(); sync(); }
-    else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') { P.ready = false; bus.emit('presence'); }
+    const CL = await import('./connlog.js');
+    if (st === 'SUBSCRIBED') { CL.log('ok', 'Lobby', 'verbunden'); P.ready = true; fastSend(); await push(); sync(); }
+    else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') { CL.log(st === 'CLOSED' ? 'info' : 'bad', 'Lobby', { CHANNEL_ERROR: 'Fehler', TIMED_OUT: 'Zeitüberschreitung', CLOSED: 'geschlossen' }[st]); P.ready = false; bus.emit('presence'); }
   });
 }
 // Alle 15 s: Liste frisch aus dem Kanal lesen (Zähler oben aktuell halten) und eine abgerissene Verbindung neu aufbauen

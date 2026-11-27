@@ -67,13 +67,13 @@ export function joinRoute(routeId, me) {
     const sub = () => { const c = ch; let failed = false; try { c.subscribe(async (st, err) => {
       if (closed || c !== ch) return; // veralteter Kanal (nach Neuaufbau) oder Fahrt beendet
       if (st === 'SUBSCRIBED') {
-        setSt('on'); clearInterval(timer); failed = false;
+        setSt('on'); clearInterval(timer); failed = false; import('./connlog.js').then(L => L.log('ok', 'Fahrt', 'Fahrt-Kanal verbunden'));
         try { await ch.track({ since: Date.now() }); } catch (e) { }
         const tx = () => { const s = me(); if (s) { api.sent++; ch.send({ type: 'broadcast', event: 'pos', payload: { id: sid, name: online.profile?.display_name || 'Fahrer', ...s } }); } };
         api.sendNow = tx; // z. B. direkt nach dem Beamen, damit die anderen einen sofort an der neuen Stelle sehen
         tx(); timer = setInterval(tx, 1000);
       } else if ((st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') && !failed) {
-        failed = true; clearInterval(timer); setSt('error'); if (err) console.warn('Live:', st, err.message);
+        failed = true; clearInterval(timer); setSt('error'); import('./connlog.js').then(L => L.log('bad', 'Fahrt', 'Fahrt-Kanal: ' + st + (err ? ' – ' + err.message : ''))); if (err) console.warn('Live:', st, err.message);
         // Erst abwarten: meist verbindet die Bibliothek den Kanal selbst wieder. Nur einen weiterhin toten Kanal ersetzen.
         setTimeout(async () => { if (closed || c !== ch) return; if (c.state === 'joined') { failed = false; return; } await purge(); await realtimeAuth().catch(() => { }); if (closed) return; ch = mk(); sub(); }, 12000);
       }

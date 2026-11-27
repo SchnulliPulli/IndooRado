@@ -8,6 +8,7 @@ import { listWorkouts, stats as wStats, getWorkout } from '../workouts.js';
 import { listRoutes, quickStats } from '../routes.js';
 import { sync, syncReady, getLive, pushNow, loadSync, isConfigured, liveFresh } from '../sync.js';
 let liveMiss = 0;
+import * as OC from '../online/client.js';
 import { missionState } from '../game.js';
 import { titleOf } from '../game.js';
 
@@ -27,7 +28,7 @@ export async function render(el) {
   <section class="comp">
     <div class="comphead"><div><div class="small muted">Übersicht</div><h1>Hallo ${esc(profile.name)}</h1><div class="small muted">Level ${L.lv} · ${titleOf(L.lv)} · FTP ${profile.ftp} W</div></div>
       <button class="btn sm" id="cRefresh" ${nas ? '' : 'disabled'}>↻ Abgleichen</button></div>
-    <div class="small ${nas ? 'muted' : 'warn'}" id="cSync">${nas ? syncText() : 'Ohne Cloud-Abgleich siehst du hier nur die Daten dieses Geräts. Unter Einstellungen › Verbindungen einen Cloud-Speicher verbinden (NAS, OneDrive, Google Drive, Dropbox), dann zeigt das Handy deine Fahrten, Pläne und die laufende Fahrt vom PC.'}</div>
+    <div class="small ${nas || OC.hasStoredSession() ? 'muted' : 'warn'}" id="cSync">${nas ? syncText() : OC.hasStoredSession() ? '🔄 Online-Konto wird verbunden …' : 'Ohne Cloud-Abgleich siehst du hier nur die Daten dieses Geräts. Unter Einstellungen › Verbindungen einen Cloud-Speicher verbinden (NAS, OneDrive, Google Drive, Dropbox), dann zeigt das Handy deine Fahrten, Pläne und die laufende Fahrt vom PC.'}</div>
 
     <div class="card live" id="cLive" hidden></div>
 

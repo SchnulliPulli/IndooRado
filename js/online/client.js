@@ -88,10 +88,11 @@ export async function client() {
   if (online.client) return online.client;
   if (!configured()) throw new Error('IndooRado Online ist nicht eingerichtet');
   const { createClient } = await import('../../vendor/supabase.esm.js');
+  const CL = await import('./connlog.js');
   const c = config();
   online.client = createClient(c.url, c.anonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: loginReturn(), flowType: 'pkce', storageKey: 'vv-auth', storage: authStore, lock: tabLock }, global: { fetch: trackedFetch },
     // Stabilere Live-Verbindung: Herzschlag aus einem Worker (läuft auch im Hintergrund), mehr Geduld bei langsamen Netzen
-    realtime: { worker: typeof Worker !== 'undefined', workerUrl: new URL('./rt-worker.js', import.meta.url).href, heartbeatIntervalMs: 25000, timeout: 10000 } });
+    realtime: { worker: typeof Worker !== 'undefined', workerUrl: new URL('./rt-worker.js', import.meta.url).href, heartbeatIntervalMs: 25000, timeout: 10000, logger: CL.rtLogger, heartbeatCallback: CL.rtHeartbeat } });
   // Laut Supabase-Doku keine Supabase-Aufrufe direkt im Callback (kann blockieren): erst danach ausführen
   online.client.auth.onAuthStateChange((ev, session) => {
     if (ev === 'PASSWORD_RECOVERY') online.recovery = true;

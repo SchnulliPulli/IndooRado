@@ -94,9 +94,10 @@ export async function render(el) {
       <div class="elevwrap" data-drag="elev"><canvas id="elev"></canvas><div class="elevtxt small" id="elevTxt"></div></div>
     </div>
     <div class="demopad" id="demoPad" data-drag="demopad" hidden aria-label="Demo-Steuerung">
-      <div class="dphead">🧪 Demo-Steuerung <span class="num" id="dpVal"></span></div>
-      <div class="dprow"><button class="dpb" data-dp="left" aria-label="Spur nach links">⬅</button><button class="dpb brake" data-dp="brake">🛑 Bremse</button><button class="dpb gas" data-dp="gas">⛽ Gas</button><button class="dpb" data-dp="right" aria-label="Spur nach rechts">➡</button></div>
-      <div class="dprow"><button class="dpb" data-dp="sprint">🚀 Sprint</button><button class="dpb" data-dp="pup" title="Power-up einsetzen (U)">⚡ Power-up</button><button class="dpb" data-dp="ro" title="Ride On geben (R)">👍</button></div>
+      <div class="dphead">🧪 Demo</div>
+      <div class="dpline"><span>Tritt</span><button class="dpb" data-dp="cad-" aria-label="langsamer treten">−</button><b class="num" id="dpCad">88</b><button class="dpb" data-dp="cad+" aria-label="schneller treten">+</button></div>
+      <div class="dpline"><span>Watt</span><button class="dpb" data-dp="w-" aria-label="weniger Watt">−</button><b class="num" id="dpW">180</b><button class="dpb" data-dp="w+" aria-label="mehr Watt">+</button></div>
+      <div class="dprow"><button class="dpb brake" data-dp="brake" title="Gedrückt halten: aufhören zu treten und bremsen">🛑</button><button class="dpb" data-dp="sprint" title="8 Sekunden Vollgas">🚀</button><button class="dpb" data-dp="left" aria-label="Spur links">⬅</button><button class="dpb" data-dp="right" aria-label="Spur rechts">➡</button></div>
     </div>
     <div class="toolbar">
       <button class="tbtn" id="tPause" title="Pause (Leertaste)">${ICON.pause}<span>Pause</span></button>
@@ -349,25 +350,26 @@ function bindUi() {
   };
   // Demo-Geräte direkt aus der Fahrt ein- und ausschalten
   const updDemo = () => { $('#tDemoL', el).textContent = demo.on ? 'Demo aus' : 'Demo an'; $('#tDemo', el).classList.toggle('on', demo.on); $('#demoPad', el).hidden = !demo.on; };
-  // Demo-Steuerung: Gas und Bremse halten, Sprint, Spurwechsel, Power-up, Ride On (Minispiel ohne echte Geräte)
-  { const pad = $('#demoPad', el), base = { cad: demo.cad || 88, effort: demo.effort || 1 }; let held = null, ramp = null, sprintT = null;
-    const val = () => { const v = $('#dpVal', el); if (v) v.textContent = `${Math.round(demo.cad)} U/min · ${Math.round(demo.effort * 100)} %`; };
-    const release = () => { held = null; clearInterval(ramp); ramp = null; S && (S.brake = false); pad.querySelectorAll('.dpb.on').forEach(b => b.classList.remove('on')); if (!sprintT) { demo.cad = base.cad; demo.effort = base.effort; } val(); };
-    const hold = k => {
-      held = k; clearInterval(ramp);
-      if (k === 'gas') ramp = setInterval(() => { demo.cad = Math.min(118, demo.cad + 2); demo.effort = Math.min(2.6, demo.effort + .08); val(); }, 100);
-      if (k === 'brake') { demo.cad = 0; S.brake = true; val(); }
-    };
+  // Demo-Steuerung: Trittfrequenz und Watt in Stufen, Bremse halten, Sprint, Spurwechsel (Minispiel ohne echte Geräte)
+  { const pad = $('#demoPad', el); let set = { cad: demo.cad || 88, w: Math.round((demo.cad || 88) * 2.1 * (demo.effort || 1)) }, braking = false, sprintT = null;
+    let wTouched = false; demo.wSet = null;
+    const apply = () => { if (braking) return; demo.cad = set.cad; demo.effort = set.cad > 20 ? set.w / (set.cad * 2.1) : 1; demo.wSet = wTouched ? set.w : null; val(); };
+    const val = () => { const c = $('#dpCad', el), w = $('#dpW', el); if (c) c.textContent = braking ? 0 : Math.round(sprintT ? demo.cad : set.cad); if (w) w.textContent = braking ? 0 : Math.round(sprintT ? demo.wSet : wTouched ? set.w : (live.power || set.w)); };
+    const valT = setInterval(() => pad.isConnected ? (!wTouched && val()) : clearInterval(valT), 1000);
+    const release = () => { if (!braking) return; braking = false; S && (S.brake = false); pad.querySelector('.dpb.brake')?.classList.remove('on'); apply(); };
+    let rep = null; const stopRep = () => { clearInterval(rep); clearTimeout(rep); rep = null; };
+    const step = k => { if (k === 'cad-') set.cad = Math.max(40, set.cad - 5); if (k === 'cad+') set.cad = Math.min(125, set.cad + 5); if (k === 'w-' || k === 'w+') { if (!wTouched) { wTouched = true; set.w = Math.round(live.power || set.w); } set.w = Math.max(50, Math.min(1200, set.w + (k === 'w+' ? 10 : -10))); } apply(); };
     pad.addEventListener('pointerdown', e => {
       if ($('#rw', el)?.classList.contains('hudedit')) return; const b = e.target.closest('[data-dp]'); if (!b) return; e.preventDefault(); e.stopPropagation();
       const k = b.dataset.dp;
-      if (k === 'gas' || k === 'brake') { b.classList.add('on'); try { b.setPointerCapture(e.pointerId); } catch (er) { } hold(k); return; }
+      if (k === 'brake') { braking = true; demo.cad = 0; S.brake = true; b.classList.add('on'); try { b.setPointerCapture(e.pointerId); } catch (er) { } val(); return; }
+      if (/[+-]$/.test(k)) { step(k); stopRep(); rep = setTimeout(() => { rep = setInterval(() => step(k), 90); }, 380); try { b.setPointerCapture(e.pointerId); } catch (er) { } return; } // gedrückt halten = schnell weiterzählen
       if (k === 'left' || k === 'right') { S.latT = clamp((S.latT ?? 1.5) + (k === 'left' ? -.6 : .6), .3, 3.2); return; }
-      if (k === 'pup') { usePup(S, flash); return; }
-      if (k === 'ro') { giveRideOn(); return; }
-      if (k === 'sprint') { clearTimeout(sprintT); demo.cad = 112; demo.effort = 3.2; val(); flash('🚀 Sprint!', 1000); sprintT = setTimeout(() => { sprintT = null; if (!held) { demo.cad = base.cad; demo.effort = base.effort; val(); } }, 8000); }
+      if (k === 'sprint') { clearTimeout(sprintT); demo.cad = 112; demo.wSet = Math.max(600, set.w * 2); flash('🚀 Sprint!', 1000); sprintT = setTimeout(() => { sprintT = null; apply(); }, 8000); val(); }
     });
-    for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) pad.addEventListener(ev, () => { if (held) release(); });
+    for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) pad.addEventListener(ev, () => { stopRep(); release(); });
+    // Tastatur im Demo-Modus: Bild auf/ab = Watt, Pos1/Ende = Trittfrequenz
+    S.demoKey = e => { if (!demo.on) return false; const m = { PageUp: 'w+', PageDown: 'w-', Home: 'cad+', End: 'cad-' }[e.key]; if (!m) return false; step(m); return true; };
     val();
   }
   updDemo();
@@ -403,6 +405,7 @@ function bindUi() {
     if ((e.key === 'o' || e.key === 'O') && !e.target.closest?.('input,textarea')) { photoMode(S, !S.world.photo); return; }
     const sk = steerKey(S, e); if (sk === 'pup') { usePup(S, flash); return; } if (sk) { e.preventDefault(); return; }
     if (e.target.matches('input,select,textarea')) return;
+    if (S.demoKey?.(e)) { e.preventDefault(); return; }
     if (e.key === 'ArrowUp' || e.key === '+') { shift(1); e.preventDefault(); }
     else if (e.key === 'ArrowDown' || e.key === '-') { shift(-1); e.preventDefault(); }
     else if (e.key === ' ') { togglePause(); e.preventDefault(); }

@@ -11,7 +11,8 @@ const T = [
     <li><b>Smart-Trainer</b> (FTMS): liefert Leistung und Kadenz und wird gesteuert – feste Watt (ERG), Steigung oder virtuelle Gänge.</li>
     <li><b>Pulsgurt</b>: Pulsanzeige, Pulszonen, Puls-Ziel-Modus, Musik nach Puls und adaptive Workouts.</li>
     <li><b>Click-Controller</b> und Fernbedienungen: Tasten unter Geräte anlernen. Einmal klicken schaltet, dreimal schnell Plus springt im Workout vor, dreimal Minus zurück.</li>
-    <li>Bekannte Geräte verbindet die App beim Start selbst. <b>Demo-Geräte</b> lassen sich auch während der Fahrt über Mehr › Demo an- und ausschalten; solche Fahrten werden nur gespeichert, wenn du das unter Einstellungen › App erlaubst.</li></ul>`],
+    <li>Bekannte Geräte verbindet die App beim Start selbst. <b>Demo-Geräte</b> lassen sich auch während der Fahrt über Mehr › Demo an- und ausschalten; solche Fahrten werden nur gespeichert, wenn du das unter Einstellungen › App erlaubst.</li>
+    <li><b>Demo-Modus als Minispiel</b>: Mit Demo-Geräten erscheint links in der Fahrt eine Steuerung – Trittfrequenz und Watt mit − / + (gedrückt halten zählt schnell), 🛑 Bremse halten, 🚀 Sprint, Spur ⬅ ➡. Tastatur: Bild ↑/↓ = Watt, Pos1/Ende = Trittfrequenz.</li></ul>`],
   ['fahren', '🚴', 'Fahren', `<ul class="tips">
     <li><b>Widerstand</b>: virtuelle Gänge (Gang × Kadenz × Steigung ergibt die Leistung, Schaltbereich unter Fahransicht), Steigung, ERG fix oder Puls-Ziel. Umschalten über den Modus-Knopf.</li>
     <li><b>Anzeigen</b>: Watt mit Zonenfarbe und FTP-Ring, Tempo, Strecke, Zeit, Höhenmeter, Puls, Kadenz, Höhenprofil, Karte, Mitfahrerliste. Mit <b>Anordnen</b> verschiebst, vergrößerst, versteckst und ergänzt du Anzeigen – getrennt für Computer, Handy hochkant und Handy quer.</li>
@@ -69,12 +70,13 @@ const T = [
     <li><b>Teilen</b>: „📤 Teilen“ erstellt ein schickes Bild mit Karte und Kennzahlen für soziale Netzwerke.</li></ul>`],
   ['handy', '📱', 'Handy und Tablet', `<ul class="tips">
     <li>Auf dem Handy wählt die App automatisch eine kompakte Ansicht. Die Fahrtanzeige passt sich hochkant und quer an, jede Lage hat ihre eigene Anordnung.</li>
+    <li><b>Wischen</b>: Seitlich über die Seite wischen springt zum nächsten bzw. vorherigen Reiter (z. B. Profil → Avatar → Fahrt & Ton).</li>
     <li>Als App installieren: im Browser-Menü „Zum Startbildschirm hinzufügen“.</li>
     <li><b>Live-Ansicht</b>: Läuft auf einem anderen Gerät deines Kontos eine Fahrt, siehst du sie live auf der Startseite. Pro Konto läuft immer nur eine Fahrt gleichzeitig.</li></ul>`],
   ['probleme', '🛠️', 'Wenn etwas nicht klappt', `<ul class="tips">
     <li><b>Ruckelt die Fahrt?</b> Die App senkt die Auflösung selbst. Zusätzlich hilft Einstellungen › App & Daten › Grafik „Mittel“ oder „Niedrig“.</li>
     <li><b>Gerät wird nicht gefunden?</b> Chrome oder Edge verwenden, Bluetooth am Gerät einschalten, andere Apps (z. B. auf dem Handy) vom Trainer trennen.</li>
-    <li><b>Online-Probleme?</b> Online › Konto › Verbindungstest prüft Schritt für Schritt Anmeldung, Datenbank und Live-Verbindung.</li>
+    <li><b>Online-Probleme?</b> Online › Konto › Verbindungstest prüft Schritt für Schritt Anmeldung, Datenbank und Live-Verbindung. Das <b>Verbindungsprotokoll</b> darunter hält jeden Abriss fest (auch während der Fahrt); der Langzeittest prüft bis zu 2 Stunden lang alle 10 Sekunden.</li>
     <li><b>Neue Version?</b> Die App aktualisiert sich beim nächsten Öffnen. Die Versionsnummer steht unten links im Menü.</li></ul>`],
 ];
 export async function render(el) {
