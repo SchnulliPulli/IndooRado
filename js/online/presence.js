@@ -83,20 +83,26 @@ export async function joinPresence() {
 setInterval(async () => {
   if (!P.ch || P.ch === 'pending') return;
   if (P.ch.state === 'joined') {
+    P.badSince = 0;
     sync();
     // Selbstkontrolle: steht beim Server noch unsere aktuelle Meldung (z. B. Lobby-Beitritt)? Sonst erneut senden
     const mine = P.ch.presenceState?.()[sid]?.at(-1), want = P.me;
     if (P.ready && (!mine || (mine.joined || null) !== (want.joined || null) || (mine.host?.id || null) !== (want.host?.id || null) || mine.where !== want.where)) push().catch(() => { });
     return;
   }
-  if (P.ch.state === 'joining' || !loggedIn() || !access().ok) return;
+  // Nicht sofort neu aufbauen: die Bibliothek verbindet abgerissene Kanäle selbst wieder. Nur wenn der Kanal
+  // 20 s lang nicht verbunden ist, frisch anlegen (sonst reißt das Entfernen die ganze Verbindung immer wieder ab)
+  P.badSince ||= Date.now();
+  if (P.ch.state === 'joining' || Date.now() - P.badSince < 20000 || !loggedIn() || !access().ok) return;
+  P.badSince = 0;
   const old = P.ch; P.ch = null; P.ready = false;
   try { (await client()).removeChannel(old); } catch (e) { }
   joinPresence().catch(() => { });
 }, 5000);
 // Sofort neu verbinden, wenn der Tab wieder sichtbar wird oder das Internet zurück ist (statt auf den nächsten Durchlauf zu warten)
 const revive = async () => {
-  if (!P.ch || P.ch === 'pending' || P.ch.state === 'joined' || P.ch.state === 'joining' || !loggedIn() || !access().ok) return;
+  // nur einen endgültig geschlossenen Kanal ersetzen; bei „errored“ läuft das automatische Wiederverbinden der Bibliothek
+  if (!P.ch || P.ch === 'pending' || P.ch.state !== 'closed' || !loggedIn() || !access().ok) return;
   const old = P.ch; P.ch = null; P.ready = false;
   try { (await client()).removeChannel(old); } catch (e) { }
   joinPresence().catch(() => { });

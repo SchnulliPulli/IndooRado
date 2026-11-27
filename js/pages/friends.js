@@ -16,10 +16,15 @@ export async function render(el) {
   el.innerHTML = `<section class="pagehead"><h1>👥 Freunde</h1><span class="small muted">Gegenseitig bestätigt · Profil und Chat nur unter Freunden</span></section>
   <section class="grid2">
     <div class="card"><h2>Freunde</h2><div id="frList"><div class="pageload"><div class="spinner"></div></div></div></div>
-    <div class="card form"><h2>Spieler suchen</h2><input class="inp" id="frQ" type="search" placeholder="Name (mind. 3 Buchstaben)" maxlength="40" autocomplete="off"><div id="frRes" class="frlist"></div>
+    <div class="card form"><h2>Freunde finden</h2>
+      <div class="frcode"><div><div class="small muted">Dein Freundescode</div><b class="num" id="frMy">…</b></div><span class="row"><button class="btn sm" id="frCopy">📋 Kopieren</button><button class="btn sm ghost" id="frNew" title="Neuen Code erzeugen, der alte wird ungültig">↻</button></span></div>
+      <div class="row frcodein"><input class="inp" id="frCode" placeholder="Code eines Freundes, z. B. K7QM-2XPA" maxlength="12" autocomplete="off"><button class="btn pri" id="frCodeGo">Anfragen</button></div>
+      <p class="small muted">Am einfachsten: Code weitergeben (Messenger, persönlich). Oder in der Lobby bei „Wer ist online“ auf „➕ Freund“ tippen.</p>
+      <h3 class="sub">Nach Namen suchen</h3><input class="inp" id="frQ" type="search" placeholder="Name (mind. 3 Buchstaben)" maxlength="40" autocomplete="off"><div id="frRes" class="frlist"></div>
+      <p class="small muted">Die Suche findet nur Spieler, die „In der Suche auffindbar“ eingeschaltet haben.</p>
       <h3 class="sub">Privatsphäre</h3>
       <label class="switch"><input type="checkbox" id="frShare" ${O.online.profile?.share_rides ? 'checked' : ''}><span></span> <div class="swt">Freunde dürfen meine einzelnen Fahrten sehen<small class="muted">Datum, Strecke, Distanz, Dauer, Höhenmeter, Ø Watt. Ohne diese Erlaubnis sehen Freunde nur Level und Summen. Puls, Gewicht und Alter sieht nie jemand.</small></div></label>
-      <label class="switch"><input type="checkbox" id="frFind" ${O.online.profile?.findable !== false ? 'checked' : ''}><span></span> <div class="swt">In der Suche auffindbar<small class="muted">Aus: Nur wer dich schon als Freund hat, sieht dich.</small></div></label>
+      <label class="switch"><input type="checkbox" id="frFind" ${O.online.profile?.discoverable ? 'checked' : ''}><span></span> <div class="swt">In der Suche auffindbar<small class="muted">Andere angemeldete Spieler finden dich über deinen Namen und sehen dabei Name, Avatar und Level. Standardmäßig aus – mit Freundescode oder über die Online-Liste können dich Freunde trotzdem anfragen.</small></div></label>
     </div>
   </section>`;
   let list = [];
@@ -45,12 +50,17 @@ export async function render(el) {
     if (t.dataset.dec) return act('friend_respond', { p_other: t.dataset.dec, p_accept: false }, 'Abgelehnt');
     if (t.dataset.del) return act('friend_remove', { p_other: t.dataset.del }, 'Erledigt');
     if (t.dataset.open) return openFriend(sb, me, list.find(f => f.id === t.dataset.open), draw);
+    if (t.id === 'frCopy') { const c = $('#frMy', el).textContent; try { await navigator.clipboard.writeText(c); toast('Code kopiert: ' + c); } catch (er) { toast('Dein Code: ' + c, 6000); } return; }
+    if (t.id === 'frNew') { if (!(await dialog({ title: 'Neuen Freundescode erzeugen?', html: '<p class="muted">Der alte Code funktioniert dann nicht mehr. Bestehende Freundschaften bleiben.</p>', buttons: [{ label: 'Abbrechen', value: 0 }, { label: 'Neuer Code', value: 1, cls: 'pri' }] }))) return; loadCode(true); return; }
+    if (t.id === 'frCodeGo') { const c = $('#frCode', el).value.trim(); if (c.replace(/[^a-z0-9]/gi, '').length !== 8) return toast('Der Code hat 8 Zeichen'); const { data, error } = await sb.rpc('friend_request_code', { p_code: c }); if (error) return toast(miss(error)); $('#frCode', el).value = ''; toast(data === 'friend' ? '🎉 Ihr seid jetzt Freunde' : 'Anfrage gesendet'); draw(); return; }
   };
   el.onchange = async e => {
-    const k = e.target.id === 'frShare' ? 'share_rides' : e.target.id === 'frFind' ? 'findable' : null; if (!k) return;
+    const k = e.target.id === 'frShare' ? 'share_rides' : e.target.id === 'frFind' ? 'discoverable' : null; if (!k) return;
     try { await O.updateProfile({ [k]: e.target.checked }); toast('Gespeichert', 900); } catch (er) { e.target.checked = !e.target.checked; toast(miss(er)); }
   };
-  draw(); timers.push(setInterval(() => el.isConnected ? draw() : leave(), 30e3));
+  const loadCode = async (fresh = false) => { const { data, error } = await sb.rpc('my_friend_code', { p_new: fresh }); $('#frMy', el).textContent = error ? '–' : String(data).replace(/^(.{4})/, '$1-'); if (error) toast(miss(error)); };
+  $('#frCode', el).onkeydown = e => { if (e.key === 'Enter') $('#frCodeGo', el).click(); };
+  loadCode(); draw(); timers.push(setInterval(() => el.isConnected ? draw() : leave(), 30e3));
 }
 
 // Profil eines Freundes mit Chat

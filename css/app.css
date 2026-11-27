@@ -1017,3 +1017,5 @@ body[data-page="ride"] .netbar { top: auto; bottom: calc(env(safe-area-inset-bot
 svg.avsvg { fill: initial; stroke: none; flex: none; }
 .loginbtn.in svg.avsvg { width: 32px; height: 32px; }
 .usermenu .umhead svg.avsvg { width: 44px; height: 44px; } .usermenu .umsw svg.avsvg { width: 30px; height: 30px; }
+.frcode { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--acc) 12%, transparent); }
+.frcode b { font-size: 1.5rem; letter-spacing: .12em; } .frcodein { gap: 8px; flex-wrap: nowrap; } .frcodein .inp { flex: 1; min-width: 0; text-transform: uppercase; }

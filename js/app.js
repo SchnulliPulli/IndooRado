@@ -401,6 +401,6 @@ init();
     const PR = await import('./online/presence.js');
     if (PR.P.ready) { clearTimeout(lostT); lostT = null; if (lost && !nb.hidden && nb.classList.contains('srv')) { hide(); toast('✓ Verbindung zum Server wiederhergestellt', 2500); } lost = 0; window.__wasReady = true; return; }
     if (!window.__wasReady || !navigator.onLine || lostT) return;
-    lostT = setTimeout(() => { lostT = null; if (PR.P.ready || !navigator.onLine || !PR.P.ch) return; lost = Date.now(); show('⚠️ <b>Verbindung zum Server unterbrochen</b> · wird neu aufgebaut …', 'srv'); }, 8000);
+    lostT = setTimeout(() => { lostT = null; if (PR.P.ready || !navigator.onLine || !PR.P.ch || document.hidden) return; lost = Date.now(); show('⚠️ <b>Verbindung zum Server unterbrochen</b> · wird neu aufgebaut …', 'srv'); }, 15000);
   });
 }
