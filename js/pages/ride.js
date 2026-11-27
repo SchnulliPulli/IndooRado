@@ -47,7 +47,7 @@ let S = null;
 export async function render(el) {
   if (S?.parked) return unpark(el);
   el.innerHTML = `<div class="ridewrap" id="rw">
-    <canvas id="gl"></canvas>
+    <canvas id="gl"></canvas><video id="rideVid" class="ridevid" muted playsinline preload="auto" hidden></video>
     <div class="loading" id="load"><div class="spinner"></div><div id="loadTxt">Welt wird aufgebaut …</div></div>
     <div class="hud-top" data-drag="top">
       <div class="hud-row">
@@ -206,6 +206,7 @@ async function start(el) {
   if (wo?.planId && progress.planAdapt) { S.wOff = progress.planAdapt; S.planAdaptMsg = true; }
   S.planLabel = plan ? `${plan.name} · Woche ${wo.week} · Einheit ${wo.n}` : null;
   if (S.wo && !S.group && !sessionStorage.getItem('quickStart') && profile.askForm !== false) await dayForm(S);
+  if (route.video) videoSetup(S, el);
 
   $('#loadTxt').textContent = 'Gelände wird erzeugt …';
   await new Promise(r => setTimeout(r, 30));
@@ -281,7 +282,8 @@ async function start(el) {
     const pd = S.pacer ? smoothD(S.pacer, 'rd', S.pacer.d, S.pacer.v) : null;
     const ghostDist = S.ghost && S.ghostPos != null ? smoothD(S, 'rghost', S.ghostPos, S.v) : null;
     const fghosts = S.fg?.map(f => ({ d: f.d, lat: f.lat, crank: f.crank, v: f.v, show: !S.world.photo })) || null;
-    world.update({ fghosts, dist, lat: S.lat ?? 1.5, ghostDist, v: S.v, crank: S.rcrank, pacerDist: pd, pacerV: S.pacer?.v, pacerCrank: S.pacer?.crank, npcs }, dt);
+    if (S.videoOn) S.vsync.update(dist, S.v * SPEED, moving); // Videofahrt: 3D-Welt ruht, das Video folgt dem Tempo
+    else world.update({ fghosts, dist, lat: S.lat ?? 1.5, ghostDist, v: S.v, crank: S.rcrank, pacerDist: pd, pacerV: S.pacer?.v, pacerCrank: S.pacer?.crank, npcs }, dt);
     if (now - S.lastHud > 200) { S.lastHud = now; hud(); }
   };
   S.raf = requestAnimationFrame(frame);
@@ -436,6 +438,7 @@ function bindUi() {
   $('#adapt', el).onclick =() => { S.adapt.on = !S.adapt.on; sel.adaptive = S.adapt.on; saveSel(); S.adapt.cap = false; flash('Adaptive Steuerung ' + (S.adapt.on ? 'an' : 'aus')); };
   S.key = e => {
     if ((e.key === 'o' || e.key === 'O') && !e.target.closest?.('input,textarea')) { photoMode(S, !S.world.photo); return; }
+    if ((e.key === 'v' || e.key === 'V') && S.videoToggle && !e.target.closest?.('input,textarea')) { S.videoToggle(); return; }
     const sk = steerKey(S, e); if (sk === 'pup') { usePup(S, flash); return; } if (sk) { e.preventDefault(); return; }
     if (e.target.matches('input,select,textarea')) return;
     if (S.demoKey?.(e)) { e.preventDefault(); return; }
@@ -686,6 +689,27 @@ function endHint(on) {
   const b = S && $('#tEnd', S.el); if (!b) return;
   b.classList.toggle('pulse', on);
   if (on) { try { b.focus({ preventScroll: true }); } catch (e) { } } else if (document.activeElement === b) b.blur();
+}
+/* ---------- Videofahrt: eigenes Video statt 3D-Welt ---------- */
+async function videoSetup(S, el) {
+  const V = await import('../video.js'), R = S.route, vid = $('#rideVid', el), box = document.createElement('div');
+  box.className = 'vidload card'; document.body.appendChild(box); S.vbox = box; // außerhalb der HUD-Anordnung
+  const show = async file => {
+    if (!file) return;
+    if (R.video.size && file.size !== R.video.size && !(await dialog({ title: 'Anderes Video?', html: `<p class="muted">Die gewählte Datei (${esc(file.name)}) ist nicht die gespeicherte (${esc(R.video.name)}). Trotzdem verwenden?</p>`, buttons: [{ label: 'Nein', value: false }, { label: 'Verwenden', value: true, cls: 'pri' }] }))) return;
+    if (S.vurl) URL.revokeObjectURL(S.vurl);
+    S.vurl = URL.createObjectURL(file); vid.src = S.vurl;
+    vid.onloadedmetadata = () => {
+      S.vsync = new V.VideoSync(vid, R.vraw, R.total, R.video); vid.hidden = false; S.videoOn = true; S.el.querySelector('.ridewrap')?.classList.add('vmode'); box.remove();
+      vid.currentTime = Math.max(0, R.video.offset || 0); flash('🎬 Video bereit · Taste V: Video/3D', 2200);
+    };
+    vid.onerror = () => toast('Video lässt sich nicht abspielen', 5000);
+  };
+  const remembered = await V.hasRemembered(R.id);
+  box.innerHTML = `<b>🎬 Videofahrt</b><span class="small muted">${esc(R.video.name)} · ${Math.round(R.video.dur / 60)} min</span><div class="row"><button class="btn sm pri" id="vLoad">${remembered ? 'Video laden' : 'Video auswählen'}</button><button class="btn sm ghost" id="v3d">Ohne Video (3D)</button></div>`;
+  box.querySelector('#vLoad').onclick = async () => { const f = (remembered && await V.openRemembered(R.id)) || (await V.pickVideo())?.file; await show(f); };
+  box.querySelector('#v3d').onclick = () => box.remove();
+  S.videoToggle = () => { if (!S.vsync) return; S.videoOn = !S.videoOn; vid.hidden = !S.videoOn; if (!S.videoOn) vid.pause(); S.el.querySelector('.ridewrap')?.classList.toggle('vmode', S.videoOn); flash(S.videoOn ? '🎬 Video' : '🌍 3D-Welt', 1000); };
 }
 /* ---------- Tagesform vor dem Workout: passt Intensität und Dauer an ---------- */
 const FORMS = [['top', '💪', 'Top fit', 3], ['ok', '🙂', 'Normal', 0], ['tired', '😴', 'Müde', -7], ['legs', '🦵', 'Beine schwer', -10], ['short', '⏱️', 'Wenig Zeit', 0]];
@@ -1189,7 +1213,7 @@ document.addEventListener('visibilitychange', () => { if (S?.alive && document.v
 
 export function leave() {
   if (!S) return;
-  S.alive = false; setTimeout(() => bus.emit('rideEnded'), 1500); S.live?.leave(); window.__presence?.setStatus({ where: 'menu', route: null, routeName: null, kit: null }); sound.silence(); music.stop(); hush(); putLive({ state: 'ended', t: Math.round(S.t), odo: Math.round(S.odo), route: S.route.name }); clearInterval(S.timer); cancelAnimationFrame(S.raf); S.ro?.disconnect();
+  S.alive = false; S.vbox?.remove(); if (S.vurl) { const v = $('#rideVid', S.el); v?.pause(); URL.revokeObjectURL(S.vurl); } setTimeout(() => bus.emit('rideEnded'), 1500); S.live?.leave(); window.__presence?.setStatus({ where: 'menu', route: null, routeName: null, kit: null }); sound.silence(); music.stop(); hush(); putLive({ state: 'ended', t: Math.round(S.t), odo: Math.round(S.odo), route: S.route.name }); clearInterval(S.timer); cancelAnimationFrame(S.raf); S.ro?.disconnect();
   document.removeEventListener('keydown', S.key); S.offs.forEach(f => f());
   try { S.world.dispose(); } catch (e) { }
   // Speicher freigeben: Streckendaten, Caches der Karte, Testverweis

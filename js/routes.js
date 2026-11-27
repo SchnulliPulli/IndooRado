@@ -161,7 +161,8 @@ export function parseGpx(text, fname) {
   let nodes = [...doc.getElementsByTagName('trkpt')];
   if (!nodes.length) nodes = [...doc.getElementsByTagName('rtept')];
   if (nodes.length < 2) throw new Error('Keine Trackpunkte gefunden');
-  const raw = nodes.map(n => [+n.getAttribute('lat'), +n.getAttribute('lon'), parseFloat(n.getElementsByTagName('ele')[0]?.textContent)]);
+  const raw = nodes.map(n => [+n.getAttribute('lat'), +n.getAttribute('lon'), parseFloat(n.getElementsByTagName('ele')[0]?.textContent), Date.parse(n.getElementsByTagName('time')[0]?.textContent || '')]);
+  const hasTime = raw.every(p => !isNaN(p[3])) && raw[raw.length - 1][3] > raw[0][3]; // Zeitstempel: für Videofahrten
   const hasEle = raw.some(p => !isNaN(p[2]));
   const pts = []; let last = null, acc = 0;
   for (const p of raw) {
@@ -174,6 +175,7 @@ export function parseGpx(text, fname) {
   const nm = (doc.getElementsByTagName('name')[0]?.textContent || fname || 'Eigene Strecke').trim().slice(0, 60);
   const loop = hav(pts[0], pts[pts.length - 1]) < 150;
   const r = { id: 'g-' + Date.now().toString(36), name: nm, theme: 'auto', loop, builtin: false, created: new Date().toISOString(), pts: pts.map(p => [+p[0].toFixed(6), +p[1].toFixed(6), +p[2].toFixed(1)]), noEle: !hasEle };
+  if (hasTime) { r.t0 = new Date(pts[0][3]).toISOString(); r.tm = pts.map(p => Math.round((p[3] - pts[0][3]) / 100) / 10); } // Sekunden ab Start
   r.stats = quickStats(r);
   if (r.stats.dist < 500) throw new Error('Strecke ist kürzer als 500 m');
   return r;
@@ -405,6 +407,7 @@ export function prepare(raw) {
     eleAt: d => sample(e, d), gradeAt: d => sample(grade, d), xAt: d => sample(x, d), zAt: d => sample(z, d), headAt,
     latAt: d => lat0 - sample(z, d) / M_DEG, lonAt: d => lon0 + sample(x, d) / kx,
     heightAt, nearest, realTerrain: !!dem, dem, demAt,
+    video: raw.video || null, vraw: raw.video ? { pts: raw.pts, tm: raw.tm } : null, // Videofahrt (Video bleibt auf dem Gerät)
     osm: raw.osm?.b?.length ? raw.osm : null, geo: { lat0, lon0, kx }, // echte Gebäude (OpenStreetMap) und Umrechnung Grad → Meter
   };
 }

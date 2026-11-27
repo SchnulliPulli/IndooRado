@@ -18,7 +18,7 @@ export async function render(el, [rid]) {
   const routes = await listRoutes();
   const cur = routes.find(r => r.id === (rid || sel.routeId)) || routes[0];
   el.innerHTML = `
-  <section class="pagehead"><h1>Strecken</h1><span class="row"><a class="btn pri" href="#/builder">🧱 Baukasten</a><button class="btn" id="rStrava">Von Strava laden</button><label class="btn">GPX importieren<input type="file" id="rFile" accept=".gpx,.xml" multiple hidden></label></span></section>
+  <section class="pagehead"><h1>Strecken</h1><span class="row"><a class="btn pri" href="#/builder">🧱 Baukasten</a><button class="btn" id="rVideo" title="Eigene Aufnahme (GoPro, Handy) mit GPX: das Video läuft passend zu deinem Tempo">🎬 Videofahrt</button><button class="btn" id="rStrava">Von Strava laden</button><label class="btn">GPX importieren<input type="file" id="rFile" accept=".gpx,.xml" multiple hidden></label></span></section>
   <div class="routes-layout">
     <div class="rlistwrap"><input class="inp sm" id="rQ" type="search" placeholder="🔍 Strecke suchen … (${routes.length})">
     <div class="rlist">${routes.map(r => { const s = quickStats(r); return `<a class="ritem ${r.id === cur.id ? 'on' : ''}" data-q="${esc((r.name + ' ' + (r.desc || '') + ' ' + (THEME_N[r.theme] || '')).toLowerCase())}" href="#/routes/${esc(r.id)}" data-id="${esc(r.id)}"><span class="rthumb">${routeMapSvg(r, 48)}</span><div style="flex:1;min-width:0"><div class="t">${progress.routeBadges?.[r.id] ? '🏅 ' : ''}${esc(r.name)}</div><div class="small muted num">${fmtKm(s.dist)} km · ${Math.round(s.asc)} hm${r.builtin ? '' : ' · eigene'}</div></div></a>`; }).join('')}</div>
@@ -41,6 +41,7 @@ export async function render(el, [rid]) {
     if (n) toast(n + ' Strecke' + (n > 1 ? 'n' : '') + ' importiert');
   };
   $('#rFile', el).onchange = e => load(e.target.files);
+  $('#rVideo', el).onclick = () => videoWizard();
   $('#rStrava', el).onclick = async () => {
     if (!stravaConnected()) { toast('Erst unter Einstellungen › Verbindungen mit Strava verbinden'); location.hash = '#/connect'; return; }
     let list;
@@ -70,6 +71,7 @@ export async function render(el, [rid]) {
     <div class="row between"><div><h2>${esc(cur.name)}</h2><div class="small muted">${esc(cur.desc || (cur.loop ? 'Rundkurs' : 'Einzelstrecke'))}</div></div>
       <div class="row"><button class="btn ${cur.id === sel.routeId ? '' : 'pri'}" id="rSel">${cur.id === sel.routeId ? 'Ausgewählt' : 'Auswählen'}</button><a class="btn" href="#/ride" id="rGo">Jetzt fahren</a><a class="btn" href="#/ride" id="rRace">🏁 Rennen gegen Bots</a><a class="btn" href="#/ride" id="rTT">⏱️ Zeitfahren</a>${cur.kit ? `<a class="btn" href="#/builder/${esc(cur.id)}">🧱 Im Baukasten bearbeiten</a>` : ''}</div>${progress.routeBadges?.[cur.id] ? `<div class="small muted">🏅 Routen-Abzeichen seit ${new Date(progress.routeBadges[cur.id].date).toLocaleDateString('de-DE')}</div>` : '<div class="small muted">🏅 Abzeichen: einmal die ganze Strecke fahren (+100 XP)</div>'}<div class="small muted">🔔 Goldene Glocken: ${(progress.bells?.[cur.id] || []).length} von 3 gefunden${progress.ttBest?.[cur.id] ? ' · ⏱️ Zeitfahr-Bestzeit ' + fmtT(progress.ttBest[cur.id].time) : ''}</div></div>
     <div class="tiles">${[[fmtKm(R.total), 'km'], [Math.round(R.asc), 'Höhenmeter'], [Math.round(R.minE) + '–' + Math.round(R.maxE), 'm ü. NN'], [R.climbs.length, 'Anstiege'], [best ? fmtT(best.time) : '–', 'Bestzeit']].map(([v, l]) => `<div class="tile"><b class="num">${v}</b><span>${l}</span></div>`).join('')}</div>
+    ${cur.video ? `<div class="vinfo row between"><span class="small">🎬 Video: <b>${esc(cur.video.name)}</b> · ${Math.round(cur.video.dur / 60)} min · Versatz ${cur.video.offset} s</span><button class="btn sm ghost" id="rVidRe">Video neu verknüpfen / Versatz</button></div>` : ''}
     <div class="rprev" id="rPrev"><div class="rprevwait"><div class="spinner"></div><span class="small muted">Vorschau wird gerendert …</span></div></div>
     <canvas id="rMap" class="mapc"></canvas>
     <h3 class="sub">Höhenprofil</h3><canvas id="rProf" class="profc"></canvas>
@@ -94,6 +96,7 @@ export async function render(el, [rid]) {
   };
   profileChart($('#rProf', el), dist, ele, { climbs: R.climbs });
   $('#rSel', el).onclick = () => { sel.routeId = cur.id; saveSel(); render(el, [cur.id]); };
+  $('#rVidRe', el)?.addEventListener('click', () => videoWizard(cur));
   $('#rGo', el).onclick = () => { sel.routeId = cur.id; saveSel(); };
   $('#rTT', el).onclick = () => { sel.routeId = cur.id; saveSel(); sessionStorage.setItem('ttNext', '1'); };
   $('#rRace', el).onclick = () => { sel.routeId = cur.id; saveSel(); sessionStorage.setItem('raceNext', '1'); };
@@ -109,4 +112,38 @@ export async function render(el, [rid]) {
   $('#rOsmOff', el)?.addEventListener('click', async () => { delete cur.osm; await saveRoute(cur); render(el, [cur.id]); });
   $('#rDemOff', el)?.addEventListener('click', async () => { delete cur.dem; cur.realTerrain = false; await saveRoute(cur); render(el, [cur.id]); });
   $('#rDel', el)?.addEventListener('click', async () => { if (await dialog({ title: 'Strecke löschen?', buttons: [{ label: 'Abbrechen', value: false }, { label: 'Löschen', value: true, cls: 'danger' }] })) { await deleteRoute(cur.id); if (sel.routeId === cur.id) { sel.routeId = 'b-hills'; saveSel(); } location.hash = '#/routes'; } });
+}
+
+/* ---------- Videofahrt anlegen: GPX + Video ---------- */
+async function videoWizard(existing) {
+  const V = await import('../video.js');
+  const w = document.createElement('div'); w.className = 'modal on';
+  const st = { raw: existing || null, file: null, handle: null, meta: null, off: existing?.video?.offset || 0 };
+  const draw = () => {
+    w.innerHTML = `<div class="card dlg" role="dialog" aria-modal="true"><h2>🎬 ${existing ? 'Video verknüpfen' : 'Videofahrt anlegen'}</h2><div class="dlg-body">
+      <p class="small muted">Deine eigene Aufnahme einer Ausfahrt (GoPro, Handy, Actioncam) und die passende GPX-Datei (z. B. vom Radcomputer oder aus Strava). Das Video läuft dann so schnell, wie du trittst, der Widerstand folgt dem Anstieg. <b>Das Video bleibt auf deinem Gerät</b> und wird nirgends hochgeladen.</p>
+      ${existing ? '' : `<label class="f">1. GPX-Datei der Ausfahrt<input class="inp" type="file" id="vGpx" accept=".gpx,.xml"></label>
+      <p class="small ${st.raw ? '' : 'muted'}">${st.raw ? `✓ ${esc(st.raw.name)} · ${fmtKm(st.raw.stats.dist)} km${st.raw.tm ? ' · mit Zeitstempeln' : ' · <span style="color:var(--warn)">ohne Zeitstempel: Video wird gleichmäßig verteilt</span>'}` : ''}</p>`}
+      <div class="row"><button class="btn ${st.file ? '' : 'pri'}" id="vPick">${existing ? '' : '2. '}Video wählen</button><span class="small">${st.file ? `✓ ${esc(st.file.name)} · ${Math.round(st.meta.dur / 60)} min${st.meta.w ? ' · ' + st.meta.w + '×' + st.meta.h : ''}` : ''}</span></div>
+      ${st.file ? `<label class="f">Versatz: Videozeit beim Start der GPX-Aufnahme (Sekunden)<input class="inp" id="vOff" type="number" step="1" value="${st.off}"><small class="muted">Startet das Video vor der GPX-Aufnahme, ist der Wert positiv. Die App schätzt ihn aus Datei- und GPX-Zeit, prüfe ihn kurz in der Vorschau.</small></label>
+      <video id="vPrev" muted playsinline style="width:100%;max-height:220px;border-radius:10px;background:#000"></video>` : ''}
+      ${V.canKeepHandle ? '<p class="small muted">Die App merkt sich, wo die Datei liegt. Verschiebst du sie, verknüpfst du sie einfach neu.</p>' : '<p class="small muted">In diesem Browser wählst du das Video vor jeder Fahrt kurz neu aus (Chrome/Edge am Computer merken es sich).</p>'}
+      </div><div class="row end"><button class="btn ghost" data-x>Abbrechen</button><button class="btn pri" id="vSave" ${st.raw && st.file ? '' : 'disabled'}>Speichern</button></div></div>`;
+    const g = w.querySelector('#vGpx'); if (g) g.onchange = async () => { const f = g.files[0]; if (!f) return; try { st.raw = parseGpx(await f.text(), f.name.replace(/\.\w+$/, '')); if (st.file) st.off = V.guessOffset(st.raw, st.file, st.meta.dur); } catch (e) { toast(e.message, 5000); } draw(); };
+    w.querySelector('#vPick').onclick = async () => {
+      const r = await V.pickVideo(); if (!r) return; const m = await V.probe(r.file);
+      if (!m.ok) { toast('Dieses Video kann der Browser nicht abspielen. Tipp: als MP4 (H.264) speichern.', 7000); return; }
+      Object.assign(st, { file: r.file, handle: r.handle, meta: m }); if (st.raw && !existing) st.off = V.guessOffset(st.raw, r.file, m.dur); draw();
+    };
+    const pv = w.querySelector('#vPrev'), off = w.querySelector('#vOff');
+    if (pv && st.file) { pv.src = URL.createObjectURL(st.file); pv.onloadedmetadata = () => { pv.currentTime = Math.max(0, st.off); }; off.oninput = () => { st.off = +off.value || 0; pv.currentTime = Math.max(0, st.off); }; }
+    w.querySelector('#vSave').onclick = async () => {
+      const r = st.raw; r.video = { name: st.file.name, size: st.file.size, dur: Math.round(st.meta.dur * 10) / 10, offset: st.off, w: st.meta.w, h: st.meta.h };
+      if (!existing) { r.name = '🎬 ' + r.name.replace(/^🎬 /, ''); try { await terrain(r); } catch (e) { } }
+      r.updated = Date.now(); await saveRoute(r); await V.rememberHandle(r.id, st.handle);
+      w.remove(); toast('Videofahrt gespeichert'); location.hash = '#/routes/' + r.id; if (existing) location.reload();
+    };
+  };
+  w.addEventListener('click', e => { if (e.target === w || e.target.closest('[data-x]')) { w.querySelectorAll('video').forEach(v => { URL.revokeObjectURL(v.src); }); w.remove(); } });
+  document.body.appendChild(w); draw();
 }
