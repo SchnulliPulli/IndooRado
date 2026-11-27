@@ -117,6 +117,7 @@ export async function render(el) {
       <button class="tbtn" id="tSnd" title="Ton (M)">${ICON.sound}<span id="tSndL">Ton</span></button>
       <button class="tbtn" id="tLayout" title="Anzeige anordnen">${ICON.layout}<span>Anordnen</span></button>
       <button class="tbtn" id="tFull" title="Vollbild">${ICON.full}<span>Vollbild</span></button>
+      <button class="tbtn" id="tCast" title="Fahrt auf dem Fernseher anzeigen (Chromecast, Fernseher mit Browser, AirPlay)"><b class="dots">📡</b><span>Auf Fernseher</span></button>
       <button class="tbtn" id="tWatch" title="Zuschauer-Link: Freunde sehen live zu und feuern an"><b class="dots">📺</b><span id="tWatchL">Zuschauer</span></button>
       <button class="tbtn" id="tBuddy" title="Trainingsbuddy, der dich pusht"><b class="dots">🤝</b><span id="tBuddyL">Buddy</span></button>
       <button class="tbtn" id="tTour" title="Kurze Einführung in die Anzeigen"><b class="dots">🎓</b><span>Einführung</span></button>
@@ -335,6 +336,7 @@ function bindUi() {
   $('#tPause', el).onclick = togglePause;
   $('#tView', el).onclick = () => flash('Kamera: ' + VIEWS[S.world.cycleView()]);
   $('#tShot', el).onclick = () => shot('Foto');
+  $('#tCast', el).onclick = async () => { const M = await import('../watch.js'); await M.castToTv(online?.profile?.display_name || profile.name); $('#tWatchL', el).textContent = M.W.token ? 'Zuschauer an' : 'Zuschauer'; };
   $('#tWatch', el).onclick = async () => { const M = await import('../watch.js'); await M.startWatch(online?.profile?.display_name || profile.name); $('#tWatchL', el).textContent = M.W.token ? 'Zuschauer an' : 'Zuschauer'; };
   $('#tMode', el).onclick = cycleMode;
   $('#tNpc', el).onclick = toggleNpcs;
@@ -725,7 +727,8 @@ function endHint(on) {
 async function watchPush(p3) {
   const M = window.__watchMod ||= await import('../watch.js'); if (!M.W.token) return;
   const R = S.route; if (!R.prof) { R.prof = []; for (let i = 0; i <= 80; i++) R.prof.push(Math.round(R.eleAt(R.total * i / 80))); }
-  const cheers = await M.pushWatch({ state: S.finished ? 'ended' : S.state, route: R.name, total: Math.round(R.total), loop: !!R.loop, d: Math.round(S.dist), odo: Math.round(S.odo), t: Math.round(S.t), p: Math.round(p3), v: +(S.v * 3.6).toFixed(1), asc: Math.round(S.asc), grade: +R.gradeAt(S.dist).toFixed(1), hr: live.heart ?? null, cad: live.cadence != null ? Math.round(live.cadence) : null, prof: R.prof, wo: S.wo ? S.wo.name : null });
+  const cheers = await M.pushWatch({ state: S.finished ? 'ended' : S.state, route: R.name, total: Math.round(R.total), loop: !!R.loop, d: Math.round(S.dist), odo: Math.round(S.odo), t: Math.round(S.t), p: Math.round(p3), v: +(S.v * 3.6).toFixed(1), asc: Math.round(S.asc), grade: +R.gradeAt(S.dist).toFixed(1), hr: live.heart ?? null, cad: live.cadence != null ? Math.round(live.cadence) : null, prof: R.prof, wo: S.wo ? S.wo.name : null,
+    iv: S.wo && S.wi && !S.wi.done ? { i: S.wi.i + 1, n: S.wo.segs.length, left: Math.round(S.wi.left), tg: S.target ? Math.round(S.target) : null, txt: S.wo.segs[S.wi.i]?.text || '' } : null, ftp: profile.ftp });
   for (const [i, c] of cheers.entries()) setTimeout(() => { if (!S?.alive) return; flash(`${c.e} ${c.n ? c.n + ' feuert dich an!' : 'Anfeuerung!'}`, 2200); const f = document.createElement('div'); f.className = 'cheerfly'; f.textContent = c.e; f.style.left = (20 + Math.random() * 60) + '%'; S.el.querySelector('.ridewrap')?.appendChild(f); setTimeout(() => f.remove(), 2600); }, i * 900);
 }
 /* ---------- Videofahrt: eigenes Video statt 3D-Welt ---------- */

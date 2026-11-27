@@ -31,12 +31,12 @@ async function shareDialog() {
   if (v === 'stop') await stopWatch();
 }
 export async function stopWatch() {
-  if (!W.token) return; const t = W.token; W.token = null;
+  if (!W.token) return; const t = W.token; W.token = null; stopCast();
   try { await (await O.client()).rpc('watch_stop', { p_token: t }); toast('Zuschauer-Link beendet'); } catch (e) { }
 }
 // Stand senden; liefert neue Anfeuerungen zurück
 export async function pushWatch(state) {
-  if (!W.token || Date.now() - W.lastPush < 4500) return [];
+  if (!W.token || Date.now() - W.lastPush < 1800) return []; // alle 2 s (Fernseher-Anzeige)
   W.lastPush = Date.now();
   if (W.hrPending != null) { W.hr = W.hrPending; W.hrPending = null; }
   if (!W.hr) delete state.hr;
@@ -47,3 +47,41 @@ export async function pushWatch(state) {
     const neu = (data || []).filter(c => !W.seen.has(c.id)); neu.forEach(c => W.seen.add(c.id)); return neu;
   } catch (e) { return []; }
 }
+
+/* ---------- Auf den Fernseher streamen ----------
+   Android/PC (Chrome): Chromecast & Google TV über die Presentation API – der Fernseher lädt selbst die große Fahrtanzeige.
+   Fernseher mit Browser (Fire TV, Android TV, Smart-TV): indoorado.de/tv öffnen und den Kurzcode eingeben.
+   iPhone/iPad: Webseiten lassen sich dort nicht an den Fernseher senden; AirPlay geht über die Bildschirmsynchronisierung.
+   In allen Fällen schickt das Handy nur die Werte (über den Zuschauer-Link), kein Video. */
+const tvUrl = t => location.origin + location.pathname + '#/watch/' + t + '/tv';
+export const tvCode = t => t.slice(0, 8).toUpperCase().replace(/(.{4})(.{4})/, '$1 $2');
+async function ensureToken(name) {
+  if (W.token) return W.token;
+  const { data, error } = await (await O.client()).rpc('watch_start', { p_name: name }); if (error) throw error;
+  W.token = data; W.hr = false; W.seen.clear(); return data;
+}
+export async function castToTv(name) {
+  if (!O.loggedIn() || !O.access().ok) { toast('Für die Fernseher-Anzeige bitte mit deinem IndooRado-Konto anmelden'); return; }
+  let t; try { t = await ensureToken(name); } catch (e) { toast(/function|schema cache/i.test(e.message) ? 'Fehlt in der Datenbank: schema.sql erneut ausführen' : e.message, 6000); return; }
+  const apple = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const canCast = typeof window.PresentationRequest === 'function' && !apple;
+  const host = location.host + (location.pathname.replace(/\/index\.html$/, '/').replace(/\/$/, '')) + '/tv';
+  const v = await dialog({ title: '📺 Auf dem Fernseher anzeigen', cls: 'castdlg', html: `
+    ${canCast ? '<p><b>Chromecast / Google TV</b><br><span class="small muted">Fernseher im selben WLAN auswählen – er zeigt dann die große Fahrtanzeige.</span></p>' : ''}
+    <p><b>Fernseher mit Browser</b> <span class="small muted">(Fire TV, Android TV, Smart-TV, Spielkonsole)</span><br>Dort <code>${esc(host)}</code> öffnen und diesen Code eingeben:</p>
+    <div class="castcode num">${tvCode(t)}</div>
+    ${apple ? '<p><b>Apple TV / AirPlay</b><br><span class="small muted">iPhone und iPad können Webseiten nicht direkt an den Fernseher senden. Öffne das Kontrollzentrum › <b>Bildschirmsynchronisierung</b> und wähle dein Apple TV – dann siehst du die komplette Fahrt mit 3D-Welt auf dem Fernseher.</span></p>' : ''}
+    <p class="small muted">Gezeigt werden Name, Strecke, Tempo, Leistung, Distanz, Höhenmeter, Zeit und das Workout – kein Puls. Der Fernseher braucht kein Konto. Beenden über ⋯ › Zuschauer.</p>`,
+    buttons: [{ label: 'Schließen', value: null }, ...(canCast ? [{ label: '📺 Fernseher wählen', value: 'cast', cls: 'pri' }] : [])] });
+  if (v !== 'cast') return;
+  try {
+    const req = new PresentationRequest([tvUrl(t)]);
+    const conn = await req.start();
+    W.cast = conn; toast('📺 Läuft auf dem Fernseher', 2500);
+    conn.addEventListener?.('terminate', () => { W.cast = null; });
+  } catch (e) {
+    if (e.name === 'NotAllowedError' || e.name === 'AbortError') return; // abgebrochen
+    toast(e.name === 'NotFoundError' ? 'Kein Chromecast im WLAN gefunden – nutze den Code auf einem Fernseher mit Browser' : 'Streamen nicht möglich: ' + e.message, 6000);
+  }
+}
+export function stopCast() { try { W.cast?.terminate?.(); } catch (e) { } W.cast = null; }

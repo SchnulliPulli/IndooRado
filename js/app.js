@@ -19,6 +19,7 @@ const PAGES = {
   legal: () => import('./pages/legal.js'),
   live: () => import('./pages/live.js'),
   watch: () => import('./pages/watch.js'), // Zuschauer-Link (ohne Konto nutzbar)
+  tv: () => import('./pages/watch.js').then(m => ({ ...m, render: el => m.renderCode(el) })), // Fernseher: Code eingeben
   events: () => import('./pages/community.js').then(m => ({ ...m, render: el => m.render(el, ['events']) })), clubs: () => import('./pages/community.js').then(m => ({ ...m, render: el => m.render(el, ['clubs']) })),
   lobby: () => import('./pages/online.js'), players: () => import('./pages/online.js').then(m => ({ ...m, render: el => m.render(el, ['players']) })), account: () => import('./pages/account.js'), admin: () => import('./pages/admin.js'),
   sound: () => import('./pages/ridesettings.js').then(m => ({ ...m, render: el => m.render(el, ['sound']) })),
@@ -163,7 +164,7 @@ async function route() {
   let k = key in PAGES ? key : '', jump = 0;
   // Kinderprofil: kein Online-Bereich (siehe unten, nach den Aliasen)
   if (ALIAS[k]) { [k, jump] = ALIAS[k]; history.replaceState(null, '', '#/' + k); }
-  if (profile.kid && (groupOf(k)?.k === 'lobby' || ['admin', 'account', 'watch'].includes(k))) { history.replaceState(null, '', '#/'); k = ''; }
+  if (profile.kid && (groupOf(k)?.k === 'lobby' || ['admin', 'account', 'watch', 'tv'].includes(k))) { history.replaceState(null, '', '#/'); k = ''; }
   // Handy-Ansicht: die Startseite ist dann die kompakte Ansicht (umschalten unter Einstellungen › App)
   if (k === '' && wantsPhoneView()) k = 'companion';
   // Laufende Fahrt beim Verlassen nicht verwerfen, sondern pausiert im Hintergrund parken
@@ -379,7 +380,7 @@ async function init() {
   // Handy erkannt: beim App-Start gleich die Handy-Ansicht öffnen (Einstellung unter App)
   window.addEventListener('hashchange', route);
   await route();
-  if (!/^#\/watch\//.test(location.hash)) import('./onboard.js').then(m => m.onboarding()).catch(e => console.error(e)); // Zuschauer sehen keine Einführung
+  if (!/^#\/(watch\/|tv\b)/.test(location.hash)) import('./onboard.js').then(m => m.onboarding()).catch(e => console.error(e)); // Zuschauer sehen keine Einführung
   import('./eggs.js').then(m => m.initEggs()).catch(e => console.error(e));
   reconnectKnown().catch(() => { });
   // Barrierefreiheit: Sprunglink zum Inhalt (ohne den Hash-Router zu stören), Tastenkürzel-Übersicht mit ?

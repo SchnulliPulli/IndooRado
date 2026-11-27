@@ -5,10 +5,11 @@ import * as O from '../online/client.js';
 
 const EMO = ['👏', '🔥', '💪', '🚴', '🎉', '❤️', '⚡', '🏔️'];
 let timer = null;
-export function leave() { clearInterval(timer); timer = null; document.body.classList.remove('watching'); }
+export function leave() { clearInterval(timer); timer = null; document.body.classList.remove('watching', 'watchtv'); }
 
-export async function render(el, [token]) {
+export async function render(el, [token, mode]) {
   leave(); document.body.classList.add('watching');
+  if (mode === 'tv') return renderTv(el, token);
   if (!/^[A-Za-z0-9]{20}$/.test(token || '')) { el.innerHTML = '<section class="card watch"><h1>📺 Zuschauen</h1><p class="muted">Dieser Link ist unvollständig. Bitte den ganzen Link aus der Nachricht öffnen.</p></section>'; return; }
   if (!O.configured()) { el.innerHTML = '<section class="card watch"><h1>📺 Zuschauen</h1><p class="muted">Zuschauen geht nur auf der Online-Version von IndooRado.</p></section>'; return; }
   let me = ''; try { me = localStorage.getItem('vvWatchName') || ''; } catch (e) { }
@@ -52,6 +53,7 @@ export async function render(el, [token]) {
 
 function draw(el, w) {
   const s = w.state || {}, age = (Date.now() - new Date(w.updated)) / 1000;
+  if ($('#wN', el)) {
   $('#wN', el).textContent = w.name || 'Fahrer';
   $('#wR', el).textContent = s.route ? `${s.route}${s.wo ? ' · Workout: ' + s.wo : ''}` : 'Wartet auf den Start …';
   const st = s.state === 'ended' ? ['beendet', 'off'] : age > 30 ? ['keine Daten', 'off'] : s.state === 'riding' ? ['● LIVE', ''] : s.state === 'paused' || s.state === 'auto' ? ['Pause', 'pause'] : ['bereit', 'pause'];
@@ -60,6 +62,7 @@ function draw(el, w) {
   if (s.hr) tiles.splice(2, 0, [s.hr, 'Puls']);
   if (s.cad) tiles.splice(2, 0, [s.cad, 'U/min']);
   $('#wT', el).innerHTML = tiles.map(([v, l]) => `<div class="tile"><b class="num">${esc(String(v))}</b><span>${l}</span></div>`).join('');
+  } // Ende normale Zuschauerseite (die Fernseher-Anzeige hat eigene Kacheln)
   $('#wPos', el).textContent = s.total ? `${s.grade != null ? 'Steigung ' + String(s.grade).replace('.', ',') + ' % · ' : ''}${s.loop ? 'Runde' : 'noch ' + fmtKm(Math.max(0, s.total - (s.d || 0))) + ' km'}` : '';
   // Höhenprofil mit Position
   const c = $('#wProf', el), P = s.prof; if (!c || !P?.length) return;
@@ -70,4 +73,54 @@ function draw(el, w) {
   g.fillStyle = 'rgba(255,106,61,.25)'; g.fill(); g.strokeStyle = '#ff6a3d'; g.lineWidth = 2; g.beginPath(); P.forEach((v, i) => i ? g.lineTo(x(i), y(v)) : g.moveTo(x(i), y(v))); g.stroke();
   const f = Math.min(1, Math.max(0, (s.d || 0) / s.total)), px = f * W, pi = f * (P.length - 1), pv = P[Math.floor(pi)] + (P[Math.min(P.length - 1, Math.floor(pi) + 1)] - P[Math.floor(pi)]) * (pi % 1);
   g.fillStyle = '#fff'; g.beginPath(); g.arc(px, y(pv), 6, 0, 7); g.fill(); g.strokeStyle = '#ff6a3d'; g.lineWidth = 3; g.stroke();
+}
+
+/* ---------- Große Anzeige für den Fernseher (#/watch/<link>/tv) ----------
+   Für Chromecast, Fire TV, Android TV, Smart-TV-Browser. Keine Bedienung nötig, aktualisiert sich alle 2 s. */
+async function renderTv(el, token) {
+  document.body.classList.add('watchtv');
+  if (!/^[A-Za-z0-9]{20}$/.test(token || '') || !O.configured()) { el.innerHTML = '<section class="tvw"><h1>📺 IndooRado</h1><p>Link ungültig.</p></section>'; return; }
+  el.innerHTML = `<section class="tvw"><header><div><span class="tvlive" id="tSt">verbinde …</span> <b id="tN">IndooRado</b> <span class="tvr" id="tR"></span></div><div class="tvclock num" id="tClock"></div></header>
+    <div class="tvbig" id="tBig"></div><div class="tviv" id="tIv" hidden></div><canvas id="wProf" class="tvprof"></canvas><div class="tvpos" id="wPos"></div></section>`;
+  try { document.documentElement.requestFullscreen?.().catch(() => { }); } catch (e) { }
+  const sb = await O.client(); let busy = false;
+  const tick = async () => {
+    if (busy) return; busy = true;
+    try {
+      $('#tClock', el).textContent = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+      const { data, error } = await sb.rpc('watch_get', { p_token: token }); if (error) throw error;
+      if (!data) { $('#tSt', el).textContent = 'beendet'; $('#tSt', el).className = 'tvlive off'; $('#tBig', el).innerHTML = '<div class="tvend">Die Fahrt ist beendet. Danke fürs Zuschauen! 👋</div>'; leave(); document.body.classList.add('watching', 'watchtv'); return; }
+      const s = data.state || {}, age = (Date.now() - new Date(data.updated)) / 1000;
+      $('#tN', el).textContent = data.name || 'Fahrer'; $('#tR', el).textContent = s.route ? '· ' + s.route : '';
+      const st = s.state === 'ended' ? ['beendet', 'off'] : age > 30 ? ['keine Daten', 'off'] : s.state === 'riding' ? ['● LIVE', ''] : ['Pause', 'pause'];
+      $('#tSt', el).textContent = st[0]; $('#tSt', el).className = 'tvlive ' + st[1];
+      const zc = s.p && s.ftp ? zoneColorOf(s.p / s.ftp) : '#fff';
+      $('#tBig', el).innerHTML = [[s.p ?? '–', 'Watt', zc], [s.v != null ? String(s.v).replace('.', ',') : '–', 'km/h'], [s.cad ?? '–', 'U/min'], [fmtKm(s.odo || 0), 'km'], [s.asc ?? 0, 'Hm'], [fmtT(s.t || 0), 'Zeit']]
+        .map(([v, l, c]) => `<div class="tvt"><b class="num" ${c ? `style="color:${c}"` : ''}>${esc(String(v))}</b><span>${l}</span></div>`).join('');
+      const iv = s.iv, ib = $('#tIv', el); ib.hidden = !iv;
+      if (iv) ib.innerHTML = `<span>🏋️ ${esc(s.wo || 'Workout')} · Intervall ${iv.i}/${iv.n}${iv.txt ? ' · ' + esc(iv.txt) : ''}</span><b class="num">${iv.tg ? iv.tg + ' W · ' : ''}noch ${fmtT(iv.left)}</b>`;
+      draw(el, data);
+    } catch (e) { $('#tSt', el).textContent = 'keine Verbindung'; $('#tSt', el).className = 'tvlive off'; }
+    finally { busy = false; }
+  };
+  await tick(); timer = setInterval(tick, 2000);
+}
+const zoneColorOf = r => r < .56 ? '#9aa7b3' : r < .76 ? '#3fa7f5' : r < .91 ? '#4fd18b' : r < 1.06 ? '#f5c542' : r < 1.21 ? '#ff8a3d' : '#ef4458';
+
+/* ---------- indoorado.de/tv: Code vom Handy eingeben ---------- */
+export async function renderCode(el) {
+  leave(); document.body.classList.add('watching', 'watchtv');
+  el.innerHTML = `<section class="tvw tvcodepage"><h1>📺 IndooRado auf dem Fernseher</h1>
+    <p>Starte auf dem Handy oder PC eine Fahrt und tippe dort auf <b>⋯ › Auf Fernseher</b>. Gib dann hier den angezeigten Code ein:</p>
+    <form id="tvF" class="row"><input class="inp tvcodein num" id="tvC" maxlength="9" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD 1234" aria-label="Code"><button class="btn pri">Anzeigen</button></form>
+    <p class="small muted" id="tvMsg">Mit der Fernbedienung: Pfeiltasten und OK.</p></section>`;
+  const inp = $('#tvC', el); inp.focus();
+  $('#tvF', el).onsubmit = async e => {
+    e.preventDefault(); const code = inp.value.replace(/[^A-Za-z0-9]/g, ''); const msg = $('#tvMsg', el);
+    if (code.length !== 8) { msg.textContent = 'Der Code hat 8 Zeichen.'; return; }
+    if (!O.configured()) { msg.textContent = 'Diese Version ist nicht mit dem Online-Dienst verbunden.'; return; }
+    msg.textContent = 'Suche Fahrt …';
+    try { const { data, error } = await (await O.client()).rpc('watch_code', { p_code: code }); if (error) throw error; if (!data) { msg.textContent = 'Keine laufende Fahrt mit diesem Code gefunden.'; return; } location.hash = '#/watch/' + data + '/tv'; }
+    catch (er) { msg.textContent = /viele/i.test(er.message) ? 'Zu viele Versuche, bitte eine Minute warten.' : 'Verbindung fehlgeschlagen: ' + er.message; }
+  };
 }

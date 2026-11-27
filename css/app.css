@@ -1214,3 +1214,33 @@ html.tv .btn { min-height: 48px; }
 @media (prefers-reduced-motion: reduce) { .invcard.callring { animation: none; } }
 .callwin .cwtile.away::after { content: "⏸ pausiert"; position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.65); color: #fff; font-weight: 700; }
 .callwin.paused .cwlocal { opacity: .3; }
+
+/* Fahrt auf dem Fernseher */
+body.watchtv .topbar { display: none !important; }
+body.watchtv .view { padding: 0 !important; max-width: none !important; }
+.tvw { min-height: 100vh; padding: 3vh 4vw; display: flex; flex-direction: column; gap: 2.5vh; background: var(--bg); }
+.tvw header { display: flex; justify-content: space-between; align-items: center; font-size: clamp(18px, 2.6vw, 40px); }
+.tvw header b { font-size: 1.2em; margin-left: .4em; }
+.tvr { color: var(--soft); margin-left: .3em; }
+.tvclock { color: var(--soft); }
+.tvlive { font-weight: 800; font-size: .7em; padding: .2em .7em; border-radius: 99px; background: #e5343d; color: #fff; vertical-align: middle; }
+.tvlive.pause { background: var(--warn, #f5b400); color: #2a2005; } .tvlive.off { background: var(--panel3); color: var(--soft); }
+.tvbig { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2vh 2vw; }
+.tvt { background: var(--panel); border-radius: 2vh; padding: 2vh 2vw; display: flex; flex-direction: column; }
+.tvt b { font-size: clamp(40px, 8.5vw, 150px); line-height: 1; }
+.tvt span { font-size: clamp(16px, 2vw, 34px); color: var(--soft); }
+.tviv { display: flex; justify-content: space-between; align-items: center; gap: 2vw; background: rgba(255,106,61,.16); border-left: .6vw solid #ff6a3d; border-radius: 1.5vh; padding: 1.5vh 2vw; font-size: clamp(16px, 2.4vw, 40px); }
+.tviv b { font-size: 1.3em; white-space: nowrap; }
+.tvprof { width: 100%; height: 18vh; }
+.tvpos { font-size: clamp(14px, 2vw, 32px); color: var(--soft); }
+.tvend { grid-column: 1 / -1; font-size: clamp(24px, 4vw, 64px); text-align: center; padding: 10vh 0; }
+.tvcodepage { align-items: center; justify-content: center; text-align: center; font-size: clamp(18px, 2.4vw, 36px); }
+.tvcodepage form { gap: 1vw; justify-content: center; }
+.tvcodein { font-size: clamp(32px, 6vw, 96px); width: 7.5em; text-align: center; letter-spacing: .12em; text-transform: uppercase; height: auto; padding: .2em .4em; }
+.tvcodepage .btn { font-size: clamp(18px, 2.4vw, 36px); height: auto; padding: .5em 1.2em; }
+.castcode { font-size: 44px; font-weight: 800; letter-spacing: .12em; text-align: center; padding: 10px; border-radius: 12px; background: var(--panel2); margin: 6px 0 12px; }
+@media (max-width: 700px) { .tvbig { grid-template-columns: repeat(2, 1fr); } }
+body.watchtv main, body.watching main { margin-left: 0 !important; }
+body.watchtv main { max-width: none !important; padding: 0 !important; }
+body.watchtv .tvw { gap: 2vh; padding: 2.5vh 3vw; }
+body.watchtv .tvprof { height: 15vh; }
