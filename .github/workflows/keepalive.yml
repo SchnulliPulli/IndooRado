@@ -1,0 +1,24 @@
+# Lebenszeichen für Supabase: Kostenlose Projekte werden nach etwa einer Woche ohne Aktivität pausiert.
+# Alle zwei Tage ein kleiner Datenbank-Aufruf (Funktion public.ping aus schema.sql). Adresse und öffentlicher Schlüssel stehen in online.json.
+name: Supabase wach halten
+on:
+  schedule:
+    - cron: '23 5 */2 * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Datenbank anpingen
+        run: |
+          URL=$(jq -r '.url // empty' online.json); KEY=$(jq -r '.anonKey // .key // empty' online.json)
+          [ -n "$URL" ] && [ -n "$KEY" ] || { echo "online.json ohne url/anonKey"; exit 1; }
+          for i in 1 2 3; do
+            code=$(curl -s -o out.txt -w '%{http_code}' -X POST "$URL/rest/v1/rpc/ping" -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' -d '{}')
+            echo "Versuch $i: HTTP $code $(cat out.txt)"; [ "$code" = 200 ] && exit 0; sleep 20
+          done
+          echo "::error::Supabase antwortet nicht (Projekt pausiert? schema.sql ausgeführt?)"; exit 1
