@@ -205,6 +205,7 @@ async function start(el) {
   const plan = wo?.planId ? getPlan(wo.planId) : null;
   if (wo?.planId && progress.planAdapt) { S.wOff = progress.planAdapt; S.planAdaptMsg = true; }
   S.planLabel = plan ? `${plan.name} · Woche ${wo.week} · Einheit ${wo.n}` : null;
+  if (S.wo && !S.group && !sessionStorage.getItem('quickStart') && profile.askForm !== false) await dayForm(S);
 
   $('#loadTxt').textContent = 'Gelände wird erzeugt …';
   await new Promise(r => setTimeout(r, 30));
@@ -686,7 +687,45 @@ function endHint(on) {
   b.classList.toggle('pulse', on);
   if (on) { try { b.focus({ preventScroll: true }); } catch (e) { } } else if (document.activeElement === b) b.blur();
 }
-function begin() { S.state = 'riding'; S.startWall = Date.now(); $('#startCard', S.el).hidden = true; flash(S.race ? '🏁 Rennen läuft!' : S.planAdaptMsg ? `Plan angepasst: Intensität ${100 + S.wOff} %` : 'Los geht’s!', 1800); }
+/* ---------- Tagesform vor dem Workout: passt Intensität und Dauer an ---------- */
+const FORMS = [['top', '💪', 'Top fit', 3], ['ok', '🙂', 'Normal', 0], ['tired', '😴', 'Müde', -7], ['legs', '🦵', 'Beine schwer', -10], ['short', '⏱️', 'Wenig Zeit', 0]];
+async function dayForm(S) {
+  const tot = woTotal(S.wo), mins = [20, 30, 45, 60].filter(m => m * 60 < tot - 120);
+  const wrap = document.createElement('div'); wrap.className = 'modal on';
+  wrap.innerHTML = `<div class="card dlg formdlg" role="dialog" aria-modal="true" aria-labelledby="formT"><h2 id="formT">Wie fühlst du dich heute?</h2><div class="dlg-body">
+    <p class="muted small">„${esc(S.wo.name)}“ (${Math.round(tot / 60)} min) passt sich an. Abschalten unter Einstellungen › Fahrt &amp; Ton.</p>
+    <div class="formgrid">${FORMS.filter(f => f[0] !== 'short' || mins.length).map(([k, i, l, d]) => `<button class="btn formbtn" data-form="${k}"><b>${i}</b><span>${l}</span><small class="muted">${k === 'short' ? 'kürzer fahren' : d ? (d > 0 ? '+' : '') + d + ' %' : 'wie geplant'}</small></button>`).join('')}</div>
+    <div class="row formmins" id="formMins" hidden><span class="small muted">Wie viel Zeit hast du?</span>${mins.map(m => `<button class="btn sm pri" data-min="${m}">${m} min</button>`).join('')}</div>
+    </div><div class="row end"><button class="btn ghost" data-form="skip">Überspringen</button></div></div>`;
+  document.body.appendChild(wrap); wrap.querySelector('[data-form="ok"]')?.focus();
+  return new Promise(res => {
+    const done = (k, m) => { wrap.remove(); removeEventListener('keydown', esc_); if (k && k !== 'skip') applyForm(S, k, m); res(); };
+    const esc_ = e => { if (e.key === 'Escape') done(null); }; addEventListener('keydown', esc_);
+    wrap.onclick = e => {
+      const m = e.target.closest('[data-min]'); if (m) return done('short', +m.dataset.min);
+      const b = e.target.closest('[data-form]'); if (!b) return;
+      if (b.dataset.form === 'short') { wrap.querySelector('#formMins').hidden = false; wrap.querySelectorAll('.formbtn').forEach(x => x.classList.toggle('on', x === b)); return; }
+      done(b.dataset.form);
+    };
+  });
+}
+function applyForm(S, k, min) {
+  const f = FORMS.find(x => x[0] === k); if (!f) return;
+  S.wOff = clamp(S.wOff + f[3], -40, 40);
+  if (k === 'legs') S.wo = { ...S.wo, segs: S.wo.segs.map(g => g.a == null ? g : { ...g, a: Math.min(g.a, 1.05), b: Math.min(g.b, 1.05) }) }; // keine Spitzen über 105 % FTP
+  if (k === 'short' && min) S.wo = shortenWorkout(S.wo, min * 60);
+  S.formMsg = `${f[1]} ${f[2]}${f[3] ? ': Intensität ' + (f[3] > 0 ? '+' : '') + f[3] + ' %' : ''}${k === 'short' && min ? ': auf ' + min + ' min gekürzt' : ''}${k === 'legs' ? ', keine Spitzen über 105 %' : ''}`;
+}
+// Ein-/Ausfahren bleiben, der Hauptteil wird gleichmäßig gestaucht (Intervalle bleiben erkennbar, mind. 15 s)
+export function shortenWorkout(w, target) {
+  const segs = w.segs.map(g => ({ ...g })), tot = segs.reduce((a, g) => a + g.dur, 0); if (tot <= target) return w;
+  const edge = segs.length > 2 ? [0, segs.length - 1] : [], keep = edge.reduce((a, i) => a + Math.min(segs[i].dur, 600), 0);
+  edge.forEach(i => segs[i].dur = Math.min(segs[i].dur, 600));
+  const mid = segs.filter((_, i) => !edge.includes(i)), midTot = mid.reduce((a, g) => a + g.dur, 0), k = Math.max(.1, (target - keep) / midTot);
+  for (const g of mid) g.dur = Math.max(15, Math.round(g.dur * k));
+  return { ...w, segs, name: w.name + ' (kurz)' };
+}
+function begin() { S.state = 'riding'; S.startWall = Date.now(); $('#startCard', S.el).hidden = true; flash(S.race ? '🏁 Rennen läuft!' : S.formMsg ? S.formMsg : S.planAdaptMsg ? `Plan angepasst: Intensität ${100 + S.wOff} %` : 'Los geht’s!', 1800); }
 
 let bannerT = 0;
 function flash(txt, ms = 1600) { const b = $('#banner', S?.el); if (!b) return; b.textContent = txt; b.classList.add('show'); requestAnimationFrame(layout); clearTimeout(bannerT); bannerT = setTimeout(() => b.classList.remove('show'), ms); }
