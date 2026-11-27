@@ -91,7 +91,7 @@ export async function client() {
   const c = config();
   online.client = createClient(c.url, c.anonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: loginReturn(), flowType: 'pkce', storageKey: 'vv-auth', storage: authStore, lock: tabLock }, global: { fetch: trackedFetch },
     // Stabilere Live-Verbindung: Herzschlag aus einem Worker (läuft auch im Hintergrund), mehr Geduld bei langsamen Netzen
-    realtime: { worker: typeof Worker !== 'undefined', workerUrl: new URL('./rt-worker.js', import.meta.url).href, heartbeatIntervalMs: 20000, timeout: 20000 } });
+    realtime: { worker: typeof Worker !== 'undefined', workerUrl: new URL('./rt-worker.js', import.meta.url).href, heartbeatIntervalMs: 20000, timeout: 10000 } });
   // Laut Supabase-Doku keine Supabase-Aufrufe direkt im Callback (kann blockieren): erst danach ausführen
   online.client.auth.onAuthStateChange((ev, session) => {
     if (ev === 'PASSWORD_RECOVERY') online.recovery = true;

@@ -37,12 +37,12 @@ const P_RS = () => import('./pages/ridesettings.js'), P_PR = () => import('./pag
 Object.assign(PAGES, {
   ridesettings: combo([P_RS, []], [P_RS, ['sound']]),
   appsettings: combo([P_PR, ['app']], [P_PR, ['connect']]),
-  friends: combo([() => import('./pages/friends.js'), []], [P_ON, ['players']]),
+  friends: () => import('./pages/friends.js'),
   community: combo([P_CO, ['events']], [P_CO, ['clubs']]),
   progress: combo([() => import('./pages/progress.js'), []], [() => import('./pages/season.js'), []]),
 });
 // Alte Adressen führen zum passenden Abschnitt der zusammengelegten Seite
-const ALIAS = { sound: ['ridesettings', 1], connect: ['appsettings', 1], players: ['friends', 1], events: ['community', 0], clubs: ['community', 1], season: ['progress', 1] };
+const ALIAS = { sound: ['ridesettings', 1], connect: ['appsettings', 1], players: ['lobby', 1], events: ['community', 0], clubs: ['community', 1], season: ['progress', 1] };
 const NAV = [
   { k: '', l: 'Start', i: 'home', also: ['companion', 'live'] },
   { k: 'workouts', l: 'Training', i: 'workout', tabs: [['workouts', 'Workouts'], ['plans', 'Trainingspläne']], also: ['editor', 'planner'] },
@@ -252,7 +252,7 @@ async function newsBar(el) {
     const st = e.target.closest('[data-step]'); if (st) { go(idx + +st.dataset.step); hold = Date.now() + 10000; return; }
     const d = e.target.closest('.nbdots [data-i]'); if (d) { go(+d.dataset.i); hold = Date.now() + 10000; return; }
     const h = e.target.closest('[data-hide]'); if (h) { const S = seen(); S.push(+h.dataset.hide); localStorage.setItem('vvAnnSeen', JSON.stringify(S.slice(-50))); draw(); return; }
-    const b = e.target.closest('[data-sid]'); if (b) { const { sel, saveSel } = await import('./state.js'); sel.routeId = b.dataset.route; saveSel(); sessionStorage.setItem('joinRider', JSON.stringify({ sid: b.dataset.sid, name: b.dataset.name })); location.hash = '#/ride'; }
+    const b = e.target.closest('[data-sid]'); if (b) { if (!(await (await import('./online/sharedroute.js')).prepareJoin(b.dataset.sid, b.dataset.route, toast))) return; const { sel, saveSel } = await import('./state.js'); sel.routeId = b.dataset.route; saveSel(); sessionStorage.setItem('joinRider', JSON.stringify({ sid: b.dataset.sid, name: b.dataset.name })); location.hash = '#/ride'; }
   };
   // Sofort: zuletzt bekannte Ankündigungen (nur wenn zuletzt angemeldet)
   if (localStorage.getItem('vv-auth') || sessionStorage.getItem('vv-auth')) draw();
@@ -281,7 +281,7 @@ bus.on('invite', async inv => {
     clearTimeout(t); c.remove();
     const PR = await import('./online/presence.js'), { sel, saveSel } = await import('./state.js');
     if (inv.kind === 'lobby') { PR.joinLobby(inv.lobby); toast('Beigetreten, die Fahrt startet automatisch'); location.hash = '#/lobby'; }
-    else { sel.routeId = inv.route; saveSel(); sessionStorage.setItem('joinRider', JSON.stringify({ sid: inv.from, name: inv.name })); location.hash = '#/ride'; }
+    else { if (!(await (await import('./online/sharedroute.js')).prepareJoin(inv.from, inv.route, toast))) return; sel.routeId = inv.route; saveSel(); sessionStorage.setItem('joinRider', JSON.stringify({ sid: inv.from, name: inv.name })); location.hash = '#/ride'; }
   };
 });
 async function announce(el) {

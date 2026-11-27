@@ -366,6 +366,13 @@ export async function putLive(obj) {
   liveBusy = true;
   try { await prep(); await B().put('live.json', JSON.stringify({ ...obj, ts: Date.now() }), 'application/json'); } catch (e) { } finally { liveBusy = false; }
 }
+// Läuft gerade wirklich eine Fahrt – auf einem ANDEREN Gerät bzw. Tab? (nicht die eigene geparkte, nicht nur „bereit“, nicht veraltet)
+export function liveFresh(L) {
+  if (!L || ['ended', 'ready'].includes(L.state)) return false;
+  let me = ''; try { me = sessionStorage.getItem('vvTab') || ''; } catch (e) { }
+  if (L.tab && L.tab === me) return false;
+  const age = Date.now() - (+L.ts || 0); return age < 30000 && age > -120000; // Uhren der Geräte können etwas abweichen
+}
 export async function getLive() {
   if (!syncReady()) return null;
   await prep();

@@ -58,7 +58,7 @@ export async function render(el) {
       <td><span class="stbadge ${c}">${st}</span></td>
       <td><select class="inp sm" data-role ${me ? 'disabled' : ''}>${['user', 'admin', 'banned'].map(r => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${{ user: 'Nutzer', admin: 'Admin', banned: 'Gesperrt' }[r]}</option>`).join('')}</select></td>
       <td class="n">${u.level}</td><td>${u.last_seen ? fmtDate(u.last_seen) : '–'}</td><td>${fmtDate(u.created_at)}</td>
-      <td class="actcell"><div class="row" style="flex-wrap:nowrap;justify-content:flex-end">${u.role === 'user' ? (u.approved ? `<button class="btn xs ghost" data-appr="0" ${me ? 'disabled' : ''}>Freischaltung entziehen</button>` : `<button class="btn xs pri" data-appr="1">Freischalten</button><button class="btn xs ghost" data-trial>+7 Tage Test</button>`) : ''}<button class="btn xs ghost danger" data-wipe ${me ? 'disabled' : ''}>Daten löschen</button><button class="btn xs danger" data-delacc ${me ? 'disabled title="Eigenes Konto unter Konto löschen"' : ''}>Konto löschen</button></div></td></tr>`; }).join('');
+      <td class="actcell"><div class="row" style="flex-wrap:nowrap;justify-content:flex-end">${u.role === 'user' ? (u.approved ? `<button class="btn xs ghost" data-appr="0" ${me ? 'disabled' : ''}>Freischaltung entziehen</button>` : `<button class="btn xs pri" data-appr="1">Freischalten</button><button class="btn xs ghost" data-trial>+7 Tage Test</button>`) : ''}${u.role !== 'admin' ? `<button class="btn xs ghost" data-mfa title="Zwei-Faktor-Schutz entfernen, z. B. bei verlorenem Handy">2FA zurücksetzen</button>` : ''}<button class="btn xs ghost danger" data-wipe ${me ? 'disabled' : ''}>Daten löschen</button><button class="btn xs danger" data-delacc ${me ? 'disabled title="Eigenes Konto unter Konto löschen"' : ''}>Konto löschen</button></div></td></tr>`; }).join('');
   };
   const loadUsers = async () => { const { data, error } = await sb.from('profiles').select('*').order('created_at', { ascending: false }).limit(500); if (error) return toast(error.message, 5000); users = data; list(); };
   const anns = async () => {
@@ -85,6 +85,13 @@ export async function render(el) {
       const patch = ap.dataset.trial != null ? { trial_until: new Date(Math.max(Date.now(), +new Date(u.trial_until || 0)) + 7 * 864e5).toISOString() } : { approved: ap.dataset.appr === '1' };
       const { error } = await sb.from('profiles').update(patch).eq('id', id); if (error) return toast(error.message, 5000);
       Object.assign(u, patch); list(); kpis(); toast(patch.approved ? esc(u.display_name) + ' freigeschaltet ✅' : patch.trial_until ? 'Testphase verlängert' : 'Freischaltung entzogen'); return;
+    }
+    const mf = e.target.closest('[data-mfa]');
+    if (mf) {
+      const id = mf.closest('tr').dataset.id, u = users.find(x => x.id === id);
+      if (!(await dialog({ title: `2FA von ${u.display_name} zurücksetzen?`, html: '<p class="muted">Alle Authenticator-Einträge dieses Kontos werden entfernt. Danach meldet sich die Person nur mit Passwort bzw. E-Mail-Code an und sollte unter Konto sofort einen neuen Authenticator einrichten.</p><p class="small warn">Nur tun, wenn du sicher bist, dass die Anfrage wirklich von dieser Person kommt (z. B. Rückfrage über einen bekannten Kontaktweg) – sonst übernimmt womöglich jemand Fremdes das Konto.</p>', buttons: [{ label: 'Abbrechen', value: 0 }, { label: '2FA zurücksetzen', value: 1, cls: 'pri' }] }))) return;
+      const { data, error } = await sb.rpc('admin_reset_mfa', { p_user: id }); if (error) return toast(/function|schema cache/i.test(error.message) ? 'Funktion fehlt: supabase/schema.sql erneut ausführen' : error.message, 6000);
+      toast(data ? `2FA von ${u.display_name} entfernt (${data} Faktor${data === 1 ? '' : 'en'})` : 'Dieses Konto hatte keine 2FA'); return;
     }
     const del = e.target.closest('[data-delacc]');
     if (del) {
@@ -125,7 +132,7 @@ export async function render(el) {
   const miss = e => /function|relation|does not exist|schema cache/i.test(e?.message || '') ? 'Fehlt in der Datenbank: supabase/schema.sql erneut ausführen.' : e?.message;
   const [{ listRoutes }, { listWorkouts }] = await Promise.all([import('../routes.js'), import('../workouts.js')]);
   const [routes, wos] = await Promise.all([listRoutes(), listWorkouts()]), shared = routes.filter(r => r.builtin);
-  $('#evR', el).innerHTML = shared.map(r => `<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');
+  $('#evR', el).innerHTML = shared.map(r => `<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('') + (routes.some(r => r.kit) ? `<optgroup label="Eigene Baukasten-Strecken (werden an alle verteilt)">${routes.filter(r => r.kit).map(r => `<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('')}</optgroup>` : '');
   $('#lbR', el).innerHTML = '<option value="">– Strecke wählen –</option>' + shared.map(r => `<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');
   $('#evW', el).innerHTML += wos.filter(w => w.builtin).map(w => `<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('');
   { const d = new Date(Date.now() + 864e5); d.setMinutes(0, 0, 0); d.setHours(18); $('#evS', el).value = new Date(d - d.getTimezoneOffset() * 60e3).toISOString().slice(0, 16); }
@@ -156,7 +163,8 @@ export async function render(el) {
   $('#lbR', el).onchange = lbAdm;
   $('#evGo', el).onclick = async () => {
     const t = $('#evT', el).value.trim(), st = $('#evS', el).value; if (t.length < 3 || !st) return toast('Titel (mind. 3 Zeichen) und Start angeben');
-    const { error } = await sb.from('events').insert({ title: t, kind: $('#evK', el).value, route_id: $('#evR', el).value, workout_id: $('#evW', el).value || null, starts_at: new Date(st).toISOString(), duration_min: +$('#evD', el).value || 60, description: $('#evB', el).value.trim() });
+    const route_kit = await (await import('../online/sharedroute.js')).kitOf($('#evR', el).value);
+    const { error } = await sb.from('events').insert({ route_kit, title: t, kind: $('#evK', el).value, route_id: $('#evR', el).value, workout_id: $('#evW', el).value || null, starts_at: new Date(st).toISOString(), duration_min: +$('#evD', el).value || 60, description: $('#evB', el).value.trim() });
     if (error) return toast(miss(error), 5000); toast('📅 Event angelegt'); $('#evT', el).value = ''; $('#evB', el).value = ''; evAdm();
   };
   el.addEventListener('click', async e => {

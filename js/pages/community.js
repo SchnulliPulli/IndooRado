@@ -20,7 +20,7 @@ export async function render(el, params = []) {
 
 async function events(el) {
   const sb = await O.client(), [routes, wos] = await Promise.all([listRoutes(), listWorkouts()]);
-  const rn = id => routes.find(r => r.id === id)?.name || id;
+  const rn = (id, kit) => routes.find(r => r.id === id)?.name || kit?.n || id;
   el.innerHTML = `<section class="pagehead"><h1>📅 Events</h1><span class="small muted">Geplante Gruppenfahrten: anmelden, zur Startzeit beitreten, zusammen fahren</span></section><div id="evList"><div class="pageload"><div class="spinner"></div></div></div>`;
   const draw = async () => {
     const { data, error } = await sb.rpc('event_list'); if (!el.isConnected) return;
@@ -30,7 +30,7 @@ async function events(el) {
       const t0 = new Date(e.starts_at), live = Date.now() >= t0 - 10 * 60e3 && Date.now() < +t0 + e.duration_min * 60e3, [ic, kl] = KIND[e.kind] || KIND.group;
       const wo = e.workout_id ? wos.find(w => w.id === e.workout_id) : null;
       return `<section class="card evcard ${live ? 'live' : ''}" data-id="${e.id}"><div class="evhead"><span class="evic">${ic}</span><div style="flex:1"><div class="small muted">${kl} · ${when(e.starts_at)} · ${e.duration_min} min</div><h2>${esc(e.title)}</h2>
-        <div class="small">🛣️ ${esc(rn(e.route_id))}${wo ? ' · 🏋️ ' + esc(wo.name) : ''} · 👥 ${e.riders} angemeldet</div>${e.description ? `<p class="small muted">${esc(e.description)}</p>` : ''}</div></div>
+        <div class="small">🛣️ ${esc(rn(e.route_id, e.route_kit))}${wo ? ' · 🏋️ ' + esc(wo.name) : ''} · 👥 ${e.riders} angemeldet</div>${e.description ? `<p class="small muted">${esc(e.description)}</p>` : ''}</div></div>
         <div class="row end">${live ? `<button class="btn pri" data-go>🚴 Jetzt beitreten</button>` : ''}<button class="btn ${e.me ? '' : live ? '' : 'pri'}" data-sign="${e.me ? 0 : 1}">${e.me ? '✓ Angemeldet (abmelden)' : 'Anmelden'}</button></div></section>`;
     }).join('');
     el.onclick = async ev => {
@@ -38,7 +38,7 @@ async function events(el) {
       const s = ev.target.closest('[data-sign]');
       if (s) { const on = s.dataset.sign === '1'; const r = on ? await sb.from('event_signups').insert({ event_id: e.id }) : await sb.from('event_signups').delete().eq('event_id', e.id).eq('user_id', O.online.user.id); if (r.error) return toast(missing(r.error)); toast(on ? '✓ Angemeldet – du bekommst auf der Startseite einen Hinweis' : 'Abgemeldet'); draw(); return; }
       if (ev.target.closest('[data-go]')) {
-        if (!(await getRaw(e.route_id))) return toast('Diese Strecke gibt es in deiner App nicht (eigene Strecke des Erstellers)');
+        if (!(await (await import('../online/sharedroute.js')).ensureRoute(e.route_id, e.route_kit, 'Event'))) return toast('Diese Strecke gibt es in deiner App nicht (eigene, importierte Strecke des Erstellers)');
         sel.routeId = e.route_id; sel.workoutId = e.workout_id || null; saveSel(); sessionStorage.setItem('eventRide', JSON.stringify({ id: e.id, title: e.title })); location.hash = '#/ride';
       }
     };

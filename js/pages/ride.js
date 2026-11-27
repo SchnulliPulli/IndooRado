@@ -93,6 +93,11 @@ export async function render(el) {
       <div class="miniwrap" data-drag="mini"><canvas id="mini" class="minimap" title="Karte öffnen (K)"></canvas></div>
       <div class="elevwrap" data-drag="elev"><canvas id="elev"></canvas><div class="elevtxt small" id="elevTxt"></div></div>
     </div>
+    <div class="demopad" id="demoPad" data-drag="demopad" hidden aria-label="Demo-Steuerung">
+      <div class="dphead">🧪 Demo-Steuerung <span class="num" id="dpVal"></span></div>
+      <div class="dprow"><button class="dpb" data-dp="left" aria-label="Spur nach links">⬅</button><button class="dpb brake" data-dp="brake">🛑 Bremse</button><button class="dpb gas" data-dp="gas">⛽ Gas</button><button class="dpb" data-dp="right" aria-label="Spur nach rechts">➡</button></div>
+      <div class="dprow"><button class="dpb" data-dp="sprint">🚀 Sprint</button><button class="dpb" data-dp="pup" title="Power-up einsetzen (U)">⚡ Power-up</button><button class="dpb" data-dp="ro" title="Ride On geben (R)">👍</button></div>
+    </div>
     <div class="toolbar">
       <button class="tbtn" id="tPause" title="Pause (Leertaste)">${ICON.pause}<span>Pause</span></button>
       <button class="tbtn" id="tView" title="Kamera (C)">${ICON.view}<span>Kamera</span></button>
@@ -223,6 +228,7 @@ async function start(el) {
   onlineReady.then(() => S?.alive && loggedIn() ? import('../online/presence.js') : Promise.reject(0)).then(m => { window.__presence = m; }).then(() => import('../online/live.js')).then(({ joinRoute }) => {
     if (!S?.alive) return;
     const PRm = window.__presence; PRm?.setStatus({ where: 'ride', route: route.id, routeName: route.name });
+    import('../online/sharedroute.js').then(m => m.kitOf(route.id)).then(kit => S?.alive && PRm?.setStatus({ kit })).catch(() => { }); // eigene Baukasten-Strecke zum Mitfahren teilen
     // Position immer senden (auch in Pause oder vor dem ersten Tritt), sonst verschwindet man für die anderen
     S.live = joinRoute(route.id, () => { const go = S.state === 'riding'; return { d: Math.round(S.dist * 10) / 10, v: S.state === 'paused' ? 0 : +S.v.toFixed(2), p: go ? Math.round(S.p3.at(-1) || 0) : 0, wkg: go ? +((S.p3.at(-1) || 0) / profile.kg).toFixed(1) : 0, cad: go && live.fresh && live.power >= 10 ? Math.round(live.cadence ?? 85) : 0, pause: S.state === 'paused' || (!go && S.v < .3), odo: Math.round(S.odo), env: { time: S.env.time, weather: S.env.weather }, look: PRm ? PRm.onlineLook() : { jersey: profile.jersey, bikeColor: profile.bikeColor, helmet: profile.helmet, skin: profile.skin, av: profile.av } }; });
     S.live.onChange = syncRemote; mpInit(S);
@@ -342,7 +348,28 @@ function bindUi() {
     updBuddy();
   };
   // Demo-Geräte direkt aus der Fahrt ein- und ausschalten
-  const updDemo = () => { $('#tDemoL', el).textContent = demo.on ? 'Demo aus' : 'Demo an'; $('#tDemo', el).classList.toggle('on', demo.on); };
+  const updDemo = () => { $('#tDemoL', el).textContent = demo.on ? 'Demo aus' : 'Demo an'; $('#tDemo', el).classList.toggle('on', demo.on); $('#demoPad', el).hidden = !demo.on; };
+  // Demo-Steuerung: Gas und Bremse halten, Sprint, Spurwechsel, Power-up, Ride On (Minispiel ohne echte Geräte)
+  { const pad = $('#demoPad', el), base = { cad: demo.cad || 88, effort: demo.effort || 1 }; let held = null, ramp = null, sprintT = null;
+    const val = () => { const v = $('#dpVal', el); if (v) v.textContent = `${Math.round(demo.cad)} U/min · ${Math.round(demo.effort * 100)} %`; };
+    const release = () => { held = null; clearInterval(ramp); ramp = null; S && (S.brake = false); pad.querySelectorAll('.dpb.on').forEach(b => b.classList.remove('on')); if (!sprintT) { demo.cad = base.cad; demo.effort = base.effort; } val(); };
+    const hold = k => {
+      held = k; clearInterval(ramp);
+      if (k === 'gas') ramp = setInterval(() => { demo.cad = Math.min(118, demo.cad + 2); demo.effort = Math.min(2.6, demo.effort + .08); val(); }, 100);
+      if (k === 'brake') { demo.cad = 0; S.brake = true; val(); }
+    };
+    pad.addEventListener('pointerdown', e => {
+      if ($('#rw', el)?.classList.contains('hudedit')) return; const b = e.target.closest('[data-dp]'); if (!b) return; e.preventDefault(); e.stopPropagation();
+      const k = b.dataset.dp;
+      if (k === 'gas' || k === 'brake') { b.classList.add('on'); try { b.setPointerCapture(e.pointerId); } catch (er) { } hold(k); return; }
+      if (k === 'left' || k === 'right') { S.latT = clamp((S.latT ?? 1.5) + (k === 'left' ? -.6 : .6), .3, 3.2); return; }
+      if (k === 'pup') { usePup(S, flash); return; }
+      if (k === 'ro') { giveRideOn(); return; }
+      if (k === 'sprint') { clearTimeout(sprintT); demo.cad = 112; demo.effort = 3.2; val(); flash('🚀 Sprint!', 1000); sprintT = setTimeout(() => { sprintT = null; if (!held) { demo.cad = base.cad; demo.effort = base.effort; val(); } }, 8000); }
+    });
+    for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) pad.addEventListener(ev, () => { if (held) release(); });
+    val();
+  }
   updDemo();
   $('#tDemo', el).onclick = () => { setDemo(!demo.on); updDemo(); flash(demo.on ? '🧪 Demo-Geräte an: diese Fahrt wird nicht gespeichert' : '🧪 Demo-Geräte aus', 2500); };
   // Meldungen und Einblendungen mit einmaligem Antippen schließen (nicht im Anordnen-Modus)
@@ -755,6 +782,7 @@ function step(dt, first) {
   // Bewegung
   const md = mods(S, grade, S.draft);
   S.v = integrate(S.v, pw * md.power, grade, dt, md.draft);
+  if (S.brake) S.v = Math.max(0, S.v - 3.5 * dt); // Demo-Bremse
   const prev = S.dist;
   S.dist += S.v * dt; S.odo += S.v * dt; S.t += dt; S.kj += pw * dt / 1000;
   if (S.fg && running) for (const f of S.fg) {
@@ -1086,7 +1114,7 @@ document.addEventListener('visibilitychange', () => { if (S?.alive && document.v
 
 export function leave() {
   if (!S) return;
-  S.alive = false; setTimeout(() => bus.emit('rideEnded'), 1500); S.live?.leave(); window.__presence?.setStatus({ where: 'menu', route: null, routeName: null }); sound.silence(); music.stop(); hush(); putLive({ state: 'ended', t: Math.round(S.t), odo: Math.round(S.odo), route: S.route.name }); clearInterval(S.timer); cancelAnimationFrame(S.raf); S.ro?.disconnect();
+  S.alive = false; setTimeout(() => bus.emit('rideEnded'), 1500); S.live?.leave(); window.__presence?.setStatus({ where: 'menu', route: null, routeName: null, kit: null }); sound.silence(); music.stop(); hush(); putLive({ state: 'ended', t: Math.round(S.t), odo: Math.round(S.odo), route: S.route.name }); clearInterval(S.timer); cancelAnimationFrame(S.raf); S.ro?.disconnect();
   document.removeEventListener('keydown', S.key); S.offs.forEach(f => f());
   try { S.world.dispose(); } catch (e) { }
   // Speicher freigeben: Streckendaten, Caches der Karte, Testverweis

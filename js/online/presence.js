@@ -37,9 +37,9 @@ export function cleanSettings(s = {}) {
 }
 function cleanMeta(m) {
   if (!m || typeof m !== 'object') return null;
-  const lob = m.host && typeof m.host === 'object' ? { id: txt(m.host.id, 24), title: txt(m.host.title, 40) || 'Gruppenfahrt', route: txt(m.host.route, 40), routeName: txt(m.host.routeName, 40), startAt: Number(m.host.startAt) || 0, race: !!m.host.race, settings: cleanSettings(m.host.settings) } : null;
+  const lob = m.host && typeof m.host === 'object' ? { kit: m.host.kit && typeof m.host.kit === 'object' ? m.host.kit : null, id: txt(m.host.id, 24), title: txt(m.host.title, 40) || 'Gruppenfahrt', route: txt(m.host.route, 40), routeName: txt(m.host.routeName, 40), startAt: Number(m.host.startAt) || 0, race: !!m.host.race, settings: cleanSettings(m.host.settings) } : null;
   const look = m.look && typeof m.look === 'object' ? m.look : {};
-  return { name: txt(m.name, 30) || 'Fahrer', where: m.where === 'ride' ? 'ride' : 'menu', route: txt(m.route, 40), routeName: txt(m.routeName, 40), joined: txt(m.joined, 24), host: lob,
+  return { uid: /^[0-9a-f-]{36}$/i.test(m.uid || '') ? m.uid : null, kit: m.kit && typeof m.kit === 'object' ? m.kit : null, name: txt(m.name, 30) || 'Fahrer', where: m.where === 'ride' ? 'ride' : 'menu', route: txt(m.route, 40), routeName: txt(m.routeName, 40), joined: txt(m.joined, 24), host: lob,
     look: { jersey: COLOR.test(look.jersey) ? look.jersey : '#ff6a3d', helmet: COLOR.test(look.helmet) ? look.helmet : '#f2f4f6', bikeColor: COLOR.test(look.bikeColor) ? look.bikeColor : '#e9eef2', skin: COLOR.test(look.skin) ? look.skin : '#e3b18c', av: { head: txt(look.av?.head, 10), bike: txt(look.av?.bike, 10), glasses: txt(look.av?.glasses, 10), helmetStyle: txt(look.av?.helmetStyle, 10), pattern: txt(look.av?.pattern, 10), jersey2: COLOR.test(look.av?.jersey2) ? look.av.jersey2 : undefined, beard: !!look.av?.beard } } };
 }
 // Schnellweg: Änderungen (Lobby beitreten, anlegen, losfahren) gehen zusätzlich sofort als Direktnachricht raus.
@@ -105,7 +105,7 @@ if (typeof document !== 'undefined') { document.addEventListener('visibilitychan
 export async function leavePresence() { try { if (P.ch && P.ch !== 'pending' && P.ready) P.ch.send({ type: 'broadcast', event: 'meta', payload: { from: sid, meta: null } }); } catch (e) { } const c = P.ch; P.ch = null; if (c && c !== 'pending') { try { await c.untrack(); (await client()).removeChannel(c); } catch (e) { } } P.ready = false; P.peers.clear(); bus.emit('presence'); }
 // Eigene Meldung senden; schlägt sie fehl (Zeitüberschreitung, Ratenlimit), bis zu 5-mal mit wachsender Pause wiederholen
 let pushTry = 0, pushTimer = null;
-const myMeta = () => ({ name: online.profile?.display_name || 'Fahrer', look: onlineLook(), ...P.me });
+const myMeta = () => ({ uid: online.user?.id, name: online.profile?.display_name || 'Fahrer', look: onlineLook(), ...P.me });
 async function push() {
   if (!P.ch || P.ch === 'pending' || !P.ready) return;
   clearTimeout(pushTimer);
@@ -140,7 +140,7 @@ export const lobbies = () => {
   if (P.me.host) all.unshift({ ...P.me.host, hostSid: sid, hostName: online.profile?.display_name || 'Du', hostLook: onlineLook(), mine: true });
   return all.filter(l => l.startAt > Date.now() - 60e3).map(l => ({ ...l, members: [...(l.mine || P.me.joined === l.id ? [{ name: online.profile?.display_name || 'Du', look: onlineLook(), me: true }] : []), ...[...P.peers.entries()].filter(([k, m]) => m.joined === l.id || (k === l.hostSid && !l.mine)).map(([, m]) => ({ name: m.name, look: m.look }))] }));
 };
-export function createLobby({ title, route, routeName, minutes, race, settings }) { const id = Math.random().toString(36).slice(2, 10); setStatus({ host: { id, title, route, routeName, startAt: Date.now() + minutes * 60e3, race, settings: cleanSettings(settings) }, joined: id }); return id; }
+export function createLobby({ title, route, routeName, minutes, race, settings, kit }) { const id = Math.random().toString(36).slice(2, 10); setStatus({ host: { id, title, route, routeName, startAt: Date.now() + minutes * 60e3, race, settings: cleanSettings(settings), kit: kit || undefined }, joined: id }); return id; }
 export function joinLobby(id) { setStatus({ joined: id }); }
 export function leaveLobby() { setStatus({ joined: null, host: null }); }
 // Startzeit erreicht: alle Teilnehmer fahren auf derselben Strecke los
@@ -158,6 +158,9 @@ function checkStart() {
 // Gemeinsamer Start: Strecke und Workout für alle gleich setzen, dann losfahren
 async function startGroup(l) {
   const id = l.id, G = cleanSettings(l.settings);
+  // Eigene Baukasten-Strecke des Gastgebers bei Bedarf lokal nachbauen
+  const SR = await import('./sharedroute.js');
+  if (!(await SR.ensureRoute(l.route, l.kit, l.hostName))) { bus.emit('toast', SR.notShareable); }
   sel.routeId = l.route;
   if (G.workout === 'plan') { const P = await import('../plans.js'); sel.workoutId = P.nextWorkout()?.id || null; }
   else if (G.woSegs) { const W = await import('../workouts.js'), wid = 'g-' + id; W.EXTRA_W.set(wid, { id: wid, name: G.woName || 'Gruppen-Workout', cat: 'Gruppe', desc: 'Workout der Gruppenfahrt', segs: G.woSegs, builtin: true }); sel.workoutId = wid; }

@@ -310,6 +310,7 @@ async function renderAccount(el) {
     </div>
     <h3 class="sub">Zwei-Faktor-Anmeldung (2FA)</h3>
     ${verified.length ? `<div class="small factorlist">${verified.map(f => `<div class="row between"><span>🔐 ${esc(f.friendly_name || 'Authenticator-App')} <span class="muted">seit ${new Date(f.created_at).toLocaleDateString('de-DE')}</span></span><button class="btn xs ghost danger" data-unenroll="${esc(f.id)}">Entfernen</button></div>`).join('')}</div>${aal2 ? '' : '<p class="small muted">Zum Entfernen erst mit dem Code bestätigen.</p>'}` : `<p class="small muted">Noch nicht eingerichtet.${O.isAdmin() ? ' <b>Für die Admin-Konsole Pflicht.</b>' : ''} Empfohlen: Google Authenticator, Microsoft Authenticator, 1Password oder Aegis.</p>`}
+    ${verified.length === 1 ? '<p class="small warn">💡 Ersatz einrichten: Füge einen zweiten Authenticator hinzu (z. B. auf einem Tablet oder in einem Passwortmanager). Geht das Handy verloren, kommst du damit weiter ins Konto. Sonst hilft nur noch der Admin.</p>' : ''}
     <div class="row"><button class="btn sm ${verified.length ? 'ghost' : 'pri'}" id="mOn">${verified.length ? '+ Weitere App hinzufügen' : '2FA einrichten'}</button></div><div id="mBox"></div>
   </section>
   <section class="card form"><div class="row between"><h2>Verbindungstest</h2><button class="btn sm" id="dgGo">Test starten</button></div><p class="small muted">Prüft Schritt für Schritt Anmeldung, Profil, Zugang, Admin, Speicher und Live-Kanäle mit Dauer und genauer Fehlermeldung.</p><div id="dgOut" class="dglist small"></div></section>

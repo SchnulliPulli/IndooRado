@@ -1,7 +1,7 @@
 // Live-Ansicht der laufenden Fahrt deines Kontos (auf einem anderen Gerät): aktuelle Werte, Workout, Strecke und Zeitverlauf.
 // Daten kommen aus dem Konto bzw. Cloud-Speicher (live.json, von der Fahrt alle 5 s geschrieben).
 import { $, esc, fmtKm, fmtT } from '../util.js';
-import { syncReady, getLive, loadSync, sync } from '../sync.js';
+import { syncReady, getLive, loadSync, sync, liveFresh } from '../sync.js';
 import { multiChart } from '../charts.js';
 
 let timer = null;
@@ -19,7 +19,7 @@ export async function render(el) {
   };
   tick(); timer = setInterval(tick, 5000);
 }
-const fresh = L => L && L.state !== 'ended' && Date.now() - L.ts < 30000;
+const fresh = L => liveFresh(L);
 function draw(el, L) {
   const body = $('#lvBody', el); if (!body) return;
   $('#lvUpd', el).textContent = L?.ts ? 'Stand: vor ' + Math.max(0, Math.round((Date.now() - L.ts) / 1000)) + ' s' : '';

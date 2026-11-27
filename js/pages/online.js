@@ -42,7 +42,10 @@ export async function render(el, params = []) {
   leave();
   const sec = params[0] === 'players' ? 'players' : 'lobby';
   if (!(await gate(el))) return;
-  return sec === 'players' ? players(el) : lobby(el);
+  if (sec === 'players') return players(el);
+  // Lobby und „Wer ist online“ auf einer Seite
+  el.innerHTML = '<div class="combo"></div><div class="combo"></div>'; const [a, b] = el.children;
+  await lobby(a); return players(b);
 }
 
 async function lobby(el) {
@@ -78,7 +81,7 @@ async function lobby(el) {
       <div class="members">${l.members.map(m => who(m, m.me ? ' <span class="muted small">(du)</span>' : '')).join('')}</div></div>`; }).join('') : '<p class="muted small">Gerade keine. Leg eine an, andere sehen sie sofort.</p>';
   };
   draw(); off.push(bus.on('presence', draw)); tick = setInterval(draw, 1000);
-  $('#gGo', el).onclick = () => { const r = routes.find(x => x.id === $('#gRoute', el).value); PR.createLobby({ title: $('#gTitle', el).value.trim() || 'Gruppenfahrt', route: r.id, routeName: r.name, minutes: +$('#gMin', el).value, race: $('#gRace', el).value === '1', settings: { ...woSet($('#gWo', el).value), time: $('#gTime', el).value, weather: $('#gWeather', el).value, npcs: $('#gNpcs', el).checked, powerups: $('#gPups', el).checked, traffic: $('#gTraffic', el).checked } }); toast('Gruppenfahrt angelegt'); draw(); };
+  $('#gGo', el).onclick = async () => { const r = routes.find(x => x.id === $('#gRoute', el).value), kit = await (await import('../online/sharedroute.js')).kitOf(r.id); PR.createLobby({ kit, title: $('#gTitle', el).value.trim() || 'Gruppenfahrt', route: r.id, routeName: r.name, minutes: +$('#gMin', el).value, race: $('#gRace', el).value === '1', settings: { ...woSet($('#gWo', el).value), time: $('#gTime', el).value, weather: $('#gWeather', el).value, npcs: $('#gNpcs', el).checked, powerups: $('#gPups', el).checked, traffic: $('#gTraffic', el).checked } }); toast('Gruppenfahrt angelegt'); draw(); };
   $('#lbList', el).onclick = e => {
     const c = e.target.closest('[data-id]'); if (!c) return; const id = c.dataset.id;
     if (e.target.closest('[data-join]')) { PR.joinLobby(id); toast('Beigetreten, die Fahrt startet automatisch'); }
@@ -116,9 +119,14 @@ async function players(el) {
     const ps = [...PR.P.peers.values()], riding = ps.filter(p => p.where === 'ride'), byRoute = {};
     for (const p of riding) (byRoute[p.route] ||= { name: p.routeName, list: [] }).list.push(p);
     $('#plKpi', el).innerHTML = [['online (mit dir)', ps.length + 1], ['fahren gerade', riding.length + (PR.P.me.where === 'ride' ? 1 : 0)], ['in der Lobby', PR.lobbies().length + ' Fahrten']].map(([l, v]) => `<div class="card kpi"><b class="num">${v}</b><span class="small muted">${l}</span></div>`).join('');
-    $('#plList', el).innerHTML = [who({ name: O.online.profile?.display_name || 'Du', look: PR.onlineLook() }, ' <span class="muted small">(du)</span>'), ...[...PR.P.peers.entries()].map(([k, p]) => `<div class="row between">${who(p, `<small class="muted">${p.where === 'ride' ? '🚴 fährt ' + esc(p.routeName || '') : '☕ im Menü'}</small>`)}<span class="row">${p.where === 'ride' && p.route ? `<button class="btn xs" data-ride="${esc(p.route)}" data-sid="${esc(k)}" data-name="${esc(p.name)}">Mitfahren</button>` : ''}<button class="btn xs ghost" data-inv="${esc(k)}" data-name="${esc(p.name)}" title="${PR.inviteOffer() ? 'Zu deiner Gruppenfahrt bzw. Fahrt einladen' : 'Leg zuerst eine Gruppenfahrt an'}">📨 Einladen</button></span></div>`)].join('') || '<p class="muted small">Gerade niemand außer dir.</p>';
+    $('#plList', el).innerHTML = [who({ name: O.online.profile?.display_name || 'Du', look: PR.onlineLook() }, ' <span class="muted small">(du)</span>'), ...[...PR.P.peers.entries()].map(([k, p]) => `<div class="row between">${who(p, `<small class="muted">${p.where === 'ride' ? '🚴 fährt ' + esc(p.routeName || '') : '☕ im Menü'}</small>`)}<span class="row">${p.where === 'ride' && p.route ? `<button class="btn xs" data-ride="${esc(p.route)}" data-sid="${esc(k)}" data-name="${esc(p.name)}">Mitfahren</button>` : ''}<button class="btn xs ghost" data-inv="${esc(k)}" data-name="${esc(p.name)}" title="${PR.inviteOffer() ? 'Zu deiner Gruppenfahrt bzw. Fahrt einladen' : 'Leg zuerst eine Gruppenfahrt an'}">📨 Einladen</button>${p.uid ? `<button class="btn xs ghost" data-fr="${esc(p.uid)}" title="Freundschaftsanfrage senden">➕ Freund</button>` : ''}</span></div>`)].join('') || '<p class="muted small">Gerade niemand außer dir.</p>';
     $('#plRoutes', el).innerHTML = Object.entries(byRoute).map(([id, r]) => `<div class="row between"><span>${esc(r.name || id)}</span><span class="row"><b class="num">${r.list.length}</b><button class="btn xs" data-ride="${esc(id)}">Mitfahren</button></span></div>`).join('') || '<p class="muted">Gerade fährt niemand. Starte doch eine Gruppenfahrt in der Lobby.</p>';
   };
   draw(); off.push(bus.on('presence', draw));
-  el.onclick = e => { const iv = e.target.closest('[data-inv]'); if (iv) { sendInvite(iv.dataset.inv, iv.dataset.name); return; } const b = e.target.closest('[data-ride]'); if (!b) return; sel.routeId = b.dataset.ride; saveSel(); if (b.dataset.sid) sessionStorage.setItem('joinRider', JSON.stringify({ sid: b.dataset.sid, name: b.dataset.name })); location.hash = '#/ride'; };
+  el.onclick = async e => {
+    const fr = e.target.closest('[data-fr]');
+    if (fr) { fr.disabled = true; const { data, error } = await (await O.client()).rpc('friend_request', { p_to: fr.dataset.fr }); if (error) { fr.disabled = false; return toast(/function|schema cache/i.test(error.message) ? 'Freunde fehlen in der Datenbank: supabase/schema.sql erneut ausführen' : error.message); } fr.textContent = data === 'friend' ? '✓ Freunde' : '✓ Angefragt'; toast(data === 'friend' ? 'Ihr seid jetzt Freunde' : 'Freundschaftsanfrage gesendet'); return; }
+    const iv = e.target.closest('[data-inv]'); if (iv) { sendInvite(iv.dataset.inv, iv.dataset.name); return; } const b = e.target.closest('[data-ride]'); if (!b) return;
+    if (!(await (await import('../online/sharedroute.js')).prepareJoin(b.dataset.sid, b.dataset.ride, toast))) return;
+    sel.routeId = b.dataset.ride; saveSel(); if (b.dataset.sid) sessionStorage.setItem('joinRider', JSON.stringify({ sid: b.dataset.sid, name: b.dataset.name })); location.hash = '#/ride'; };
 }

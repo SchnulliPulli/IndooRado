@@ -1,17 +1,21 @@
 // Companion: Handy-Ansicht zum Planen, Nachsehen und Mitverfolgen einer laufenden Fahrt (über den NAS-Abgleich)
-import { $, esc, fmtKm, fmtDur, fmtT, fmtDate, toast } from '../util.js';
+import { $, esc, fmtKm, fmtDur, fmtT, fmtDate, toast, bus } from '../util.js';
 import { profile, sel, saveSel, progress, levelOf, loadState } from '../state.js';
 import { db } from '../db.js';
 import { totals, fitness } from '../analysis.js';
 import { planProgress, loadPlan } from '../plans.js';
 import { listWorkouts, stats as wStats, getWorkout } from '../workouts.js';
 import { listRoutes, quickStats } from '../routes.js';
-import { sync, syncReady, getLive, pushNow, loadSync, isConfigured } from '../sync.js';
+import { sync, syncReady, getLive, pushNow, loadSync, isConfigured, liveFresh } from '../sync.js';
+let liveMiss = 0;
 import { missionState } from '../game.js';
 import { titleOf } from '../game.js';
 
 let timer = null;
+let offSync = null;
 export async function render(el) {
+  // Kommt die Online-/Cloud-Verbindung erst nach dem Aufbau der Seite zustande: Seite einmal neu zeichnen
+  offSync?.(); const was = isConfigured(); offSync = bus.on('sync', () => { if (isConfigured() !== was && el.isConnected) { offSync?.(); offSync = null; render(el); } });
   if (!sync.cfg) await loadSync(); // beim direkten Öffnen ist der NAS-Zugang evtl. noch nicht geladen
   const rides = (await db.all('rides')).sort((a, b) => b.date.localeCompare(a.date));
   const t = totals(rides), f = fitness(rides, 60).at(-1) || { ctl: 0, atl: 0, tsb: 0 }, L = levelOf(progress.xp);
@@ -66,7 +70,8 @@ function syncText() { return sync.needLogin ? '🔑 Anmeldung beim Cloud-Speiche
 async function liveTick(el) {
   const box = $('#cLive', el); if (!box) { clearInterval(timer); return; }
   let L = null; try { L = await getLive(); } catch (e) { }
-  const fresh = L && L.state !== 'ended' && Date.now() - L.ts < 30000;
+  // Nicht flackern: erst nach zwei Fehlversuchen hintereinander ausblenden
+  let fresh = liveFresh(L); if (!fresh && L === null && !box.hidden && (liveMiss = (liveMiss || 0) + 1) < 2) return; if (fresh || L) liveMiss = 0;
   box.hidden = !fresh; if (!fresh) return;
   const pct = L.total ? Math.min(100, (L.pos / L.total) * 100) : 0, w = L.wo;
   box.innerHTML = `<div class="row between"><div><span class="livedot"></span> <a href="#/live"><b>Live</b> ›</a> <span class="small muted">· ${esc(L.route)}${L.state === 'paused' || L.state === 'auto' ? ' · Pause' : ''}</span></div><span class="small muted num">${fmtT(L.t)}</span></div>
@@ -75,4 +80,4 @@ async function liveTick(el) {
     ${w ? `<div class="livewo"><div class="row between small"><b>${esc(w.name)}</b><span class="num">${w.i ? `Intervall ${w.i}/${w.n} · noch ${fmtT(w.left)}` : 'fertig'}</span></div>${w.target ? `<div class="small">Ziel <b class="num">${w.target} W</b></div>` : ''}<div class="bar"><i style="width:${Math.min(100, w.done / w.total * 100).toFixed(1)}%"></i></div></div>` : ''}
     ${!L.loop ? `<div class="small muted">Strecke ${pct.toFixed(0)} % · noch ${fmtKm(Math.max(0, L.total - L.pos))} km</div><div class="bar thin"><i style="width:${pct.toFixed(1)}%"></i></div>` : ''}`;
 }
-export function leave() { clearInterval(timer); timer = null; }
+export function leave() { clearInterval(timer); timer = null; offSync?.(); offSync = null; }

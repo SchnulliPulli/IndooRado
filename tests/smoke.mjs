@@ -16,7 +16,8 @@ for (const vp of [{ width: 1280, height: 800, n: 'Desktop' }, { width: 390, heig
   for (const k of PAGES) {
     await p.goto(BASE + '#/' + k);
     // Warten, bis die Seite Inhalt hat (auf langsamen Test-Rechnern dauert das Laden länger)
-    await p.waitForFunction(() => (document.querySelector('#view')?.textContent || '').trim().length > 20 && !document.querySelector('#view .pageload'), null, { timeout: 10000 }).catch(() => { });
+    // (kein waitForFunction: das wertet Code als Text aus, was die Sicherheitsrichtlinie der App zu Recht verbietet)
+    for (let i = 0; i < 40; i++) { const ok = await p.evaluate(() => (document.querySelector('#view')?.textContent || '').trim().length > 20 && !document.querySelector('#view .pageload')).catch(() => false); if (ok) break; await p.waitForTimeout(250); }
     const txt = (await p.textContent('#view')).trim();
     check(txt.length > 20, `${vp.n}: Seite #/${k} zeigt Inhalt`);
   }
