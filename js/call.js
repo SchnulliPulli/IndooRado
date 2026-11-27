@@ -103,7 +103,9 @@ async function openWindow(room, peer, mode = 'av') {
   if (mode === 'audio') w.querySelector('.cwlocal').remove(); else w.querySelector('.cwlocal').srcObject = call.local;
   // Direkte Verbindung mit „perfekter Aushandlung“: der Höflichere (größere Nutzer-ID) gibt bei gleichzeitigen Angeboten nach
   const iceServers = await iceFor(room); if (call.room !== room) return;
-  const me = O.online.user.id, polite = me > (peer?.id || ''), pc = call.pc = new RTCPeerConnection({ iceServers });
+  // Test: localStorage.vvRelay = '1' erzwingt die Weiterleitung (prüft, ob TURN eingerichtet ist)
+  let relayOnly = false; try { relayOnly = localStorage.getItem('vvRelay') === '1' && iceServers.some(x => /^turns?:/.test([].concat(x.urls)[0] || '')); } catch (e) { }
+  const me = O.online.user.id, polite = me > (peer?.id || ''), pc = call.pc = new RTCPeerConnection({ iceServers, ...(relayOnly ? { iceTransportPolicy: 'relay' } : {}) });
   let makingOffer = false, ignoreOffer = false, started = false;
   const sb = await O.client(); await O.realtimeAuth().catch(() => { });
   const ch = call.ch = sb.channel('call:' + room, { config: { private: true, broadcast: { self: false } } });
@@ -122,8 +124,9 @@ async function openWindow(room, peer, mode = 'av') {
   pc.onconnectionstatechange = () => {
     const s = pc.connectionState;
     clearTimeout(restartT); if (s === 'disconnected') restartT = setTimeout(restart, 4000); if (s === 'failed') restart();
+    if (s === 'connected') { st('verbunden'); setTimeout(() => route(pc).then(r => { if (call.pc !== pc || !r) return; st(r.relay ? 'verbunden · über Weiterleitung' : 'verbunden · direkt'); if (r.relay) capVideo(pc, 300000); }), 600); }
     if (s === 'connected') sas(pc).then(c => { const e = w.querySelector('.cwsas'); if (c && e) { e.hidden = false; e.innerHTML = `🔒 Sicherheitscode <b class="num">${c}</b> <span class="small">– sieht ${esc(peer?.name || 'dein Freund')} dieselbe Zahl?</span>`; } });
-    st({ connecting: 'verbinde …', connected: 'verbunden', disconnected: 'Verbindung wackelt …', failed: 'keine direkte Verbindung', closed: 'beendet' }[s] || s);
+    if (s !== 'connected') st({ connecting: 'verbinde …', disconnected: 'Verbindung wackelt …', failed: 'keine direkte Verbindung', closed: 'beendet' }[s] || s);
     if (s === 'failed') toast('Keine Verbindung möglich (strenges Netzwerk). Tipp: ↗ öffnet den Anruf über Jitsi in einem neuen Fenster.', 7000);
   };
   ch.on('broadcast', { event: 'sig' }, async ({ payload: m }) => {
@@ -141,6 +144,19 @@ async function openWindow(room, peer, mode = 'av') {
   });
   ch.subscribe(stt => { if (stt === 'SUBSCRIBED') send({ t: 'hello' }); else if (stt === 'CHANNEL_ERROR' || stt === 'TIMED_OUT') st('Signal gestört – Datenbankschema aktuell?'); });
 }
+// Läuft die Verbindung direkt oder über den Weiterleitungsserver (TURN)?
+async function route(pc) {
+  try {
+    const stats = await pc.getStats(); let pair = null;
+    stats.forEach(r => { if (r.type === 'transport' && r.selectedCandidatePairId) pair = stats.get(r.selectedCandidatePairId); });
+    if (!pair) stats.forEach(r => { if (r.type === 'candidate-pair' && r.nominated && r.state === 'succeeded') pair ||= r; });
+    if (!pair) return null;
+    const l = stats.get(pair.localCandidateId), rm = stats.get(pair.remoteCandidateId);
+    return { relay: l?.candidateType === 'relay' || rm?.candidateType === 'relay' };
+  } catch (e) { return null; }
+}
+// Über die Weiterleitung weniger Datenrate (spart TURN-Kontingent)
+function capVideo(pc, bps) { for (const snd of pc.getSenders()) if (snd.track?.kind === 'video') { try { const pr = snd.getParameters(); pr.encodings = pr.encodings?.length ? pr.encodings : [{}]; pr.encodings[0].maxBitrate = bps; snd.setParameters(pr).catch(() => { }); } catch (e) { } } }
 // Sicherheitscode aus den Schlüssel-Fingerabdrücken beider Geräte (DTLS): gleich auf beiden Seiten, wenn niemand dazwischen sitzt
 async function sas(pc) {
   try {
