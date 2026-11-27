@@ -152,11 +152,13 @@ async function otherRide() {
 }
 async function blocked(el, L) {
   const tok = window.__routeTok;
-  el.innerHTML = `<section class="pagehead"><h1>Fahrt läuft schon</h1></section>
-    <section class="card form"><h2>🚴 Auf „${esc(L.devName || 'einem anderen Gerät')}“ läuft gerade eine Fahrt mit deinem Konto</h2>
-      <p class="muted">${esc(L.route || '')} · ${fmtT(L.t || 0)} gefahren. Pro Konto kann immer nur eine Fahrt gleichzeitig laufen, damit sich Fahrten und Fortschritt nicht in die Quere kommen.</p>
-      <div class="row"><a class="btn pri" href="#/live">📊 Live verfolgen</a><a class="btn" href="#/">Zur Startseite</a></div>
-      <p class="small muted" id="blkInfo">Sobald die andere Fahrt beendet ist, kannst du hier starten.</p></section>`;
+  el.innerHTML = `<div class="blkwrap"><section class="card form blkcard">
+      <div class="blkico">🚴</div><h2>Auf „${esc(L.devName || 'einem anderen Gerät')}“ läuft gerade eine Fahrt</h2>
+      <p class="muted">${esc(L.route || '')}${L.route ? ' · ' : ''}${fmtT(L.t || 0)} gefahren. Online kann pro Konto nur eine Fahrt gleichzeitig laufen, damit sich Live-Anzeige, Lobby und Fortschritt nicht in die Quere kommen.</p>
+      <div class="blkbtns"><a class="btn pri" href="#/live">📊 Live verfolgen</a><button class="btn" id="blkOff">📴 Hier offline fahren</button><a class="btn ghost" href="#/">Zur Startseite</a></div>
+      <p class="small muted">Offline fahren: Die Fahrt läuft nur auf diesem Gerät – ohne Live-Anzeige, Lobby und Online-Status. Gespeichert wird sie wie gewohnt und danach abgeglichen.</p>
+      <p class="small muted" id="blkInfo">Sobald die andere Fahrt beendet ist, kannst du hier normal starten.</p></section></div>`;
+  el.querySelector('#blkOff').onclick = () => { sessionStorage.setItem('offlineRide', '1'); window.__route?.(); };
   // Nachsehen, ob die andere Fahrt inzwischen beendet ist
   const iv = setInterval(async () => {
     if (tok !== window.__routeTok) return clearInterval(iv);
@@ -164,7 +166,8 @@ async function blocked(el, L) {
   }, 5000);
 }
 async function start(el) {
-  { const L = await otherRide(); if (L) return blocked(el, L); }
+  const offline = sessionStorage.getItem('offlineRide') === '1'; sessionStorage.removeItem('offlineRide');
+  if (!offline) { const L = await otherRide(); if (L) return blocked(el, L); }
   const route = await getRoute(sel.routeId);
   const wo = await getWorkout(sel.workoutId);
   const { World } = await import('../world.js');
@@ -226,7 +229,8 @@ async function start(el) {
   if (grp) { $('#startCard', el).innerHTML = `<b>👥 ${esc(grp.title)}</b><span>Gruppenfahrt: alle starten jetzt mit denselben Einstellungen${grp.isHost ? ' (du bist Gastgeber und bestimmst das Wetter)' : ''}.${S.wo ? ` Gemeinsames Training: <b>${esc(S.wo.name)}</b>, Ziele nach deiner FTP.` : ''} Tritt in die Pedale!</span>`; }
   // Nach einem Neuladen läuft die Anmeldung evtl. noch: kurz darauf warten, dann live beitreten
   const onlineReady = online.ready ? Promise.resolve() : new Promise(r => { const off = bus.on('online', () => { off(); r(); }); setTimeout(() => { off(); r(); }, 20000); });
-  onlineReady.then(() => S?.alive && loggedIn() ? import('../online/presence.js') : Promise.reject(0)).then(m => { window.__presence = m; }).then(() => import('../online/live.js')).then(({ joinRoute }) => {
+  if (offline) { S.offline = true; setTimeout(() => S?.alive && flash('📴 Offline-Fahrt: ohne Live-Anzeige und Lobby', 3000), 1500); } // Offline-Fahrt: keine Lobby, kein Live-Kanal, keine Live-Anzeige
+  onlineReady.then(() => S?.alive && !S.offline && loggedIn() ? import('../online/presence.js') : Promise.reject(0)).then(m => { window.__presence = m; }).then(() => import('../online/live.js')).then(({ joinRoute }) => {
     if (!S?.alive) return;
     const PRm = window.__presence; PRm?.setStatus({ where: 'ride', route: route.id, routeName: route.name });
     import('../online/sharedroute.js').then(m => m.kitOf(route.id)).then(kit => S?.alive && PRm?.setStatus({ kit })).catch(() => { }); // eigene Baukasten-Strecke zum Mitfahren teilen
@@ -405,12 +409,13 @@ function bindUi() {
         L.w.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerId: L.id, pointerType: L.type, clientX: L.x, clientY: L.y, isPrimary: true, button: 0, buttons: 1 }));
         const done = () => { removeEventListener('pointerup', done, true); removeEventListener('pointercancel', done, true);
           setTimeout(() => { L.w.classList.remove('lifted'); rw.classList.remove('lpdrag'); if (rw.classList.contains('hudedit')) { editMode(rw, false); layout(); } }, 250); };
-        addEventListener('pointerup', done, true); addEventListener('pointercancel', done, true);
-      }, 480);
+        addEventListener('pointerup', done, true); addEventListener('pointercancel', done, true); // Browser darf nicht mehr übernehmen (touch-action: none), daher kommt pointercancel nur bei echtem Abbruch
+      }, e.pointerType === 'mouse' ? 600 : 800); // bewusst lang halten, damit normales Antippen nichts auslöst
     }, true);
     el.addEventListener('pointermove', e => { if (lp && e.pointerId === lp.id && Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 10) cancel(); }, true);
     for (const ev of ['pointerup', 'pointercancel']) el.addEventListener(ev, e => { if (lp && e.pointerId === lp.id) cancel(); }, true);
     el.addEventListener('contextmenu', e => { if (widgetAt(e.clientX, e.clientY)) e.preventDefault(); }); // kein Kontextmenü beim langen Drücken
+    el.addEventListener('touchmove', e => { if (lp || rw.classList.contains('lpdrag')) e.preventDefault(); }, { passive: false });
   }
   $('#rw', el).addEventListener('hudresize', () => { S.miniCache = null; hud(); });
   $('#tMenu', el).onclick = () => { if (!S.samples.length) { leave(); location.hash = '#/'; return; } location.hash = '#/'; };
@@ -691,6 +696,7 @@ function note(txt) { S.adapt.note = txt; S.adapt.noteT = performance.now(); if (
 /* ---------- Simulation (10 Hz, auch im Hintergrund) ---------- */
 // Live-Fahrt für die Companion-Ansicht (läuft im Simulationstakt, also auch bei verdecktem Fenster)
 function liveShare() {
+  if (S?.offline) return;
   if (performance.now() - (S.liveT || 0) < 5000) return;
   S.liveT = performance.now();
   const me = { dev: syncState.device?.id, devName: syncState.device?.name, tab: TAB };

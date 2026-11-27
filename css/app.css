@@ -1081,3 +1081,17 @@ html.calm .view.swl, html.calm .view.swr { animation: none; }
 /* Farbwähler: kompaktes Farbfeld statt einer breiten Leiste */
 input[type=color].inp { width: 56px; min-width: 56px; max-width: 56px; height: 40px; padding: 3px; border-radius: 10px; cursor: pointer; flex: none; }
 label.f:has(> input[type=color].inp) { align-items: flex-start; }
+/* Fahrt: kein Scrollen/Zoomen durch den Browser auf der Fahrtfläche (Gesten gehören der App, z. B. Anzeigen verschieben) */
+body[data-page=ride] #rw { touch-action: none; }
+body[data-page=ride] #rw #bigMap, body[data-page=ride] #rw .tbpop, body[data-page=ride] #rw #envPanel { touch-action: pan-y; }
+/* Hinweis „Fahrt läuft schon“ (im Vollbild der Fahrt) */
+.blkwrap { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; box-sizing: border-box; background: var(--bg); }
+.blkcard { max-width: 540px; width: 100%; text-align: center; gap: 12px; }
+.blkcard .blkico { font-size: 44px; } .blkcard h2 { margin: 0; }
+.blkcard .blkbtns { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.callwin .cwsas { padding: 4px 10px; font-size: 12px; color: #d8f5e3; background: rgba(46, 160, 90, .25); border-top: 1px solid rgba(255,255,255,.08); }
+.callwin .cwsas b { letter-spacing: .08em; font-size: 13px; }
+/* Leere Listen: Platzhalter */
+.empty { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 6px; padding: 28px 16px; color: var(--soft); }
+.empty .emi { font-size: 40px; line-height: 1; opacity: .85; } .empty b { color: var(--ink); font-size: 1.05rem; } .empty span { font-size: 13px; max-width: 320px; }
+.chat .empty { margin: auto; }

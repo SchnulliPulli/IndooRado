@@ -37,7 +37,10 @@ async function pickMode(title) {
 export async function startCall(friend) {
   if (!(await allowed())) return;
   const mode = await pickMode(`${friend.display_name || friend.name} anrufen`); if (!mode) return;
-  const sb = await O.client(), room = 'IndooRado-' + rand(24);
+  const sb = await O.client();
+  // Raum vom Server: nur unter Freunden, kryptografisch zufällig, Kanal danach nur für euch beide
+  const cr = await sb.rpc('call_create', { p_friend: friend.id }); if (cr.error) return toast('Anruf nicht möglich: ' + (/function|schema cache/i.test(cr.error.message) ? 'supabase/schema.sql erneut ausführen' : cr.error.message));
+  const room = cr.data;
   const { error } = await sb.from('chat_messages').insert({ recipient: friend.id, body: `[[call:${room}]]` });
   if (error) return toast('Anruf nicht möglich: ' + (/row-level/i.test(error.message) ? 'ihr seid nicht (mehr) befreundet oder zu viele Nachrichten' : error.message));
   const PR = await import('./online/presence.js'); const n = await PR.callSignal(friend.id, 'call');
@@ -62,6 +65,7 @@ async function openWindow(room, peer, mode = 'av') {
   const w = document.createElement('div'); w.className = 'callwin'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-label', 'Videoanruf');
   Object.assign(w.style, { width: (g.w || 340) + 'px', height: (g.h || 260) + 'px', left: (g.x ?? Math.max(8, innerWidth - (g.w || 340) - 16)) + 'px', top: (g.y ?? 80) + 'px' });
   w.innerHTML = `<div class="cwhead"><span class="cwt">📹 ${esc(peer?.name || 'Anruf')} <small class="cwst">verbinde …</small></span><span class="row"><button class="btn xs ghost" data-cw="lobby" title="Zur Gruppenfahrt einladen">👥</button><button class="btn xs ghost" data-cw="jitsi" title="Klappt die direkte Verbindung nicht: über Jitsi in neuem Fenster">↗</button><button class="btn xs danger" data-cw="end" title="Auflegen">✕</button></span></div>
+    <div class="cwsas" hidden title="Sicherheitscode: Seht ihr beide dieselbe Zahl, ist die Verbindung Ende-zu-Ende verschlüsselt und niemand sitzt dazwischen – auch kein Server."></div>
     <div class="cwbody"><video class="cwremote" autoplay playsinline></video><video class="cwlocal" autoplay playsinline muted></video><div class="cwwait">Warte auf ${esc(peer?.name || 'deinen Freund')} …</div>
     <div class="cwctl">${mode !== 'video' ? '<button class="btn xs" data-cw="mic" title="Mikrofon an/aus">🎙️</button>' : ''}${mode !== 'audio' ? '<button class="btn xs" data-cw="cam" title="Kamera an/aus">📷</button>' : ''}</div></div>`;
   document.body.appendChild(w); call.win = w;
@@ -100,7 +104,9 @@ async function openWindow(room, peer, mode = 'av') {
     if (hasV) wait?.remove(); else if (wait) wait.innerHTML = `🎙️ ${esc(peer?.name || 'Dein Freund')} ist nur mit Ton dabei`; else { const d = document.createElement('div'); d.className = 'cwwait'; d.innerHTML = `🎙️ ${esc(peer?.name || 'Dein Freund')} ist nur mit Ton dabei`; w.querySelector('.cwbody').prepend(d); } };
   pc.ontrack = ({ streams, track }) => { const st = streams[0] || new MediaStream([track]); showRemote(st); st.onaddtrack = () => showRemote(st); };
   pc.onconnectionstatechange = () => {
-    const s = pc.connectionState; st({ connecting: 'verbinde …', connected: 'verbunden', disconnected: 'Verbindung wackelt …', failed: 'keine direkte Verbindung', closed: 'beendet' }[s] || s);
+    const s = pc.connectionState;
+    if (s === 'connected') sas(pc).then(c => { const e = w.querySelector('.cwsas'); if (c && e) { e.hidden = false; e.innerHTML = `🔒 Sicherheitscode <b class="num">${c}</b> <span class="small">– sieht ${esc(peer?.name || 'dein Freund')} dieselbe Zahl?</span>`; } });
+    st({ connecting: 'verbinde …', connected: 'verbunden', disconnected: 'Verbindung wackelt …', failed: 'keine direkte Verbindung', closed: 'beendet' }[s] || s);
     if (s === 'failed') toast('Keine direkte Verbindung möglich (strenges Netzwerk). Tipp: ↗ öffnet den Anruf über Jitsi in einem neuen Fenster.', 7000);
   };
   ch.on('broadcast', { event: 'sig' }, async ({ payload: m }) => {
@@ -117,6 +123,15 @@ async function openWindow(room, peer, mode = 'av') {
     } catch (e) { console.warn('Anruf-Signal', e); }
   });
   ch.subscribe(stt => { if (stt === 'SUBSCRIBED') send({ t: 'hello' }); else if (stt === 'CHANNEL_ERROR' || stt === 'TIMED_OUT') st('Signal gestört – supabase/schema.sql aktuell?'); });
+}
+// Sicherheitscode aus den Schlüssel-Fingerabdrücken beider Geräte (DTLS): gleich auf beiden Seiten, wenn niemand dazwischen sitzt
+async function sas(pc) {
+  try {
+    const fp = sdp => (String(sdp).match(/a=fingerprint:sha-256 ([0-9A-F:]+)/i) || [])[1]?.toUpperCase();
+    const a = fp(pc.localDescription?.sdp), b = fp(pc.remoteDescription?.sdp); if (!a || !b) return null;
+    const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode([a, b].sort().join('|'))));
+    const n = ((h[0] << 16) | (h[1] << 8) | h[2]) % 1000000; return String(n).padStart(6, '0').replace(/(\d{3})(\d{3})/, '$1 $2');
+  } catch (e) { return null; }
 }
 // Während des Anrufs zur Gruppenfahrt einladen (legt bei Bedarf eine an: gewählte Strecke, Start in 3 Minuten)
 async function inviteToLobby() {
