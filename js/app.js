@@ -95,6 +95,8 @@ function nav() {
     } else { lb.className = 'btn sm loginbtn'; lb.title = 'Anmelden oder registrieren'; lb.href = '#/account'; lb.removeAttribute('role'); lb.innerHTML = ICON.profile + '<span>Anmelden</span>'; }
   };
   bus.on('online', loginUpd); bus.on('profile', loginUpd); window.__loginUpd = loginUpd;
+  // Nachrichten: Knopf in der Kopfleiste (und auf der Startseite) mit Anzahl Neuer, öffnet das Nachrichtenfenster
+  const mc = document.createElement('button'); mc.className = 'chip msgchip'; mc.dataset.inbox = ''; mc.hidden = true; mc.title = 'Nachrichten'; mc.setAttribute('aria-label', 'Nachrichten'); lb.before(mc);
   // Wie viele andere sind online? (nur angemeldet)
   const oc = document.createElement('a'); oc.className = 'chip onlinechip'; oc.href = '#/players'; oc.hidden = true; lb.before(oc);
   bus.on('presence', async () => { const PR = await import('./online/presence.js'); const n = PR.P.peers.size; oc.hidden = !PR.P.ready; oc.innerHTML = `<i class="odot"></i><b>${n}</b>`; oc.title = n === 1 ? '1 anderer Spieler online' : n + ' andere Spieler online'; });
@@ -137,6 +139,22 @@ function nav() {
   addEventListener('hashchange', close);
 }
 window.__route = () => route();
+// Anzahl neuer Nachrichten/Anfragen in alle Nachrichten-Knöpfe schreiben
+let msgN = null, msgT = 0;
+async function msgUpd(force = false) {
+  if (!force && msgN != null && Date.now() - msgT < 8000) return paint(); msgT = Date.now();
+  try { msgN = await (await import('./inbox.js')).newCount(); } catch (e) { msgN = null; } paint();
+}
+function paint() {
+  for (const b of document.querySelectorAll('[data-inbox]')) {
+    b.hidden = msgN == null; b.classList.toggle('has', msgN > 0);
+    if (b.classList.contains('msgchip')) b.innerHTML = `💬${msgN > 0 ? `<b class="mbadge">${msgN > 9 ? '9+' : msgN}</b>` : ''}`;
+    else b.innerHTML = `💬 Nachrichten${msgN > 0 ? ` <b class="mbadge">${msgN} neu</b>` : ''}`;
+  }
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-inbox],[data-inbox-open]'); if (b) import('./inbox.js').then(m => m.openInbox()); });
+setInterval(() => document.hidden || msgUpd(true), 30e3);
+bus.on('online', () => setTimeout(() => msgUpd(true), 500)); bus.on('inbox', () => msgUpd(true));
 async function route() {
   const raw = location.hash.replace(/^#\/?/, '');
   const [path, query] = raw.split('?');
@@ -166,6 +184,7 @@ async function route() {
     el.innerHTML = '';
     await mod.render(el, params.map(decodeURIComponent), query);
     if (jump) requestAnimationFrame(() => el.children[jump]?.scrollIntoView({ block: 'start' }));
+    msgUpd();
     sessionStorage.removeItem('vvReloaded');
     if (k === 'lobby') announce(el);
     if (k === '' || k === 'companion') newsBar(el);
@@ -217,8 +236,8 @@ async function newsBar(el) {
     const S = seen(), out = [];
     for (const a of anns) if (!S.includes(a.id)) { const [ic, k] = LV[a.level] || LV.info; out.push({ key: 'a' + a.id, ...slide('nb-ann nb-lv-' + (LV[a.level] ? a.level : 'info'), ic, k, esc(a.title), esc(a.body), `<button class="nbx" data-hide="${a.id}" aria-label="Ausblenden">✕</button>`) }); }
     // Freunde: neue Anfragen und ungelesene Nachrichten
-    if (soc.req) out.push({ key: 'fr' + soc.req, ...slide('nb-event', '👥', 'Freunde', soc.req === 1 ? 'Neue Freundschaftsanfrage' : soc.req + ' neue Freundschaftsanfragen', '', '<a class="btn sm pri" href="#/friends">Ansehen</a>') });
-    if (soc.unread) out.push({ key: 'msg' + soc.unread, ...slide('nb-event', '💬', 'Chat', soc.unread === 1 ? '1 ungelesene Nachricht' : soc.unread + ' ungelesene Nachrichten', '', '<a class="btn sm pri" href="#/friends">Lesen</a>') });
+    if (soc.req) out.push({ key: 'fr' + soc.req, ...slide('nb-event', '👥', 'Freunde', soc.req === 1 ? 'Neue Freundschaftsanfrage' : soc.req + ' neue Freundschaftsanfragen', '', '<button class="btn sm pri" data-inbox-open>Ansehen</button>') });
+    if (soc.unread) out.push({ key: 'msg' + soc.unread, ...slide('nb-event', '💬', 'Chat', soc.unread === 1 ? '1 ungelesene Nachricht' : soc.unread + ' ungelesene Nachrichten', '', '<button class="btn sm pri" data-inbox-open>Lesen</button>') });
     // Geplante Events der nächsten 24 Stunden (angemeldete zuerst)
     for (const e of evs) { const ms = new Date(e.starts_at) - Date.now(); if (ms > 864e5 || ms < -e.duration_min * 60e3) continue; const now = ms < 10 * 60e3;
       out.push({ key: 'e' + e.id, ...slide('nb-event', '📅', `Event${e.me ? ' · du bist angemeldet' : ''} · ${now ? 'läuft jetzt' : min(ms).replace('startet ', '')}`, esc(e.title), `👥 ${e.riders} angemeldet`, `<a class="btn sm ${now ? 'pri' : ''}" href="#/events">${now ? 'Beitreten' : 'Ansehen'}</a>`) }); }

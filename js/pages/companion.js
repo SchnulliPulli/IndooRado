@@ -27,7 +27,7 @@ export async function render(el) {
   el.innerHTML = `
   <section class="comp">
     <div class="comphead"><div><div class="small muted">Übersicht</div><h1>Hallo ${esc(profile.name)}</h1><div class="small muted">Level ${L.lv} · ${titleOf(L.lv)} · FTP ${profile.ftp} W</div></div>
-      <button class="btn sm" id="cRefresh" ${nas ? '' : 'disabled'}>↻ Abgleichen</button></div>
+      <button class="btn sm msgbtn" data-inbox hidden>💬</button><button class="btn sm" id="cRefresh" ${nas ? '' : 'disabled'}>↻ Abgleichen</button></div>
     <div class="small ${nas || OC.hasStoredSession() ? 'muted' : 'warn'}" id="cSync">${nas ? syncText() : OC.hasStoredSession() ? '🔄 Online-Konto wird verbunden …' : 'Ohne Cloud-Abgleich siehst du hier nur die Daten dieses Geräts. Unter Einstellungen › Verbindungen einen Cloud-Speicher verbinden (NAS, OneDrive, Google Drive, Dropbox), dann zeigt das Handy deine Fahrten, Pläne und die laufende Fahrt vom PC.'}</div>
 
     <div class="card live" id="cLive" hidden></div>
@@ -50,7 +50,6 @@ export async function render(el) {
       ${rides.slice(0, 12).map(r => `<a class="compride" href="#/summary/${esc(r.id)}" data-rid="${esc(r.id)}"><div><b>${esc(r.title)}</b><div class="small muted">${fmtDate(r.date, { dateStyle: 'medium', timeStyle: 'short' })}${r.imported ? ' · übernommen' : ''}</div></div><div class="num compride-s"><span>${fmtKm(r.sum.dist)} km</span><span>${fmtDur(r.sum.dur)}</span><span>${r.sum.avgP} W</span></div><button class="rdel" data-delride="${esc(r.id)}" title="Fahrt löschen" aria-label="Fahrt löschen">🗑</button></a>`).join('') || '<p class="muted">Noch keine Fahrten.</p>'}
     </div>
   </section>`;
-  import('../inbox.js').then(m => m.mountInbox(el.querySelector('#cLive'))).catch(() => { }); // Nachrichten (nur angemeldet)
 
   el.onchange = e => {
     if (e.target.id === 'cWo') { sel.workoutId = e.target.value || null; saveSel(); toast(nas ? 'Vorgemerkt, wird zum PC übertragen' : 'Vorgemerkt'); render(el); }

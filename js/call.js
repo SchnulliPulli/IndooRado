@@ -24,18 +24,28 @@ async function allowed() {
     <p>Gespeichert wird nur die Einladung als private Chat-Nachricht zwischen euch beiden (Raumname, Zeitpunkt), gelöscht nach 12 Monaten. Kamera und Mikrofon fragt dein Browser jeweils ab.</p>
     <p class="small muted">Bitte nur Freunde anrufen, die das möchten, und keine Gespräche ohne Einverständnis aufnehmen.</p>` });
 }
+// Was teile ich? Bild und Ton, nur Ton oder nur Bild (der Browser fragt nur das jeweils Nötige ab)
+const MODES = { av: '📹 Bild und Ton', audio: '🎙️ Nur Ton', video: '📷 Nur Bild' };
+async function pickMode(title) {
+  const last = MODES[profile.callMode] ? profile.callMode : 'av';
+  const order = [last, ...Object.keys(MODES).filter(k => k !== last)];
+  const v = await dialog({ title, html: '<p class="muted small">Was möchtest du teilen? Du kannst Mikrofon und Kamera im Gespräch zusätzlich stummschalten.</p>', buttons: [{ label: 'Abbrechen', value: null }, ...order.slice().reverse().map(k => ({ label: MODES[k], value: k, cls: k === last ? 'pri' : '' }))], cls: 'modedlg' });
+  if (v) { profile.callMode = v; try { (await import('./state.js')).saveProfile(); } catch (e) { } }
+  return v;
+}
 // Anrufen: Raum anlegen, Einladung als private Nachricht, Klingeln an alle Geräte des Freundes
 export async function startCall(friend) {
   if (!(await allowed())) return;
+  const mode = await pickMode(`${friend.display_name || friend.name} anrufen`); if (!mode) return;
   const sb = await O.client(), room = 'IndooRado-' + rand(24);
   const { error } = await sb.from('chat_messages').insert({ recipient: friend.id, body: `[[call:${room}]]` });
   if (error) return toast('Anruf nicht möglich: ' + (/row-level/i.test(error.message) ? 'ihr seid nicht (mehr) befreundet oder zu viele Nachrichten' : error.message));
   const PR = await import('./online/presence.js'); const n = await PR.callSignal(friend.id, 'call');
-  openWindow(room, { id: friend.id, name: friend.display_name || friend.name });
+  openWindow(room, { id: friend.id, name: friend.display_name || friend.name }, mode);
   toast(n ? `📞 Es klingelt bei ${friend.display_name || friend.name} …` : `${friend.display_name || friend.name} ist gerade nicht online – die Einladung liegt im Chat`, 4000);
 }
 // Beitreten (aus dem Chat oder beim Klingeln)
-export async function joinCall(room, peer) { if (!/^IndooRado-[A-Za-z0-9]{24}$/.test(room) || !(await allowed())) return; openWindow(room, peer); }
+export async function joinCall(room, peer) { if (!/^IndooRado-[A-Za-z0-9]{24}$/.test(room) || !(await allowed())) return; const mode = await pickMode(`Anruf von ${peer?.name || 'Freund'} annehmen`); if (mode) openWindow(room, peer, mode); }
 export async function hangUp(notify = true) {
   const p = call.peer;
   try { call.ch?.send({ type: 'broadcast', event: 'sig', payload: { t: 'bye', from: O.online.user?.id } }); } catch (e) { }
@@ -46,14 +56,14 @@ export async function hangUp(notify = true) {
 }
 
 // Schwebendes, verschieb- und größenveränderbares Anruffenster (auch über der Fahrt) mit direkter WebRTC-Verbindung
-async function openWindow(room, peer) {
-  await hangUp(false); call.room = room; call.peer = peer;
+async function openWindow(room, peer, mode = 'av') {
+  await hangUp(false); call.room = room; call.peer = peer; call.mode = mode;
   let g = {}; try { g = JSON.parse(localStorage.getItem('vvCallWin') || '{}'); } catch (e) { }
   const w = document.createElement('div'); w.className = 'callwin'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-label', 'Videoanruf');
   Object.assign(w.style, { width: (g.w || 340) + 'px', height: (g.h || 260) + 'px', left: (g.x ?? Math.max(8, innerWidth - (g.w || 340) - 16)) + 'px', top: (g.y ?? 80) + 'px' });
   w.innerHTML = `<div class="cwhead"><span class="cwt">📹 ${esc(peer?.name || 'Anruf')} <small class="cwst">verbinde …</small></span><span class="row"><button class="btn xs ghost" data-cw="lobby" title="Zur Gruppenfahrt einladen">👥</button><button class="btn xs ghost" data-cw="jitsi" title="Klappt die direkte Verbindung nicht: über Jitsi in neuem Fenster">↗</button><button class="btn xs danger" data-cw="end" title="Auflegen">✕</button></span></div>
     <div class="cwbody"><video class="cwremote" autoplay playsinline></video><video class="cwlocal" autoplay playsinline muted></video><div class="cwwait">Warte auf ${esc(peer?.name || 'deinen Freund')} …</div>
-    <div class="cwctl"><button class="btn xs" data-cw="mic" title="Mikrofon an/aus">🎙️</button><button class="btn xs" data-cw="cam" title="Kamera an/aus">📷</button></div></div>`;
+    <div class="cwctl">${mode !== 'video' ? '<button class="btn xs" data-cw="mic" title="Mikrofon an/aus">🎙️</button>' : ''}${mode !== 'audio' ? '<button class="btn xs" data-cw="cam" title="Kamera an/aus">📷</button>' : ''}</div></div>`;
   document.body.appendChild(w); call.win = w;
   const st = t => { const e = w.querySelector('.cwst'); if (e) e.textContent = t; };
   // Verschieben am Kopf, Größe über die Ecke (CSS resize); Lage merken
@@ -71,9 +81,11 @@ async function openWindow(room, peer) {
     if (b.dataset.cw === 'mic' || b.dataset.cw === 'cam') { const tr = call.local?.getTracks().filter(t => t.kind === (b.dataset.cw === 'mic' ? 'audio' : 'video')) || []; tr.forEach(t => t.enabled = !t.enabled); b.classList.toggle('off', tr.length && !tr[0].enabled); }
   });
   // Kamera und Mikrofon
-  try { call.local = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 24 } } }); }
-  catch (e) { try { call.local = await navigator.mediaDevices.getUserMedia({ audio: true }); toast('Ohne Kamera – nur Ton'); } catch (e2) { toast('Kein Zugriff auf Kamera/Mikrofon: ' + e2.message, 5000); return hangUp(false); } }
-  if (call.room !== room) return; w.querySelector('.cwlocal').srcObject = call.local;
+  const want = { audio: mode !== 'video' ? { echoCancellation: true, noiseSuppression: true } : false, video: mode !== 'audio' ? { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 24 } } : false };
+  try { call.local = await navigator.mediaDevices.getUserMedia(want); }
+  catch (e) { toast(`Kein Zugriff auf ${mode === 'audio' ? 'das Mikrofon' : mode === 'video' ? 'die Kamera' : 'Kamera/Mikrofon'}: ${e.message}`, 5000); return hangUp(false); }
+  if (call.room !== room) return;
+  if (mode === 'audio') w.querySelector('.cwlocal').remove(); else w.querySelector('.cwlocal').srcObject = call.local;
   // Direkte Verbindung mit „perfekter Aushandlung“: der Höflichere (größere Nutzer-ID) gibt bei gleichzeitigen Angeboten nach
   const me = O.online.user.id, polite = me > (peer?.id || ''), pc = call.pc = new RTCPeerConnection({ iceServers: ICE });
   let makingOffer = false, ignoreOffer = false, started = false;
@@ -83,7 +95,10 @@ async function openWindow(room, peer) {
   const start = () => { if (started) return; started = true; for (const t of call.local.getTracks()) pc.addTrack(t, call.local); };
   pc.onnegotiationneeded = async () => { try { makingOffer = true; await pc.setLocalDescription(); send({ desc: pc.localDescription.toJSON() }); } catch (e) { console.warn('Anruf', e); } finally { makingOffer = false; } };
   pc.onicecandidate = ({ candidate }) => { if (candidate) send({ cand: candidate.toJSON() }); };
-  pc.ontrack = ({ streams }) => { const v = w.querySelector('.cwremote'); if (v.srcObject !== streams[0]) v.srcObject = streams[0]; w.querySelector('.cwwait')?.remove(); };
+  // Gegenüber ohne Kamera: Hinweis statt schwarzem Bild
+  const showRemote = st => { const v = w.querySelector('.cwremote'), hasV = st.getVideoTracks().length > 0, wait = w.querySelector('.cwwait'); if (v.srcObject !== st) v.srcObject = st; v.hidden = !hasV;
+    if (hasV) wait?.remove(); else if (wait) wait.innerHTML = `🎙️ ${esc(peer?.name || 'Dein Freund')} ist nur mit Ton dabei`; else { const d = document.createElement('div'); d.className = 'cwwait'; d.innerHTML = `🎙️ ${esc(peer?.name || 'Dein Freund')} ist nur mit Ton dabei`; w.querySelector('.cwbody').prepend(d); } };
+  pc.ontrack = ({ streams, track }) => { const st = streams[0] || new MediaStream([track]); showRemote(st); st.onaddtrack = () => showRemote(st); };
   pc.onconnectionstatechange = () => {
     const s = pc.connectionState; st({ connecting: 'verbinde …', connected: 'verbunden', disconnected: 'Verbindung wackelt …', failed: 'keine direkte Verbindung', closed: 'beendet' }[s] || s);
     if (s === 'failed') toast('Keine direkte Verbindung möglich (strenges Netzwerk). Tipp: ↗ öffnet den Anruf über Jitsi in einem neuen Fenster.', 7000);

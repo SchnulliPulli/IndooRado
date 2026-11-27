@@ -1055,3 +1055,10 @@ html.calm .view.swl, html.calm .view.swr { animation: none; }
 .ibrow:hover { background: color-mix(in srgb, currentColor 5%, transparent); }
 .ibrow.new { background: color-mix(in srgb, var(--acc) 12%, transparent); } .ibrow .ibt { min-width: 0; } .ibrow .ibt .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ibrow .badge { background: var(--acc); color: #fff; border-radius: 99px; padding: 2px 8px; font-size: 12px; font-weight: 800; }
+/* Nachrichten-Knopf */
+.msgchip { position: relative; font-size: 17px; width: 36px; height: 36px; border: 0; cursor: pointer; }
+.msgchip .mbadge { position: absolute; top: -4px; right: -6px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 99px; background: var(--acc); color: #fff; font: 800 11px/18px inherit; text-align: center; }
+.msgbtn .mbadge { background: var(--acc); color: #fff; border-radius: 99px; padding: 1px 7px; font-size: 12px; margin-left: 4px; }
+.msgbtn.has { border-color: var(--acc); }
+.hero-lv .msgbtn { align-self: flex-start; margin-bottom: 6px; }
+.inboxdlg { width: min(520px, calc(100vw - 24px)); max-height: calc(100vh - 60px); overflow: auto; }

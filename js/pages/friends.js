@@ -1,6 +1,6 @@
 // Freunde: suchen, Anfragen (gegenseitige Zustimmung), Profil mit Kennzahlen, einzelne Fahrten nur mit Erlaubnis, einfacher Chat.
 // Keine Gesundheitsdaten (Puls, Gewicht, Alter) – die Datenbank gibt sie gar nicht heraus.
-import { $, esc, toast, fmtKm, fmtDur, fmtDate, dialog } from '../util.js';
+import { $, esc, toast, fmtKm, fmtDur, fmtDate, dialog, bus } from '../util.js';
 import { avatarSvg } from '../components.js';
 import * as O from '../online/client.js';
 import { gate } from './online.js';
@@ -75,7 +75,7 @@ async function openFriend(sb, me, f, redraw) {
     <div data-pane="prof" hidden><div id="fpBody"><div class="pageload"><div class="spinner"></div></div></div>
       <div class="row end" style="margin-top:12px"><button class="btn sm ghost" data-rm>Freundschaft beenden</button><button class="btn sm ghost danger" data-block>Blockieren</button></div></div></div>`;
   document.body.appendChild(w);
-  const close = () => { clearInterval(chatT); w.remove(); document.removeEventListener('keydown', esck, true); redraw(); };
+  const close = () => { clearInterval(chatT); w.remove(); document.removeEventListener('keydown', esck, true); redraw(); bus.emit('inbox'); };
   const esck = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
   document.addEventListener('keydown', esck, true);
   const log = w.querySelector('#chLog');
