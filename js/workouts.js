@@ -33,7 +33,12 @@ export async function listWorkouts() {
   const own = (await db.all('workouts')).sort((a, b) => (b.created || '').localeCompare(a.created || ''));
   return [...BUILTIN_W, ...own];
 }
-export async function getWorkout(id) { if (!id) return null; return BUILTIN_W.find(w => w.id === id) || EXTRA_W.get(id) || await db.get('workouts', id); }
+export async function getWorkout(id) {
+  if (!id) return null;
+  const m = /^fit:(.+):(\d+)$/.exec(id); // an verfügbare Zeit angepasst (siehe fitToTime)
+  if (m) { const base = await getWorkout(m[1]); return base ? { ...fitToTime(base, +m[2] * 60), id } : null; }
+  return BUILTIN_W.find(w => w.id === id) || EXTRA_W.get(id) || await db.get('workouts', id);
+}
 export const saveWorkout = w => db.put('workouts', w);
 export const deleteWorkout = async id => { await tomb('deletedWorkouts', id); await db.del('workouts', id); };
 
@@ -129,4 +134,50 @@ export function drawWorkout(canvas, w, opt = {}) {
   }
   x.strokeStyle = 'rgba(255,255,255,.3)'; x.setLineDash([4 * d, 4 * d]); x.beginPath(); x.moveTo(0, h - h / mx); x.lineTo(W_, h - h / mx); x.stroke(); x.setLineDash([]);
   if (opt.pos != null) { const px = opt.pos / T * W_; x.fillStyle = '#fff'; x.fillRect(px - d, 0, 2 * d, h); }
+}
+
+/* ---------- Workout an die verfügbare Zeit anpassen ----------
+   Ein- und Ausfahren bleiben (gekürzt bzw. etwas verlängert), im Hauptteil werden ganze Wiederholungen weggelassen
+   oder ergänzt – die Intervalle selbst behalten Dauer und Intensität. Den Rest gleichen ruhige Abschnitte aus
+   (Grundlage strecken/stauchen); ohne solche wird gleichmäßig skaliert, harte Intervalle nie unter 20 s. */
+const same = (x, y) => Math.abs(x.dur - y.dur) < 2 && (x.a == null) === (y.a == null) && (x.a == null || (Math.abs(x.a - y.a) < .01 && Math.abs(x.b - y.b) < .01));
+function repeatUnit(core) {
+  // Wiederholung, die den größten Teil des Hauptteils abdeckt (bei verschachtelten Intervallen die äußere)
+  let best = null;
+  for (let p = 1; p <= Math.min(14, core.length / 2); p++) for (let st = 0; st + 2 * p <= core.length; st++) {
+    let n = 1; while (st + (n + 1) * p <= core.length && core.slice(st + n * p, st + (n + 1) * p).every((g, i) => same(g, core[st + i]))) n++;
+    if (n < 2) continue; const cov = n * core.slice(st, st + p).reduce((a, g) => a + g.dur, 0);
+    if (!best || cov > best.cov + 1) best = { st, p, n, cov };
+  }
+  return best;
+}
+export const fitInfo = (w, target) => { const t = total(w); return { t, ratio: target / t, fits: Math.abs(t - target) <= Math.max(120, target * .08), adaptable: !/^Test$/i.test(w.cat || '') && target / t >= .35 && target / t <= 2.2 }; };
+export function fitToTime(w, target) {
+  const segs = w.segs.map(g => ({ ...g })), tot = total(w);
+  if (Math.abs(tot - target) <= Math.max(60, target * .03) || segs.length < 2) return { ...w, segs, fitted: target };
+  const isWarm = g => g.a != null && (g.b > g.a + .05 || (g.a + g.b) / 2 < .66), isCool = g => g.a != null && (g.b < g.a - .05 || (g.a + g.b) / 2 < .6);
+  const warm = segs.length > 2 && isWarm(segs[0]) ? segs.shift() : null, cool = segs.length > 1 && isCool(segs.at(-1)) ? segs.pop() : null;
+  const r = target / tot, edge = g => g && (g.dur = Math.round(Math.min(900, Math.max(180, g.dur * Math.min(1.3, Math.max(.5, r)))))); edge(warm); edge(cool);
+  let core = segs; const want = () => target - (warm?.dur || 0) - (cool?.dur || 0), sum = a => a.reduce((x, g) => x + g.dur, 0);
+  // ganze Wiederholungen weglassen oder ergänzen
+  const u = repeatUnit(core);
+  if (u) {
+    const unit = core.slice(u.st, u.st + u.p), ud = sum(unit), before = core.slice(0, u.st), after = core.slice(u.st + u.n * u.p);
+    let n = u.n;
+    while (n > 1 && sum(before) + sum(after) + n * ud > want() + ud * .4) n--;
+    while (n < u.n * 2 && sum(before) + sum(after) + (n + 1) * ud <= want() + ud * .25) n++;
+    core = [...before, ...Array.from({ length: n }, () => unit.map(g => ({ ...g }))).flat(), ...after];
+  }
+  // Rest: ruhige Abschnitte (≤ 80 % FTP, mind. 2 min) strecken/stauchen, sonst alles gleichmäßig
+  let diff = want() - sum(core);
+  const calm = core.filter(g => g.a != null && (g.a + g.b) / 2 <= .8 && g.dur >= 120);
+  if (Math.abs(diff) > 30) {
+    const pool = calm.length && sum(calm) + diff >= calm.length * 60 ? calm : core, ps = sum(pool), k = Math.max(.2, (ps + diff) / ps);
+    for (const g of pool) g.dur = Math.max(g.a != null && g.a > 1.05 ? Math.min(g.dur, 20) : 15, Math.round(g.dur * k));
+    diff = want() - sum(core);
+  }
+  // längere Zeit ohne ruhige Abschnitte: Grundlagenblock vor dem Ausfahren ergänzen
+  if (diff > 120) core.push({ dur: Math.round(diff), a: .65, b: .65, text: 'Grundlage' });
+  const out = [...(warm ? [warm] : []), ...core, ...(cool ? [cool] : [])];
+  return { ...w, segs: out, name: `${w.name} · ${Math.round(target / 60)} min`, fitted: target, fittedFrom: w.id };
 }

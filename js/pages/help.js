@@ -36,6 +36,7 @@ const T = [
     <li><b>FTP-Schätzung</b>: aus deinen besten 20, 10 oder 5 Minuten der letzten 90 Tage. Weicht sie deutlich ab, schlägt die Startseite die neue FTP vor. Genauer ist ein FTP-Test (unter Workouts).</li>
     <li><b>Empfehlung für heute</b> nach deiner Frische (TSB) und dem Plan.</li>    <li><b>Tagesform</b>: Vor einem Workout fragt die App „Wie fühlst du dich heute?“ – Müde oder Beine schwer senkt die Intensität, Wenig Zeit kürzt das Workout auf 20–60 Minuten (abschaltbar unter Fahrt &amp; Ton).</li>
     <li><b>Export für den Radcomputer</b>: Workout › Export › .fit (Garmin, Wahoo, Hammerhead; Leistung in % FTP). Ganze Pläne als ZIP mit einer FIT-Datei je Einheit.</li>
+    <li><b>⏱️ Nach Zeit suchen</b>: Unter Training › Workouts oben deine verfügbare Zeit wählen (20 bis 120 min oder frei). Passende Workouts stehen vorn, andere werden angepasst: ganze Intervall-Wiederholungen fallen weg oder kommen dazu, Ein- und Ausfahren bleiben. Mit „💾 Behalten“ wird die angepasste Fassung ein eigenes Workout.</li>
 </ul>`],
   ['strecken', '🗺️', 'Strecken und Baukasten', `<ul class="tips">
     <li>Fast 30 eingebaute Welten von Hügelland bis Weltall, Tiefsee, Lava-Insel, Wolken und Zuckerland. Jede Strecke zeigt ein Vorschaubild.</li>
