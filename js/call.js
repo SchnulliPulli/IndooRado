@@ -57,17 +57,33 @@ async function allowed() {
 }
 // Was teile ich? Bild und Ton, nur Ton oder nur Bild (der Browser fragt nur das jeweils Nötige ab)
 const MODES = { av: '📹 Bild und Ton', audio: '🎙️ Nur Ton', video: '📷 Nur Bild' };
-async function pickMode(title) {
-  const last = MODES[profile.callMode] ? profile.callMode : 'av';
-  const order = [last, ...Object.keys(MODES).filter(k => k !== last)];
-  const v = await dialog({ title, html: '<p class="muted small">Was möchtest du teilen? Du kannst Mikrofon und Kamera im Gespräch zusätzlich stummschalten.</p>', buttons: [{ label: 'Abbrechen', value: null }, ...order.slice().reverse().map(k => ({ label: MODES[k], value: k, cls: k === last ? 'pri' : '' }))], cls: 'modedlg' });
-  if (v) { profile.callMode = v; try { (await import('./state.js')).saveProfile(); } catch (e) { } }
-  return v;
+const MODE_INFO = { av: ['📹', 'Video', 'Kamera und Mikrofon'], audio: ['🎙️', 'Nur Ton', 'Mikrofon, ohne Kamera'], video: ['📷', 'Nur Bild', 'Kamera, ohne Mikrofon'] };
+// Auswahl vor dem Anruf: große Kacheln, die zuletzt gewählte Art ist vorausgewählt
+export function pickMode(title, peer) {
+  return new Promise(async res => {
+    const last = MODES[profile.callMode] ? profile.callMode : 'av';
+    let av = ''; try { if (peer?.avatar) av = (await import('./components.js')).avatarSvg(peer.avatar, 56); } catch (e) { }
+    const w = document.createElement('div'); w.className = 'modal on';
+    w.innerHTML = `<div class="card dlg callpick" role="dialog" aria-modal="true" aria-labelledby="cpT">
+      <div class="cphead">${av ? `<div class="cpav">${av}</div>` : '<div class="cpav cpico">📞</div>'}<div><h2 id="cpT">${esc(title)}</h2><p class="small muted">Wie möchtest du sprechen?</p></div></div>
+      <div class="cpmodes" role="radiogroup">${Object.entries(MODE_INFO).map(([k, [i, l, d]]) => `<button class="cpmode ${k === last ? 'on' : ''}" role="radio" aria-checked="${k === last}" data-m="${k}"><span class="cpi" aria-hidden="true">${i}</span><b>${l}</b><small>${d}</small>${k === last ? '<em>zuletzt</em>' : ''}</button>`).join('')}</div>
+      <p class="small muted cpnote">Mikrofon und Kamera lassen sich im Gespräch jederzeit stummschalten. Verbindung direkt und Ende-zu-Ende-verschlüsselt.</p>
+      <div class="row end"><button class="btn ghost" data-c>Abbrechen</button><button class="btn pri cpgo" data-go>📞 Anrufen</button></div></div>`;
+    document.body.appendChild(w);
+    let cur = last; const go = w.querySelector('[data-go]');
+    if (/annehmen/i.test(title)) go.textContent = '📞 Annehmen';
+    const pick = k => { cur = k; w.querySelectorAll('.cpmode').forEach(b => { const on = b.dataset.m === k; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); }); };
+    const done = v => { w.remove(); document.removeEventListener('keydown', key, true); if (v) { profile.callMode = v; import('./state.js').then(m => m.saveProfile()).catch(() => { }); } res(v); };
+    const key = e => { if (e.key === 'Escape') { e.stopPropagation(); done(null); } else if (e.key === 'Enter' && !e.target.closest('[data-c]')) { e.preventDefault(); e.stopPropagation(); done(cur); } else if (/Arrow(Left|Right|Up|Down)/.test(e.key)) { const ks = Object.keys(MODE_INFO), i = ks.indexOf(cur); pick(ks[(i + (/Right|Down/.test(e.key) ? 1 : ks.length - 1)) % ks.length]); w.querySelector('.cpmode.on').focus(); e.preventDefault(); } };
+    document.addEventListener('keydown', key, true);
+    w.addEventListener('click', e => { const m = e.target.closest('[data-m]'); if (m) { pick(m.dataset.m); if (e.detail === 2) done(cur); return; } if (e.target.closest('[data-go]')) done(cur); else if (e.target.closest('[data-c]') || e.target === w) done(null); });
+    go.focus();
+  });
 }
 // Anrufen: Raum anlegen, Einladung als private Nachricht, Klingeln an alle Geräte des Freundes
 export async function startCall(friend) {
   if (!(await allowed())) return;
-  const mode = await pickMode(`${friend.display_name || friend.name} anrufen`); if (!mode) return;
+  const mode = await pickMode(`${friend.display_name || friend.name} anrufen`, friend); if (!mode) return;
   const sb = await O.client();
   // Raum vom Server: nur unter Freunden, kryptografisch zufällig, Kanal danach nur für euch beide
   const cr = await sb.rpc('call_create', { p_friend: friend.id }); if (cr.error) return toast('Anruf nicht möglich: ' + (/function|schema cache/i.test(cr.error.message) ? 'Datenbankschema erneut ausführen' : cr.error.message));
@@ -80,7 +96,7 @@ export async function startCall(friend) {
   toast(n ? `📞 Es klingelt bei ${friend.display_name || friend.name} …` : `${friend.display_name || friend.name} ist gerade nicht online – die Einladung liegt im Chat`, 4000);
 }
 // Beitreten (aus dem Chat oder beim Klingeln)
-export async function joinCall(room, peer) { if (!/^IndooRado-[A-Za-z0-9]{24}$/.test(room) || !(await allowed())) return; const mode = await pickMode(`Anruf von ${peer?.name || 'Freund'} annehmen`); if (mode) openWindow(room, peer, mode); }
+export async function joinCall(room, peer) { if (!/^IndooRado-[A-Za-z0-9]{24}$/.test(room) || !(await allowed())) return; const mode = await pickMode(`Anruf von ${peer?.name || 'Freund'} annehmen`, peer); if (mode) openWindow(room, peer, mode); }
 export async function hangUp(notify = true) {
   const notifyIds = [...new Set([call.peer?.id, ...call.peers.keys()].filter(Boolean))];
   if (call.room) { clearInterval(call.aliveT); const others = [...call.peers.values()].some(P => P.pc?.connectionState === 'connected'); if (!others || call.peers.size <= 1) callState(call.room, 'end'); } // letzter im Anruf (bzw. Zweiergespräch): Anruf ist vorbei

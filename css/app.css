@@ -1387,3 +1387,20 @@ body.watchtv .tvprof { height: 15vh; }
 /* Vergangene Anrufe im Chat: kurze Zeile statt Nachricht */
 .calllog { align-self: center; font-size: 12px; opacity: .7; padding: 3px 10px; border-radius: 99px; background: color-mix(in srgb, currentColor 6%, transparent); text-align: center; }
 .calllog.missed { color: #ff8b97; opacity: .9; }
+/* Anruf: Auswahl Video / Nur Ton / Nur Bild */
+.callpick { max-width: 460px; display: flex; flex-direction: column; gap: 14px; }
+.cphead { display: flex; align-items: center; gap: 12px; }
+.cphead h2 { margin: 0; font-size: 1.25rem; } .cphead p { margin: 2px 0 0; }
+.cpav { width: 56px; height: 56px; border-radius: 50%; overflow: hidden; flex: none; display: grid; place-items: center; background: color-mix(in srgb, var(--acc) 18%, transparent); }
+.cpico { font-size: 28px; }
+.cpmodes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.cpmode { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 16px 8px 12px; border-radius: 14px; border: 2px solid rgba(127,127,127,.22); background: color-mix(in srgb, currentColor 4%, transparent); color: inherit; font: inherit; cursor: pointer; text-align: center; transition: border-color .15s, background .15s, transform .15s; }
+.cpmode:hover { border-color: rgba(127,127,127,.5); transform: translateY(-1px); }
+.cpmode.on { border-color: var(--acc); background: color-mix(in srgb, var(--acc) 14%, transparent); }
+.cpmode:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.cpi { font-size: 30px; line-height: 1; margin-bottom: 4px; }
+.cpmode b { font-size: .98rem; } .cpmode small { font-size: .74rem; opacity: .7; line-height: 1.25; }
+.cpmode em { position: absolute; top: 6px; right: 6px; font-style: normal; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 99px; background: var(--acc); color: #fff; }
+.cpnote { margin: 0; }
+.callpick .cpgo { min-width: 140px; }
+@media (max-width: 420px) { .cpmodes { gap: 6px; } .cpmode { padding: 12px 4px 10px; } .cpi { font-size: 26px; } .cpmode small { display: none; } }

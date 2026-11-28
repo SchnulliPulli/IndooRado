@@ -2,6 +2,7 @@
 import { esc, toast, bus } from './util.js';
 import { avatarSvg } from './components.js';
 import * as O from './online/client.js';
+import { kv } from './db.js';
 
 const ago = t => { const s = (Date.now() - new Date(t)) / 1000; return s < 60 ? 'gerade eben' : s < 3600 ? `vor ${Math.floor(s / 60)} min` : s < 86400 ? `vor ${Math.floor(s / 3600)} h` : new Date(t).toLocaleDateString(document.documentElement.lang, { day: '2-digit', month: '2-digit' }); };
 // Anzahl Neues (ungelesene Nachrichten + offene Freundschaftsanfragen); null = nicht angemeldet
@@ -15,7 +16,7 @@ export async function openInbox() {
   if (!O.loggedIn() || !O.access().ok) { location.hash = '#/account'; return; }
   document.querySelector('.inboxdlg')?.closest('.modal')?.remove();
   const w = document.createElement('div'); w.className = 'modal on';
-  w.innerHTML = `<div class="card dlg inboxdlg" role="dialog" aria-modal="true" aria-label="Nachrichten"><div class="row between"><h2>💬 Nachrichten</h2><span class="row"><a class="btn sm ghost" href="#/friends">Alle Freunde</a><button class="btn sm ghost" data-x aria-label="Schließen">✕</button></span></div><div class="ibl"><div class="pageload"><div class="spinner"></div></div></div></div>`;
+  w.innerHTML = `<div class="card dlg inboxdlg" role="dialog" aria-modal="true" aria-label="Nachrichten"><div class="row between"><h2>💬 Nachrichten</h2><span class="row"><button class="btn sm ghost" data-clear title="Alle Benachrichtigungen aus der Liste entfernen">🧹 Alle löschen</button><a class="btn sm ghost" href="#/friends">Alle Freunde</a><button class="btn sm ghost" data-x aria-label="Schließen">✕</button></span></div><div class="ibl"><div class="pageload"><div class="spinner"></div></div></div></div>`;
   document.body.appendChild(w); let iv = null;
   const close = () => { w.remove(); clearInterval(iv); document.removeEventListener('keydown', k, true); bus.emit('inbox'); };
   const k = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } }; document.addEventListener('keydown', k, true);
@@ -31,6 +32,8 @@ async function fill(box, close) {
     if (fl.error) { box.querySelector('.ibl').innerHTML = `<p class="small muted">${/function|schema cache/i.test(fl.error.message) ? 'Freunde fehlen in der Datenbank: Datenbankschema erneut ausführen.' : esc(fl.error.message)}</p>`; return; }
     const fr = new Map(fl.data.map(f => [f.id, f])), req = fl.data.filter(f => f.status === 'pending' && f.incoming), last = new Map();
     for (const m of ms.data || []) { const other = m.sender === me ? m.recipient : m.sender; if (!last.has(other) && fr.get(other)?.status === 'accepted') last.set(other, m); }
+    const cleared = +(await kv.get('inboxCleared', 0)) || 0; // „Alle löschen“: ältere Einträge ausblenden, neue erscheinen wieder
+    for (const [id, m] of [...last]) if (+new Date(m.created_at) <= cleared) last.delete(id);
     const states = await C.callStates([...last.values()].map(m => C.callRoom(m.body)));
     const rows = [...last.entries()].slice(0, 15).map(([id, m]) => {
       const f = fr.get(id), room = C.callRoom(m.body), mine = m.sender === me, unread = !mine && !m.read_at, ci = room ? C.callInfo(states.get(room), m, me) : null, fresh = ci?.active;
@@ -38,9 +41,15 @@ async function fill(box, close) {
       return `<div class="ibrow ${unread ? 'new' : ''}" data-open="${esc(id)}">${avatarSvg(f.avatar || {}, 36)}<div class="ibt"><div class="row between"><b>${esc(f.display_name)}</b><span class="small muted">${ago(m.created_at)}</span></div><div class="small ${unread ? '' : 'muted'}">${mine && !room ? 'Du: ' : ''}${text}</div></div>${fresh && !mine ? `<button class="btn xs pri" data-join="${esc(room)}" data-peer="${esc(id)}">Beitreten</button>` : f.unread ? `<span class="badge">${f.unread}</span>` : ''}</div>`;
     });
     box.querySelector('.ibl').innerHTML = (req.length ? req.map(f => `<div class="ibrow new">${avatarSvg(f.avatar || {}, 36)}<div class="ibt"><b>${esc(f.display_name)}</b><div class="small">möchte mit dir befreundet sein</div></div><span class="row"><button class="btn xs pri" data-acc="${esc(f.id)}">Annehmen</button><button class="btn xs ghost" data-dec="${esc(f.id)}">✕</button></span></div>`).join('') : '')
-      + (rows.join('') || (req.length ? '' : (fl.data.some(f => f.status === 'accepted') ? '<div class="empty"><div class="emi">📭</div><b>Keine Nachrichten</b><span>Hier erscheinen Nachrichten, Freundschaftsanfragen und Anruf-Einladungen. Schreib deinen Freunden unter Online › Freunde.</span></div>' : '<div class="empty"><div class="emi">👋</div><b>Noch keine Freunde</b><span>Unter Online › Freunde findest du deinen Freundescode und kannst Spieler suchen.</span></div>')));
+      + (rows.join('') || (req.length ? '' : (fl.data.some(f => f.status === 'accepted') ? (cleared ? '<div class="empty"><div class="emi">✨</div><b>Alles erledigt</b><span>Neue Nachrichten und Anrufe erscheinen wieder hier. Ältere findest du im Chat unter Alle Freunde.</span></div>' : '<div class="empty"><div class="emi">📭</div><b>Keine Nachrichten</b><span>Hier erscheinen Nachrichten, Freundschaftsanfragen und Anruf-Einladungen. Schreib deinen Freunden unter Online › Freunde.</span></div>') : '<div class="empty"><div class="emi">👋</div><b>Noch keine Freunde</b><span>Unter Online › Freunde findest du deinen Freundescode und kannst Spieler suchen.</span></div>')));
   };
   box.addEventListener('click', async e => {
+    if (e.target.closest('[data-clear]')) {
+      e.stopPropagation(); await kv.set('inboxCleared', Date.now());
+      try { const { data } = await sb.rpc('friend_list'); await Promise.all((data || []).filter(f => f.status === 'accepted' && +f.unread > 0).map(f => sb.rpc('chat_read', { p_other: f.id }))); } catch (x) { }
+      try { const reg = await navigator.serviceWorker?.getRegistration(); (await reg?.getNotifications() || []).forEach(n => n.close()); } catch (x) { } // auch die Meldungen des Geräts schließen
+      toast('🧹 Benachrichtigungen gelöscht'); bus.emit('inbox'); draw(); return;
+    }
     const a = e.target.closest('[data-acc],[data-dec]');
     if (a) { e.stopPropagation(); const acc = !!a.dataset.acc; const { error } = await sb.rpc('friend_respond', { p_other: a.dataset.acc || a.dataset.dec, p_accept: acc }); if (error) return toast(error.message); toast(acc ? '🎉 Ihr seid jetzt Freunde' : 'Abgelehnt'); draw(); return; }
     const j = e.target.closest('[data-join]'); if (j) { e.stopPropagation(); close(); const f = (await sb.rpc('friend_list')).data?.find(x => x.id === j.dataset.peer); C.joinCall(j.dataset.join, { id: j.dataset.peer, name: f?.display_name || 'Freund' }); return; }
