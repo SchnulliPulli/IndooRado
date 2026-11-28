@@ -4,8 +4,9 @@
 import * as O from './online/client.js';
 
 const ICE = [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.nextcloud.com:443'] }];
-// Weiterleitung (TURN, Cloudflare) für WLANs mit Client-Isolierung oder gesperrtem UDP: Zugangsdaten über den
-// Zuschauer-Link von der Supabase-Funktion „turn“, je Link begrenzt. Darum je Gerät nur einmal holen (gilt 2 h).
+// Weiterleitung (TURN, Cloudflare) für WLANs mit Client-Isolierung oder gesperrtem UDP: Nur das angemeldete Fahrgerät
+// holt kurzlebige Zugangsdaten (Supabase-Funktion „turn“, je Link begrenzt, gilt 2 h) und schickt sie dem Fernseher
+// mit dem Angebot. Der Fernseher (ohne Konto) ruft die Funktion nie selbst auf.
 let iceP = null, iceTok = '', iceAt = 0;
 function iceFor(token) {
   if (iceP && iceTok === token && Date.now() - iceAt < 100 * 60e3) return iceP;
@@ -49,7 +50,7 @@ async function offer(viewer) {
   pc.onconnectionstatechange = () => { if (['failed', 'closed'].includes(pc.connectionState)) { TX.peers.delete(viewer); try { pc.close(); } catch (e) { } } };
   await pc.setLocalDescription(await pc.createOffer()); await gathered(pc);
   try { const p = snd.getParameters(); p.encodings = p.encodings?.length ? p.encodings : [{}]; const w = track.getSettings?.().width || 1280; p.encodings[0].maxBitrate = 1800000; p.encodings[0].maxFramerate = 24; if (w > 1280) p.encodings[0].scaleResolutionDownBy = w / 1280; p.degradationPreference = 'maintain-framerate'; await snd.setParameters(p); } catch (e) { }
-  await rpc('tv_send', { p_token: TX.token, p_viewer: viewer, p_kind: 'offer', p_payload: { sdp: pc.localDescription.sdp } });
+  await rpc('tv_send', { p_token: TX.token, p_viewer: viewer, p_kind: 'offer', p_payload: { sdp: pc.localDescription.sdp, ice: ice.slice(ICE.length) } });
   for (let i = 0; i < 25 && TX.peers.get(viewer) === pc; i++) {
     await wait(1000);
     const a = (await rpc('tv_recv', { p_token: TX.token, p_viewer: viewer, p_kind: 'answer', p_after: 0 }).catch(() => [])) || [];
@@ -71,7 +72,8 @@ export function startReceiver(token, video, onState = () => { }) {
         for (let i = 0; i < 12 && !stopped && !off; i++) { await wait(1000); const r = (await rpc('tv_recv', { p_token: token, p_viewer: viewer, p_kind: 'offer', p_after: lastOffer }).catch(() => [])) || []; if (r.length) { off = r.at(-1); lastOffer = off.id; } }
         if (!off) { onState('none'); await wait(15000); continue; } // Fahrgerät sendet (noch) kein Bild
         try { pc?.close(); } catch (e) { }
-        pc = new RTCPeerConnection({ iceServers: await iceFor(token) });
+        const extra = (Array.isArray(off.payload.ice) ? off.payload.ice : []).slice(0, 4).map(x => ({ urls: [].concat(x?.urls || []).filter(u => typeof u === 'string' && /^turns?:/.test(u)).slice(0, 6), username: String(x?.username || ''), credential: String(x?.credential || '') })).filter(x => x.urls.length && x.username); // nur TURN-Einträge vom Fahrgerät übernehmen
+        pc = new RTCPeerConnection({ iceServers: [...ICE, ...extra] });
         pc.ontrack = e => { video.srcObject = e.streams[0] || new MediaStream([e.track]); video.play().catch(() => { }); onState('live'); };
         await pc.setRemoteDescription({ type: 'offer', sdp: off.payload.sdp });
         await pc.setLocalDescription(await pc.createAnswer()); await gathered(pc);
