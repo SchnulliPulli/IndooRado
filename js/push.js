@@ -48,3 +48,17 @@ export async function makeVapid() {
   const pub = await crypto.subtle.exportKey('raw', k.publicKey), jwk = await crypto.subtle.exportKey('jwk', k.privateKey);
   return { publicKey: enc(pub), privateKey: jwk.d };
 }
+
+// Selbsttest: Push an die eigenen Geräte (kommt über den Push-Dienst, also genau wie bei geschlossener App)
+export async function selfTest() {
+  if (!O.loggedIn()) throw new Error('Nicht angemeldet');
+  if (!pushWanted()) throw new Error('Erst „Auch bei geschlossener App (Push)“ einschalten');
+  await enablePush(); // Anmeldung des Geräts auffrischen
+  const { data, error } = await (await O.client()).functions.invoke('push', { body: { to: O.online.user.id, kind: 'test' } });
+  if (error) { const st = error.context?.status; throw new Error(st === 404 ? 'Edge Function „push“ nicht gefunden' : st === 401 ? 'Edge Function lehnt die Anmeldung ab (401)' : 'Edge Function: ' + (st || error.message)); }
+  if (data?.why === 'not-configured') throw new Error('In Supabase fehlen die Secrets VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY');
+  if (data?.why === 'not-allowed') throw new Error('Zu viele Tests (höchstens 5 pro Stunde) oder Schema veraltet (schema.sql ausführen)');
+  if (data?.why === 'no-device') throw new Error('Kein Gerät angemeldet – Schema ausgeführt?');
+  if (!data?.sent) throw new Error('Push-Dienst lehnt ab: ' + (data?.errors || []).join(', ') + ' – passt VAPID_PUBLIC_KEY zum Schlüssel in online.json?');
+  return data;
+}

@@ -2224,3 +2224,4 @@ Push braucht ein angemeldetes IndooRado-Konto	Push needs a signed-in IndooRado a
 Push ist noch nicht eingerichtet (öffentlicher Schlüssel fehlt in online.json)	Push isn't set up yet (public key missing in online.json)
 Dieser Browser kann keine Push-Benachrichtigungen	This browser can't do push notifications
 Auf dem iPhone erst IndooRado zum Home-Bildschirm hinzufügen und von dort öffnen	On iPhone, first add IndooRado to the home screen and open it from there
+Test-Push	Test push
