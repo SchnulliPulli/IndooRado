@@ -282,7 +282,7 @@ async function inviteToLobby() {
 
 // Klingeln und Auflegen vom Gegenüber
 bus.on('callsignal', async s => {
-  if (s.kind === 'callend') { import('./push.js').then(P => P.closeNotes('call-')).catch(() => { }); if (call.peers.has(s.uid)) call.dropPeer?.(s.uid, `📴 ${s.name} hat aufgelegt`); else if (call.peer?.id === s.uid && !call.peers.size) { toast(`📴 ${s.name} hat aufgelegt`); hangUp(false); } return; }
+  if (s.kind === 'callend') { document.querySelectorAll(`.callring[data-uid="${CSS.escape(s.uid || '')}"]`).forEach(x => x.remove()); import('./push.js').then(P => P.closeNotes('call-')).catch(() => { }); if (call.peers.has(s.uid)) call.dropPeer?.(s.uid, `📴 ${s.name} hat aufgelegt`); else if (call.peer?.id === s.uid && !call.peers.size) { toast(`📴 ${s.name} hat aufgelegt`); hangUp(false); } return; }
   if (call.room) return; // schon im Gespräch
   // Einladung aus dem privaten Chat holen (nur Freunde können sie schreiben); älter als 3 Minuten = verpasst
   const sb = await O.client(), me = O.online.user?.id; if (!me) return;
@@ -293,7 +293,8 @@ bus.on('callsignal', async s => {
   { const P = await import('./push.js');
     if (document.hidden) { if (!(await P.pushActive())) import('./comfort.js').then(C => C.notify(`📹 ${s.name} ruft an`, 'Videoanruf in IndooRado – zum Annehmen die App öffnen.', 'call-' + room, 'call')).catch(() => { }); } // mit Push kommt die Meldung schon vom Server
     else setTimeout(() => P.closeNotes('call-' + room), 1500); } // App ist offen: Klingel-Fenster reicht, Meldung in der Leiste schließen
-  const c = document.createElement('div'); c.className = 'invcard callring'; c.setAttribute('role', 'alertdialog');
+  if (document.querySelector(`.callring[data-uid="${CSS.escape(s.uid)}"]`)) return; // klingelt schon (Live-Signal und Push gleichzeitig)
+  const c = document.createElement('div'); c.className = 'invcard callring'; c.dataset.uid = s.uid; c.setAttribute('role', 'alertdialog');
   c.innerHTML = `<div class="row">${avatarSvg(s.look || {}, 40)}<div><b>📹 ${esc(s.name)} ruft an</b><div class="small muted">Videoanruf</div></div></div><div class="row end"><button class="btn sm ghost" data-no>📵 Ablehnen</button><button class="btn sm pri" data-ok>📞 Annehmen</button></div>`;
   document.body.appendChild(c); const t = setTimeout(() => c.remove(), 60e3);
   const stopRing = ringTone(); const obs = new MutationObserver(() => { if (!c.isConnected) { stopRing(); obs.disconnect(); } }); obs.observe(document.body, { childList: true });

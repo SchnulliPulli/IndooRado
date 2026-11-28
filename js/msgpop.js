@@ -15,6 +15,7 @@ bus.on('chatsignal', async s => {
 async function show(s, m) {
   document.querySelector(`.msgpop[data-uid="${CSS.escape(s.uid)}"]`)?.remove();
   const { avatarSvg } = await import('./components.js');
+  if (!s.look) try { const { data } = await (await O.client()).rpc('friend_list'); const f = (data || []).find(x => x.id === s.uid); s = { ...s, look: f?.avatar || {}, name: s.name || f?.display_name }; } catch (e) { }
   const c = document.createElement('div'); c.className = 'invcard msgpop'; c.dataset.uid = s.uid; c.setAttribute('role', 'status');
   const txt = m.body.length > 140 ? m.body.slice(0, 140) + ' …' : m.body;
   c.innerHTML = `<button class="mpx" data-x aria-label="Schließen">✕</button><div class="row mprow">${avatarSvg(s.look || {}, 38)}<div class="mpt"><b>💬 ${esc(s.name || 'Freund')}</b><div class="small mpbody" data-noi18n>${esc(txt)}</div></div></div>

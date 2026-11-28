@@ -418,7 +418,14 @@ async function init() {
   })().catch(() => { });
   // Aus einer Push-Benachrichtigung geöffnet: Anruf annehmen bzw. Chat öffnen
   if (/[?&]pcall=/.test(location.hash)) pushOpen(location.href);
-  navigator.serviceWorker?.addEventListener('message', e => { if (e.data?.type === 'pushOpen') pushOpen(e.data.url); });
+  navigator.serviceWorker?.addEventListener('message', e => {
+    if (e.data?.type === 'pushOpen') pushOpen(e.data.url);
+    // Push bei offener App im Fokus: statt Gerätemeldung der Hinweis in der App
+    if (e.data?.type === 'pushIn') { const d = e.data.d || {}; if (!/^[0-9a-f-]{36}$/i.test(d.from || '')) return;
+      if (d.kind === 'msg') bus.emit('chatsignal', { uid: d.from, name: d.name });
+      else if (d.kind === 'call') bus.emit('callsignal', { kind: 'call', uid: d.from, name: d.name, look: {} });
+      else if (d.kind === 'missed') { bus.emit('callsignal', { kind: 'callend', uid: d.from, name: d.name }); toast(`📵 Verpasster Anruf von ${d.name || 'Freund'}`, 6000); bus.emit('inbox'); } }
+  });
   bus.on('online', ev => { if (ev === 'SIGNED_IN' || ev === 'init') import('./push.js').then(m => m.refreshPush()).catch(() => { }); });
   reconnectKnown().catch(() => { });
   // Barrierefreiheit: Sprunglink zum Inhalt (ohne den Hash-Router zu stören), Tastenkürzel-Übersicht mit ?

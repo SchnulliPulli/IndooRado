@@ -2,7 +2,7 @@
 // Schnellstart: Dateien kommen sofort aus dem Cache und werden im Hintergrund aktualisiert (stale-while-revalidate).
 // Eine neue App-Version bekommt einen neuen Cache-Namen; beim Wechsel lädt die Seite einmal neu (siehe app.js),
 // damit nie Dateien aus zwei Versionen gemischt werden.
-const CACHE = 'indoorado-v136';
+const CACHE = 'indoorado-v137';
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', e => {
@@ -28,11 +28,17 @@ self.addEventListener('push', e => {
   let d = {}; try { d = e.data ? e.data.json() : {}; } catch (x) { }
   const call = d.kind === 'call', missed = d.kind === 'missed', safe = v => String(v || '').slice(0, 80);
   const url = missed ? `./#/friends?open=${encodeURIComponent(safe(d.from))}` : call ? `./#/?pcall=${encodeURIComponent(safe(d.room))}&from=${encodeURIComponent(safe(d.from))}&name=${encodeURIComponent(safe(d.name))}` : `./#/friends?open=${encodeURIComponent(safe(d.from))}`;
-  e.waitUntil(self.registration.showNotification(safe(d.title) || 'IndooRado', {
+  // App ist offen und im Fokus: keine Gerätemeldung, die App zeigt den Hinweis selbst (Test-Push immer als Meldung)
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    const fg = d.kind !== 'test' && list.find(c => c.visibilityState === 'visible' && c.focused);
+    if (fg) { fg.postMessage({ type: 'pushIn', d: { kind: safe(d.kind), from: safe(d.from), name: safe(d.name), room: safe(d.room) } }); return; }
+    return showIt();
+  }));
+  function showIt() { return self.registration.showNotification(safe(d.title) || 'IndooRado', {
     body: safe(d.body), tag: call || missed ? 'call-' + safe(d.room) : d.kind === 'test' ? 'test' : 'msg-' + safe(d.from), renotify: !missed, icon: 'icons/icon-192.png', badge: 'icons/badge-96.png', timestamp: Date.now(), silent: false,
     requireInteraction: call, vibrate: call ? [600, 250, 600, 250, 600, 250, 600] : [120], data: { url, call },
     actions: call ? [{ action: 'join', title: '📹 Annehmen' }, { action: 'no', title: 'Ablehnen' }] : d.kind === 'msg' ? [{ action: 'open', title: '💬 Antworten' }] : missed ? [{ action: 'open', title: '💬 Chat öffnen' }] : [],
-  }));
+  }); }
 });
 self.addEventListener('notificationclick', e => {
   e.notification.close(); if (e.action === 'no') return;

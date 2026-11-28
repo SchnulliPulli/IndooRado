@@ -32,6 +32,7 @@ export const notifOn = k => profile.reminders === true && profile.notif?.[k] !==
 export function setNotif(k, on) { profile.notif = { ...(profile.notif || {}), [k]: !!on }; saveProfile(); scheduleReminders(); }
 export async function notify(title, body, tag, kind) {
   if ((kind && !notifOn(kind)) || profile.reminders !== true || typeof Notification === 'undefined' || Notification.permission !== 'granted') return false;
+  if (!document.hidden && document.hasFocus() && tag !== 'test') { toast(`${title} – ${body}`, 6000); return true; } // App offen und im Fokus: nur in der App
   try { const reg = await navigator.serviceWorker?.getRegistration(); if (reg) await reg.showNotification(title, { body, tag, icon: 'icons/icon-192.png', badge: 'icons/badge-96.png' }); else new Notification(title, { body, tag }); return true; } catch (e) { return false; }
 }
 export const testNotify = () => notify('🔔 IndooRado', 'So sehen Benachrichtigungen aus.', 'test');
