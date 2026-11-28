@@ -141,7 +141,7 @@ export async function render(el) {
         <div class="row small" id="bmQuick"></div>
       </div>
     </div>
-    <button class="liveled" id="liveLed" hidden title="Live-Verbindung"><i></i><span id="liveLedN"></span></button>
+    <div class="toprt"><button class="castbtn" id="castBtn" title="Auf Fernseher oder anderem Bildschirm anzeigen" aria-label="Auf Fernseher streamen"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11zm20-7H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg></button><button class="liveled" id="liveLed" hidden title="Live-Verbindung"><i></i><span id="liveLedN"></span></button></div>
     <div class="startcard" id="startCard"><b>Bereit</b><span>Tritt in die Pedale, die Fahrt startet automatisch.</span></div>
   </div>`;
   await start(el);
@@ -336,6 +336,7 @@ function bindUi() {
   $('#tPause', el).onclick = togglePause;
   $('#tView', el).onclick = () => flash('Kamera: ' + VIEWS[S.world.cycleView()]);
   $('#tShot', el).onclick = () => shot('Foto');
+  $('#castBtn', el).onclick = () => $('#tCast', el).click();
   $('#tCast', el).onclick = async () => { const M = await import('../watch.js'); await M.castToTv(online?.profile?.display_name || profile.name); $('#tWatchL', el).textContent = M.W.token ? 'Zuschauer an' : 'Zuschauer'; };
   $('#tWatch', el).onclick = async () => { const M = await import('../watch.js'); await M.startWatch(online?.profile?.display_name || profile.name); $('#tWatchL', el).textContent = M.W.token ? 'Zuschauer an' : 'Zuschauer'; };
   $('#tMode', el).onclick = cycleMode;
@@ -390,6 +391,13 @@ function bindUi() {
     });
     for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) pad.addEventListener(ev, () => { stopRep(); release(); });
     // Tastatur im Demo-Modus: Bild auf/ab = Watt, Pos1/Ende = Trittfrequenz
+    // Fernbedienung (Handy): Trittfrequenz/Watt in Doppelschritten, Bremse 2,5 s, Sprint
+    S.demoRemote = k => {
+      if (!demo.on) return;
+      if (/[+-]$/.test(k)) { step(k); step(k); return; }
+      if (k === 'brake') { braking = true; demo.cad = 0; S.brake = true; pad.querySelector('.dpb.brake')?.classList.add('on'); val(); setTimeout(release, 2500); return; }
+      if (k === 'sprint') { clearTimeout(sprintT); demo.cad = 112; demo.wSet = Math.max(600, set.w * 2); flash('🚀 Sprint!', 1000); sprintT = setTimeout(() => { sprintT = null; apply(); }, 8000); val(); }
+    };
     S.demoKey = e => { if (!demo.on) return false; const m = { PageUp: 'w+', PageDown: 'w-', Home: 'cad+', End: 'cad-' }[e.key]; if (!m) return false; step(m); return true; };
     val();
   }
@@ -479,6 +487,7 @@ function bindUi() {
     if (c === 'next') { if (wi && !wi.done) { S.wT += wi.left + .01; flash('⏭ Nächstes Intervall', 1400); } else flash('Kein Workout aktiv', 1200); }
     else if (c === 'prev' || c === 'restart') { if (!wi || wi.done) { flash('Kein Workout aktiv', 1200); return; } if (c === 'prev' && S.wT - wi.start < 5 && wi.start > 0) { const p = woAt(S.wo, wi.start - .5); S.wT = p.start + .01; flash('⏮ Vorheriges Intervall', 1400); } else { S.wT = wi.start + .01; flash('↺ Intervall von vorn', 1400); } }
     else if (c === 'harder' || c === 'easier') { S.wOff = clamp(S.wOff + (c === 'harder' ? 2 : -2), -40, 40); flash(`Intensität ${100 + S.wOff} %`, 1200); }
+    else if (c.startsWith('demo:')) S.demoRemote?.(c.slice(5));
     else if (c === 'pause') togglePause();
     else if (c === 'up' || c === 'down') shift(c === 'up' ? 1 : -1);
     else if (c === 'left' || c === 'right') S.latT = clamp((S.latT ?? 1.5) + (c === 'right' ? .6 : -.6), .3, 3.2);
@@ -812,7 +821,7 @@ function liveShare() {
   const R = S.route, wi = S.wi, p3 = S.p3.length ? S.p3.reduce((a, b) => a + b, 0) / S.p3.length : 0, np = S.np.n ? Math.pow(S.np.s4 / S.np.n, .25) : p3;
   putLive({ state: S.state, route: R.name, routeId: R.id, total: R.total, loop: R.loop, pos: S.dist, odo: Math.round(S.odo), t: Math.round(S.t), p: Math.round(p3), hr: live.heart, cad: live.cadence != null ? Math.round(live.cadence) : null, v: +(S.v * 3.6).toFixed(1), asc: Math.round(S.asc), kj: Math.round(S.kj), np: Math.round(np), grade: +R.gradeAt(S.dist).toFixed(1),
     wo: S.wo ? { name: S.wo.name, i: wi && !wi.done ? wi.i + 1 : null, n: S.wo.segs.length, left: wi && !wi.done ? Math.round(wi.left) : 0, target: S.target ? Math.round(S.target) : null, done: Math.round(S.wT), total: woTotal(S.wo) } : null,
-    ghost: S.ghost ? Math.round(S.ghostGap) : null, place: S.npcOn ? S.field.filter(n => gapOf(R, n.d, S.dist) > 0).length + 1 : null, hist: S.liveHist, ...me }, { store });
+    ghost: S.ghost ? Math.round(S.ghostGap) : null, place: S.npcOn ? S.field.filter(n => gapOf(R, n.d, S.dist) > 0).length + 1 : null, hist: S.liveHist, demo: demo.on ? { cad: Math.round(live.cadence ?? demo.cad ?? 0), w: Math.round(live.power ?? 0) } : null, ...me }, { store });
   watchPush(p3);
   // Alle 20 s prüfen, ob trotzdem woanders eine Fahrt läuft (beide fast gleichzeitig gestartet)
   if (!S.dupCheckAt || performance.now() > S.dupCheckAt) { S.dupCheckAt = performance.now() + 20000; setTimeout(async () => { const L = await getLive().catch(() => null); if (S?.alive && L && L.tab && L.tab !== TAB && L.state !== 'ended' && Date.now() - L.ts < 4000 && !S.dupWarned) { S.dupWarned = true; flash(`⚠️ Auf „${L.devName || 'einem anderen Gerät'}“ läuft ebenfalls eine Fahrt mit deinem Konto. Bitte eine davon beenden.`, 6000); } }, 2500); }

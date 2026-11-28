@@ -61,7 +61,16 @@ async function ensureToken(name) {
   W.token = data; W.hr = false; W.seen.clear(); return data;
 }
 export async function castToTv(name) {
-  if (!O.loggedIn() || !O.access().ok) { toast('Für die Fernseher-Anzeige bitte mit deinem IndooRado-Konto anmelden'); return; }
+  const apple0 = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (!O.loggedIn() || !O.access().ok) {
+    // Ohne Konto: Bildschirm spiegeln (zeigt die komplette Fahrt mit 3D-Welt)
+    await dialog({ title: '📺 Auf dem Fernseher anzeigen', cls: 'castdlg', html: apple0
+      ? '<p><b>Apple TV / AirPlay</b><br><span class="small muted">Kontrollzentrum öffnen › <b>Bildschirmsynchronisierung</b> › Apple TV wählen.</span></p>'
+      : '<p><b>Chromecast / Google TV</b><br><span class="small muted">Chrome-Menü <b>⋮</b> › <b>Streamen …</b> (am Handy: Teilen › Streamen bzw. Schnelleinstellungen › <b>Bildschirm übertragen</b>) und den Fernseher wählen.</span></p>' +
+        '<p class="small muted">Mit IndooRado-Konto gibt es zusätzlich die große Fahrtanzeige direkt auf dem Fernseher (Chromecast oder indoorado.de/tv mit Code) – das spart Akku, weil nur die Werte übertragen werden.</p>',
+      buttons: [{ label: 'OK', value: null, cls: 'pri' }] });
+    return;
+  }
   let t; try { t = await ensureToken(name); } catch (e) { toast(/function|schema cache/i.test(e.message) ? 'Fehlt in der Datenbank: schema.sql erneut ausführen' : e.message, 6000); return; }
   const apple = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const canCast = typeof window.PresentationRequest === 'function' && !apple;

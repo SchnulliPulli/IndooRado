@@ -30,13 +30,24 @@ export async function render(el) {
       <button class="btn sm" id="cRefresh" ${nas ? '' : 'disabled'}>↻ Abgleichen</button></div>
     <div class="small ${nas || OC.hasStoredSession() ? 'muted' : 'warn'}" id="cSync">${nas ? syncText() : OC.hasStoredSession() ? '🔄 Online-Konto wird verbunden …' : 'Ohne Cloud-Abgleich siehst du hier nur die Daten dieses Geräts. Unter Einstellungen › Verbindungen einen Cloud-Speicher verbinden (NAS, OneDrive, Google Drive, Dropbox), dann zeigt das Handy deine Fahrten, Pläne und die laufende Fahrt vom PC.'}</div>
 
-    <div class="card live" id="cLive" hidden></div>
-    ${OC.loggedIn() ? `<div class="card remote" id="cRemote" hidden><div class="row between"><h2>🎮 Fernbedienung</h2><span class="small muted" id="rmSt">für die laufende Fahrt</span></div>
-      <div class="rmgrid">${[['pause', '⏯️', 'Pause'], ['up', '➕', 'Schwerer'], ['cam', '🎥', 'Kamera'], ['left', '⬅️', 'Spur'], ['down', '➖', 'Leichter'], ['right', '➡️', 'Spur'], ['rideon', '👍', 'Ride On'], ['photo', '📷', 'Foto'], ['music', '🎵', 'Musik']].map(([c, i, l]) => `<button class="btn rmb" data-rm="${c}"><b>${i}</b><span>${l}</span></button>`).join('')}</div>
-      <div id="rmWo"><h3 class="sub">Workout</h3>
-      <div class="rmgrid">${[['prev', '⏮️', 'Zurück'], ['restart', '↺', 'Neu starten'], ['next', '⏭️', 'Weiter'], ['easier', '🔽', 'Leichter'], ['harder', '🔼', 'Härter']].map(([c, i, l]) => `<button class="btn rmb" data-rm="${c}"><b>${i}</b><span>${l}</span></button>`).join('')}</div></div>
-      <div class="row"><button class="btn danger" data-rm="end" style="flex:1">⏹️ Fahrt beenden</button></div>
-      <p class="small muted">Steuert die laufende Fahrt auf deinem PC oder Fernseher, wenn dort dasselbe Konto angemeldet ist. ⏮️ springt an den Anfang des Intervalls, zweimal schnell ins vorherige.</p></div>` : ''}
+    <div class="card live livewrap" id="cLiveWrap" hidden>
+      ${OC.loggedIn() ? `<div class="seg lvtabs" id="lvTabs" role="tablist"><button data-lt="live" aria-pressed="${!sessionStorage.getItem('vvLvTab') || sessionStorage.getItem('vvLvTab') === 'live'}">📊 Live</button><button data-lt="remote" aria-pressed="${sessionStorage.getItem('vvLvTab') === 'remote'}">🎮 Fernbedienung</button></div>` : ''}
+      <div id="cLive"></div>
+      ${OC.loggedIn() ? `<div id="cRemote" class="remote" hidden>
+        <div class="rmhead"><span class="small muted" id="rmSt">Steuert die Fahrt auf deinem anderen Gerät</span></div>
+        <button class="btn rmpause" data-rm="pause" id="rmPause"><b>⏯️</b> Pause / Weiter</button>
+        <div class="rmgrid">${[['down', '➖', 'Leichter'], ['up', '➕', 'Schwerer'], ['left', '⬅️', 'Spur links'], ['right', '➡️', 'Spur rechts'], ['cam', '🎥', 'Kamera'], ['rideon', '👍', 'Ride On'], ['photo', '📷', 'Foto'], ['music', '🎵', 'Musik']].map(([c, i, l]) => `<button class="btn rmb" data-rm="${c}"><b>${i}</b><span>${l}</span></button>`).join('')}</div>
+        <div id="rmWo"><div class="rmsub">🏋️ Workout</div><div class="rmgrid three">${[['prev', '⏮️', 'Zurück'], ['restart', '↺', 'Neu'], ['next', '⏭️', 'Weiter']].map(([c, i, l]) => `<button class="btn rmb" data-rm="${c}"><b>${i}</b><span>${l}</span></button>`).join('')}</div></div>
+        <div id="rmDemo" hidden><div class="rmsub">🧪 Demo-Steuerung</div>
+          <div class="demorm">
+            <div class="dmrow"><span>Tritt</span><button class="dmb" data-rm="demo:cad-">−</button><b class="num" id="dmCad">–</b><button class="dmb" data-rm="demo:cad+">+</button></div>
+            <div class="dmrow"><span>Watt</span><button class="dmb" data-rm="demo:w-">−</button><b class="num" id="dmW">–</b><button class="dmb" data-rm="demo:w+">+</button></div>
+            <div class="dmact"><button class="dmb wide brake" data-rm="demo:brake">🛑 Bremsen</button><button class="dmb wide sprint" data-rm="demo:sprint">🚀 Sprint</button></div>
+          </div></div>
+        <button class="btn danger rmend" data-rm="end">⏹️ Fahrt beenden</button>
+        <p class="small muted">➕/➖ ändern im Workout die Intensität, sonst den Gang. ⏮️ springt an den Anfang des Intervalls, zweimal schnell ins vorherige.</p>
+      </div>` : ''}
+    </div>
 
     <div class="card"><div class="row between"><h2>Nächste Fahrt</h2><a class="small" href="#/plans">Plan</a></div>
       ${next ? `<div class="compnext"><div><div class="small muted">${esc(pr.p.name)} · Woche ${next.week}</div><b>${esc(next.name)}</b><div class="small muted num">${fmtDur(wStats(next).dur)} · TSS ${wStats(next).tss}</div></div>${sel.workoutId === next.id ? '<span class="tag">vorgemerkt</span>' : `<button class="btn sm pri" data-pick="${next.id}">Vormerken</button>`}</div>` : '<p class="small muted">Kein Trainingsplan aktiv.</p>'}
@@ -62,7 +73,10 @@ export async function render(el) {
     if (e.target.id === 'cWo') { sel.workoutId = e.target.value || null; saveSel(); toast(nas ? 'Vorgemerkt, wird zum PC übertragen' : 'Vorgemerkt'); render(el); }
     if (e.target.id === 'cRoute') { sel.routeId = e.target.value; saveSel(); toast('Strecke vorgemerkt'); }
   };
+  const lvTab = t => { try { sessionStorage.setItem('vvLvTab', t); } catch (er) { } $('#cLive', el).hidden = t !== 'live'; const r = $('#cRemote', el); if (r) r.hidden = t !== 'remote'; el.querySelectorAll('#lvTabs [data-lt]').forEach(b => b.setAttribute('aria-pressed', b.dataset.lt === t)); };
+  if ($('#lvTabs', el)) lvTab(sessionStorage.getItem('vvLvTab') || 'live');
   el.onclick = async e => {
+    const lt = e.target.closest('[data-lt]'); if (lt) { lvTab(lt.dataset.lt); return; }
     const rm = e.target.closest('[data-rm]');
     if (rm) {
       let c = rm.dataset.rm;
@@ -88,10 +102,10 @@ async function liveTick(el) {
   const box = $('#cLive', el); if (!box) { clearInterval(timer); return; }
   let L = null; try { L = await (await import('../tv.js')).liveNow(); } catch (e) { }
   // Nicht flackern: erst nach zwei Fehlversuchen hintereinander ausblenden
-  let fresh = liveFresh(L); if (!fresh && L === null && !box.hidden && (liveMiss = (liveMiss || 0) + 1) < 2) return; if (fresh || L) liveMiss = 0;
-  box.hidden = !fresh;
-  // Fernbedienung nur zusammen mit einer laufenden Fahrt; Workout-Knöpfe nur, wenn dort ein Workout läuft
-  const rc = $('#cRemote', el); if (rc) { rc.hidden = !fresh; const wo = $('#rmWo', el); if (wo) wo.hidden = !(fresh && L.wo); }
+  let fresh = liveFresh(L); if (!fresh && L === null && !$('#cLiveWrap', el)?.hidden && (liveMiss = (liveMiss || 0) + 1) < 2) return; if (fresh || L) liveMiss = 0;
+  const wrap = $('#cLiveWrap', el); if (wrap) wrap.hidden = !fresh;
+  // Fernbedienung nur zusammen mit einer laufenden Fahrt; Workout- und Demo-Felder nur, wenn dort aktiv
+  const rc = $('#cRemote', el); if (rc) { const wo = $('#rmWo', el); if (wo) wo.hidden = !(fresh && L.wo); const dm = $('#rmDemo', el); if (dm) { dm.hidden = !(fresh && L.demo); if (L?.demo) { $('#dmCad', el).textContent = L.demo.cad; $('#dmW', el).textContent = L.demo.w; } } }
   if (!fresh) return;
   const pct = L.total ? Math.min(100, (L.pos / L.total) * 100) : 0, w = L.wo;
   box.innerHTML = `<div class="row between"><div><span class="livedot"></span> <a href="#/live"><b>Live</b> ›</a> <span class="small muted">· ${esc(L.route)}${L.state === 'paused' || L.state === 'auto' ? ' · Pause' : ''}</span></div><span class="small muted num">${fmtT(L.t)}</span></div>

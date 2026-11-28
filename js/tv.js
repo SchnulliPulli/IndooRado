@@ -86,7 +86,7 @@ async function open_(O) {
   rch.on('broadcast', { event: 'cmd' }, ({ payload }) => {
     if (!inRide() || !payload?.c) return;
     const c = payload.c, k = REMOTE[c];
-    if (!k && !CMDS.includes(c)) return;
+    if (!k && !CMDS.includes(c) && !/^demo:(cad[+-]|w[+-]|brake|sprint)$/.test(c)) return;
     rch.send({ type: 'broadcast', event: 'ack', payload: { ok: true, c } }); // erst bestätigen, dann ausführen
     try { bus.emit('remoteCmd', c); } catch (e) { console.warn('Fernbedienung', e); } // die Fahrt führt alles direkt aus (ride.js)
   });
