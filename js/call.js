@@ -331,7 +331,7 @@ bus.on('callsignal', async s => {
 let lastHang = 0;
 function hangToast(t) { if (Date.now() - lastHang < 5000) return; lastHang = Date.now(); toast(t, 3000); }
 // Klingeln in der offenen App: Ton wie ein Telefon (zwei Töne, Pause) und Vibration, bis angenommen, abgelehnt oder 45 s
-function ringTone() {
+export function ringTone() {
   let ac = null, stop = false; const until = Date.now() + 45e3;
   try { ac = new (window.AudioContext || window.webkitAudioContext)(); ac.resume?.(); } catch (e) { }
   const tone = (f, t0, d) => { if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.value = f; g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(.18, t0 + .02); g.gain.setValueAtTime(.18, t0 + d - .05); g.gain.linearRampToValueAtTime(0, t0 + d); o.connect(g).connect(ac.destination); o.start(t0); o.stop(t0 + d + .02); };

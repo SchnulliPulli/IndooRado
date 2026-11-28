@@ -1461,3 +1461,4 @@ body.watchtv .tvprof { height: 15vh; }
 .ibnote:not([data-note]) { cursor: default; }
 .invsub { margin: 10px 4px 4px; }
 .callwin.flash { box-shadow: 0 0 0 3px var(--acc); transition: box-shadow .2s; }
+.otherpop .opacct { color: var(--acc); margin-bottom: 2px; } .otherpop.callring { padding: 14px; }

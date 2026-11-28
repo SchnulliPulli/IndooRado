@@ -367,7 +367,7 @@ function netIndicator() {
   let t = null;
   bus.on('netbusy', n => { clearTimeout(t); if (n > 0) t = setTimeout(() => { pill.hidden = currentKey === 'ride'; }, 400); else pill.hidden = true; });
 }
-async function pushOpen(href) {
+export async function pushOpen(href) {
   let h = ''; try { h = new URL(href, location.href).hash; } catch (e) { return; }
   // Meldung für ein anderes Konto auf diesem Gerät: erst dorthin wechseln, danach die Aktion ausführen
   const acct = (h.match(/[?&]acct=([0-9a-f-]{36})/i) || [])[1];
@@ -460,6 +460,7 @@ async function init() {
   navigator.serviceWorker?.addEventListener('message', e => {
     if (e.data?.type === 'ping' && e.ports?.[0]) { const port = e.ports[0], t0 = Date.now(); requestAnimationFrame(() => port.postMessage({ active: document.visibilityState === 'visible' && document.hasFocus() && Date.now() - t0 < 600 })); return; } // bei gesperrtem Handy zeichnet die Seite nicht – keine Antwort
     if (e.data?.type === 'pushOpen') pushOpen(e.data.url);
+    if (e.data?.type === 'pushOther') import('./otherpop.js').then(m => m.showOther(e.data.d || {}, pushOpen)); // für ein anderes angemeldetes Konto
     // Push bei offener App im Fokus: statt Gerätemeldung der Hinweis in der App
     if (e.data?.type === 'pushIn') { const d = e.data.d || {}; if (!/^[0-9a-f-]{36}$/i.test(d.from || '')) return;
       if (d.kind === 'msg') bus.emit('chatsignal', { uid: d.from, name: d.name });

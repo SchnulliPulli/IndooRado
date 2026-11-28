@@ -2,7 +2,7 @@
 // Schnellstart: Dateien kommen sofort aus dem Cache und werden im Hintergrund aktualisiert (stale-while-revalidate).
 // Eine neue App-Version bekommt einen neuen Cache-Namen; beim Wechsel lädt die Seite einmal neu (siehe app.js),
 // damit nie Dateien aus zwei Versionen gemischt werden.
-const CACHE = 'indoorado-v146';
+const CACHE = 'indoorado-v148';
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE && k !== 'indoorado-acct').map(k => caches.delete(k)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', e => {
@@ -47,6 +47,11 @@ self.addEventListener('push', e => {
     no: call ? `./#/?pdecline=${encodeURIComponent(safe(d.room))}&from=${from}${ac}` : null,
   };
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async list => {
+    let A = null; try { A = await (await (await caches.open('indoorado-acct')).match('/__acct.json'))?.json(); } catch (x) { }
+    const other = d.acct && A?.cur && d.acct !== A.cur, who = other ? (A.list || []).find(x => x.uid === d.acct)?.name || 'anderes Konto' : '';
+    // Für ein anderes angemeldetes Konto bei offener App: Hinweis in der App (mit Aktionen, die ins richtige Konto wechseln) statt Gerätemeldung
+    const fgO = other && k !== 'test' && await appActive(list);
+    if (fgO) { fgO.postMessage({ type: 'pushOther', d: { kind: safe(k), title: safe(d.title), body: safe(d.body), who: safe(who), acct: safe(d.acct), from: safe(d.from), room: safe(d.room), ring: !!d.ring, url, acts } }); if (k !== 'callstop') return; }
     // Anruf wurde auf einem anderen Gerät dieses Kontos angenommen: Klingel-Meldung hier still durch einen kurzen Hinweis ersetzen
     if (k === 'callstop') {
       let had = false; for (const n of await self.registration.getNotifications()) if (String(n.tag).startsWith('call-' + safe(d.room))) { n.close(); had = true; }
@@ -57,8 +62,6 @@ self.addEventListener('push', e => {
       return;
     }
     if (k === 'test') await new Promise(r => setTimeout(r, 6000)); // Zeit, zum Startbildschirm zu wechseln (Samsung zeigt für die App im Vordergrund kein Pop-up)
-    let A = null; try { A = await (await (await caches.open('indoorado-acct')).match('/__acct.json'))?.json(); } catch (x) { }
-    const other = d.acct && A?.cur && d.acct !== A.cur, who = other ? (A.list || []).find(x => x.uid === d.acct)?.name || 'anderes Konto' : '';
     const fg = k !== 'test' && !other && await appActive(list); // Meldung für ein anderes Konto: immer als Gerätemeldung
     if (fg) { fg.postMessage({ type: 'pushIn', d: { kind: safe(k), from: safe(d.from), name: safe(d.name), room: safe(d.room), info: { k: safe(inf.k), lobby: safe(inf.lobby), title: safe(inf.title), route: safe(inf.route), routeName: safe(inf.routeName) } } }); return; }
     // Android zeigt eine ersetzte Meldung (gleiche Kennung) nicht erneut als Pop-up: ältere desselben Absenders schließen
