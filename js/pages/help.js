@@ -3,14 +3,14 @@ import { RIDE } from '../shortcuts.js';
 const T = [
   ['start', '🚀', 'Erste Schritte', `<ol class="tips">
     <li><b>Profil</b> (Einstellungen › Profil): Name, <b>FTP</b> und Gewicht eintragen. Alle Workout-Watt und Zonen hängen an der FTP. FTP unbekannt? Fahr ein paar Mal – die App schätzt sie und schlägt sie auf der Startseite vor.</li>
-    <li><b>Geräte</b> verbinden: Smart-Trainer, Pulsgurt, Trittfrequenz-Sensor, Click-Controller. Ohne Geräte probierst du alles mit den <b>Demo-Geräten</b> aus.</li>
+    <li><b>Geräte</b> verbinden: Smart-Trainer, Pulsgurt, Trittfrequenz-Sensor, Lenkertasten. Ohne Geräte probierst du alles mit den <b>Demo-Geräten</b> aus.</li>
     <li>Oben rechts <b>⚡ Schnellstart</b> (letzte Strecke, sofort los) oder auf der Startseite Strecke und Workout wählen und „Fahren“. Die Fahrt startet, sobald du trittst.</li>
     <li>Am Ende <b>Beenden › Speichern</b>. Nur gespeicherte Fahrten zählen für Level, Saison, Missionen, Plan und Bestzeiten.</li>
   </ol><p class="small muted">Bluetooth gibt es in Chrome und Edge (Windows, macOS, Android, ChromeOS), nicht in Safari und nicht auf dem iPhone. Bei der ersten Fahrt erklärt eine kurze <b>Einführung</b> die Anzeigen (später wieder über Mehr › Einführung).</p>`],
   ['geraete', '📡', 'Geräte', `<ul class="tips">
     <li><b>Smart-Trainer</b> (FTMS): liefert Leistung und Kadenz und wird gesteuert – feste Watt (ERG), Steigung oder virtuelle Gänge.</li>
     <li><b>Pulsgurt</b>: Pulsanzeige, Pulszonen, Puls-Ziel-Modus, Musik nach Puls und adaptive Workouts.</li>
-    <li><b>Click-Controller</b> und Fernbedienungen: Tasten unter Geräte anlernen. Einmal klicken schaltet, dreimal schnell Plus springt im Workout vor, dreimal Minus zurück.</li>
+    <li><b>Lenkertasten</b> und Fernbedienungen: Tasten unter Geräte anlernen. Einmal klicken schaltet, dreimal schnell Plus springt im Workout vor, dreimal Minus zurück.</li>
     <li>Bekannte Geräte verbindet die App beim Start selbst. <b>Demo-Geräte</b> lassen sich auch während der Fahrt über Mehr › Demo an- und ausschalten; solche Fahrten werden nur gespeichert, wenn du das unter Einstellungen › App erlaubst.</li>
     <li><b>Demo-Modus als Minispiel</b>: Mit Demo-Geräten erscheint links in der Fahrt eine Steuerung – Trittfrequenz und Watt mit − / + (gedrückt halten zählt schnell), 🛑 Bremse halten, 🚀 Sprint, Spur ⬅ ➡. Tastatur: Bild ↑/↓ = Watt, Pos1/Ende = Trittfrequenz.</li></ul>`],
   ['fahren', '🚴', 'Fahren', `<ul class="tips">

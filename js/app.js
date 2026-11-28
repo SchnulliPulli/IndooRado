@@ -190,6 +190,7 @@ async function route() {
     el.innerHTML = '';
     await mod.render(el, params.map(decodeURIComponent), query);
     if (jump) requestAnimationFrame(() => el.children[jump]?.scrollIntoView({ block: 'start' }));
+    if ((grp?.k === 'profile' && k !== 'help' && k !== 'legal') || k === 'devices') import('./setsearch.js').then(m => m.attach(el, k, PAGES, mod)).catch(e => console.warn(e)); // Suche in den Einstellungen
     msgUpd();
     sessionStorage.removeItem('vvReloaded');
     if (k === 'lobby') announce(el);

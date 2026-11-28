@@ -1,4 +1,4 @@
-// Bluetooth-Geräte: FTMS-Trainer, Herzfrequenz, Trittfrequenz (CSC), Click-Controller
+// Bluetooth-Geräte: FTMS-Trainer, Herzfrequenz, Trittfrequenz (CSC), Lenkertasten
 // Alle Verbindungen leben im Speicher der App und überdauern Seitenwechsel innerhalb der App.
 import { live, profile } from './state.js';
 import { bus, clamp } from './util.js';
@@ -9,10 +9,10 @@ const U = {
   zw: '00000001-19ca-4651-86e5-fa29dcdd09d1', zwFc: '0000fc82-0000-1000-8000-00805f9b34fb',
 };
 export const KINDS = {
-  trainer: { label: 'Smart-Trainer', hint: 'Van Rysel D100 und andere FTMS-Trainer' },
-  hr: { label: 'Herzfrequenz', hint: 'Garmin HRM-Dual (Bluetooth)' },
-  cad: { label: 'Trittfrequenz', hint: 'Garmin Cadence Sensor 2' },
-  click: { label: 'Click-Controller', hint: 'Zum Aufwecken eine Taste drücken' },
+  trainer: { label: 'Smart-Trainer', hint: 'Rolle mit Bluetooth-Steuerung (FTMS)' },
+  hr: { label: 'Herzfrequenz', hint: 'Brustgurt, Armband oder Uhr mit Pulsübertragung' },
+  cad: { label: 'Trittfrequenz', hint: 'Kurbel- oder Pedalsensor' },
+  click: { label: 'Lenkertasten', hint: 'Schalt-Controller – zum Aufwecken eine Taste drücken' },
 };
 export const devs = { trainer: null, hr: null, cad: null, click: null };
 export const status = { trainer: 'off', hr: 'off', cad: 'off', click: 'off' };
@@ -34,7 +34,7 @@ const OPTS = {
   trainer: { filters: [{ services: [U.ftms] }], optionalServices: [U.ftms, U.batt] },
   hr: { filters: [{ services: [U.hr] }], optionalServices: [U.batt] },
   cad: { filters: [{ services: [U.csc] }], optionalServices: [U.batt] },
-  // Click-Controller: Erkennung über seine Bluetooth-Dienste
+  // Lenkertasten: Erkennung über seine Bluetooth-Dienste
   click: { filters: [{ services: [U.zw] }, { services: [U.zwFc] }], optionalServices: [U.zw, U.zwFc, U.batt] },
 };
 
@@ -174,6 +174,7 @@ async function setupHr(d, srv) {
     const v = e.target.value, f = v.getUint8(0);
     const h = f & 1 ? v.getUint16(1, true) : v.getUint8(1);
     if (h > 0) { live.hr = h; live.hrT = performance.now(); bus.emit('data'); }
+    if (f & 16) import('./sensors.js').then(m => m.addRr('main-hr', m.hrFrom(v).rr, d.name || 'Pulsgurt')).catch(() => { }); // RR-Abstände → HRV
   });
   await c.startNotifications();
 }
@@ -198,7 +199,7 @@ function parseCsc(v) {
   C.rev = rev; C.time = t; live.cadT = now; bus.emit('data');
 }
 
-/* ---------------- Click-Controller ---------------- */
+/* ---------------- Lenkertasten ---------------- */
 export const click = { map: null, learn: null, state: {}, lastId: '' };
 const DEFAULT_MAP = { '37:1': 'up', '37:2': 'down', '23:4096': 'up', '23:8192': 'down', '23:256': 'up', '23:512': 'down', '23:2': 'up', '23:8': 'down' };
 export async function loadClickMap() { click.map = await kv.get('clickmap', { ...DEFAULT_MAP }); }
@@ -208,14 +209,14 @@ async function setupClick(d, srv) {
   const chars = await s.getCharacteristics();
   const find = n => chars.find(c => c.uuid.startsWith('0000000' + n));
   const notify = find(2), write = find(3), ind = find(4);
-  if (!notify || !write) throw new Error('Click-Merkmale nicht gefunden');
+  if (!notify || !write) throw new Error('Controller-Merkmale nicht gefunden');
   notify.addEventListener('characteristicvaluechanged', e => parseClick(e.target.value));
   await notify.startNotifications();
   if (ind) {
     ind.addEventListener('characteristicvaluechanged', e => {
       const b = new Uint8Array(e.target.value.buffer);
-      if (b[0] === 0xff) log('Click ist gesperrt. Ein Click v2 muss etwa alle 24 h einmal in der App des Herstellers verbunden werden.');
-      else if (b[0] === 0x52) log('Click antwortet mit RideOn.');
+      if (b[0] === 0xff) log('Der Controller ist gesperrt. Manche Modelle müssen regelmäßig in der App des Herstellers verbunden werden.');
+      else if (b[0] === 0x52) log('Controller antwortet (RideOn).');
     });
     try { await ind.startNotifications(); } catch (e) { }
   }

@@ -1357,3 +1357,21 @@ body.watchtv .tvprof { height: 15vh; }
 .notifkinds .chk input{margin-top:4px;width:18px;height:18px;flex:none;accent-color:var(--acc)}
 .notifkinds .chk span{display:flex;flex-direction:column}
 .notifkinds .notifat{margin:0 0 4px 28px;max-width:260px}
+/* Weitere Sensoren */
+.snpresets{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin:8px 0 12px}
+.snpre{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:10px 12px;border-radius:10px;border:1px solid rgba(127,127,127,.25);background:rgba(127,127,127,.06);color:inherit;cursor:pointer;font:inherit}
+.snpre:hover,.snpre:focus-visible{border-color:var(--acc);background:rgba(127,127,127,.12)}
+.snpre small{opacity:.7;font-size:.8em}
+.snvals{display:flex;flex-wrap:wrap;gap:6px 14px;margin:6px 0;font-size:.95em}
+.snraw{margin-top:4px}.snadv{margin:6px 0}
+/* Suche in den Einstellungen */
+.setsearch{position:relative;margin:0 0 14px;z-index:20}
+.setsearch .inp{width:100%}
+.ssres{position:absolute;left:0;right:0;top:calc(100% + 4px);background:var(--card,#1b2026);border:1px solid rgba(127,127,127,.3);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.35);max-height:60vh;overflow:auto;padding:6px}
+.ssitem{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;text-align:left;padding:8px 10px;border:0;border-radius:8px;background:none;color:inherit;font:inherit;cursor:pointer}
+.ssitem:hover,.ssitem:focus-visible{background:rgba(127,127,127,.15);outline:none}
+.ssitem small{opacity:.65;font-size:.8em}
+.ssempty{padding:10px;opacity:.7;font-size:.9em}
+.ssbuild{position:absolute;left:-10000px;top:0;width:900px;visibility:hidden;pointer-events:none}
+.sshit{animation:sshit 2.4s ease-out}
+@keyframes sshit{0%,30%{box-shadow:0 0 0 3px var(--acc);border-radius:10px;background:rgba(255,106,61,.12)}100%{box-shadow:0 0 0 0 transparent}}

@@ -529,7 +529,7 @@ function bindUi() {
     else if (c === 'end') endRide();
     else if (c === 'endsave') { document.querySelector('.modal.on .enddlg')?.closest('.modal')?.remove(); endRide(false, 'save'); }
   }));
-  // Click-Controller: drei schnelle Klicks auf dieselbe Taste überspringen das Intervall, einzelne Klicks schalten
+  // Lenkertasten: drei schnelle Klicks auf dieselbe Taste überspringen das Intervall, einzelne Klicks schalten
   S.offs.push(bus.on('clickpress', id => {
     const now = performance.now(), P = S.presses = (S.presses || []).filter(p => now - p.t < 900 && p.id === id);
     P.push({ id, t: now });
@@ -1046,7 +1046,7 @@ function step(dt, first) {
       S.vkLast = Math.floor(totD / (vk * 1000)); const ps = S.samples.filter(x => x.p != null), ap = ps.length ? ps.reduce((a, x) => a + x.p, 0) / ps.length : 0;
       say(`Kilometer ${S.vkLast * vk}. Zeit ${fmtT(S.t)}, Schnitt ${Math.round(ap)} W und ${(totD / Math.max(1, S.t) * 3.6).toFixed(1).replace('.', ',')} km/h${live.heart ? ', Puls ' + live.heart : ''}`, 'km');
     }
-    S.samples.push({ ts: Math.round(S.wall), p: Math.round(pw), hr: live.heart, cad: cad != null ? Math.round(cad) : null, v: +S.v.toFixed(2), d: +totD.toFixed(1), e: +e.toFixed(1), la: +R.latAt(S.dist).toFixed(6), lo: +R.lonAt(S.dist).toFixed(6), g: S.mode === 'gear' ? S.gear : null, tg: target != null ? Math.round(target) : null, wt: S.wo ? Math.round(S.wT) : null, gr: +grade.toFixed(1), rd: Math.round(S.dist) }); snapTick();
+    S.samples.push({ ts: Math.round(S.wall), p: Math.round(pw), hr: live.heart, cad: cad != null ? Math.round(cad) : null, v: +S.v.toFixed(2), d: +totD.toFixed(1), e: +e.toFixed(1), la: +R.latAt(S.dist).toFixed(6), lo: +R.lonAt(S.dist).toFixed(6), g: S.mode === 'gear' ? S.gear : null, tg: target != null ? Math.round(target) : null, wt: S.wo ? Math.round(S.wT) : null, gr: +grade.toFixed(1), rd: Math.round(S.dist) }); snapTick(); window.__rideSpeed = S.state === 'riding' ? S.v : 0;
     const N = S.np; N.buf.push(pw); N.bs += pw; if (N.buf.length > 30) N.bs -= N.buf.shift(); if (N.buf.length === 30) { N.s4 += (N.bs / 30) ** 4; N.n++; }
     if (profile.autoShots) {
       const n = S.samples.length;
@@ -1141,7 +1141,7 @@ function hud() {
       kj: [Math.round(S.kj)], kcal: [Math.round(S.kj / .24 / 4.184)], grade: [f(g) + ' %'], target: [tgt != null && S.wo ? Math.round(tgt) + ' W' : '–', tgt ? zoneColor(tgt / ftp) : ''],
       left: [wi && !wi.done ? fmtT(wi.left) : '–'], woLeft: [S.wo ? fmtT(Math.max(0, tot - S.wT)) : '–'], xp: ['+' + xp], clock: [new Date().toLocaleTimeString(document.documentElement.lang, { hour: '2-digit', minute: '2-digit' })],
       ...(() => { const X = live.extra || {}, fresh = o => o && performance.now() - o.t < 5000, cu = Object.values(X).find(o => o.label && Object.keys(X).find(k => k.startsWith('x:') && X[k] === o));
-        return { xspeed: [fresh(X.speed) ? f(X.speed.v) + ' km/h' : '–'], xtemp: [fresh(X.temp) ? f(X.temp.v) + ' °C' : '–'], xcustom: [fresh(cu) ? (Math.abs(cu.v) < 100 ? f(cu.v) : Math.round(cu.v)) + ' ' + cu.label : '–'] }; })(),
+        return { xspeed: [fresh(X.speed) ? f(X.speed.v) + ' km/h' : '–'], xtemp: [fresh(X.temp) ? f(X.temp.v) + ' °C' : '–'], xhrv: [X.hrv && performance.now() - X.hrv.t < 15000 ? Math.round(X.hrv.v) + ' ms' : '–'], xbal: [fresh(X.bal) ? Math.round(X.bal.v) + ' / ' + Math.round(100 - X.bal.v) : '–'], xcore: [X.core && performance.now() - X.core.t < 60000 ? f(X.core.v) + ' °C' : '–', X.core?.v >= 39 ? '#ff8b97' : ''], xroom: [X.room && performance.now() - X.room.t < 120000 ? f(X.room.v) + ' °C' + (X.hum && performance.now() - X.hum.t < 120000 ? ' · ' + Math.round(X.hum.v) + ' %' : '') : '–'], xcustom: [fresh(cu) ? (Math.abs(cu.v) < 100 ? f(cu.v) : Math.round(cu.v)) + ' ' + cu.label : '–'] }; })(),
       lap: [fmtT(S.t - S.lapT0)], place: [S.npcOn ? (S.field.filter(n => gapOf(R, n.d, S.dist) > 0).length + 1) + ' / ' + (S.field.length + 1) : '–'],
       tss: [tss], ghost: [gg == null ? 'kein Geist' : (gg >= 0 ? '−' : '+') + Math.abs(Math.round(gg)) + ' m', gg == null ? '' : gg > 0 ? '#ff8b97' : '#4fd18b'],
       hrz: [hz >= 0 ? HRZONES[hz].n : '–', hz >= 0 ? HRZONES[hz].c : ''], pz: [ZONES[pz].n.split(' ')[0], ZONES[pz].c],

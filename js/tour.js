@@ -4,7 +4,7 @@ import { profile, saveProfile } from './state.js';
 const STEPS = [
   { s: '#hPw', t: 'Deine Leistung', x: 'Hier siehst du deine Watt. Die Farbe zeigt die Trainingszone, der Ring füllt sich bis zu deiner FTP.' },
   { s: '#hSpd', t: 'Tempo und Strecke', x: 'Geschwindigkeit, gefahrene Kilometer und Zeit. Bergauf wirst du langsamer, im Windschatten anderer schneller.' },
-  { s: '#hGear', t: 'Virtuelle Gänge', x: 'Mit ↑/↓, den Tasten deines Click-Controllers oder hier antippen schaltest du. Schwerer Gang = mehr Widerstand.' },
+  { s: '#hGear', t: 'Virtuelle Gänge', x: 'Mit ↑/↓, deinen Lenkertasten oder hier antippen schaltest du. Schwerer Gang = mehr Widerstand.' },
   { s: '#elev', t: 'Höhenprofil', x: 'Was vor dir liegt: Anstiege, Sprints und dein Standort. Gipfel und Sprints bringen XP und Bestzeiten.' },
   { s: '#mini', t: 'Karte', x: 'Die Übersicht. Antippen öffnet die große Karte – dort kannst du zoomen und an jede Stelle beamen.' },
   { s: '#riders', t: 'Mitfahrer', x: 'Wer um dich herum fährt. Echte Spieler sind hervorgehoben, Bots kannst du mit N ein- und ausblenden.' },

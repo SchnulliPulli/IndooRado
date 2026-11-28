@@ -13,7 +13,7 @@ export const METRICS = {
   p3: 'Leistung 3 s', wkg: 'W/kg', hr: 'Puls', cad: 'Trittfrequenz', spd: 'Tempo', dist: 'Distanz', time: 'Fahrzeit', asc: 'Höhenmeter',
   avg: 'Ø Leistung', np: 'Normalisierte Leistung', kj: 'Arbeit (kJ)', kcal: 'Kalorien', grade: 'Steigung', target: 'Zielleistung',
   left: 'Intervall-Rest', woLeft: 'Workout-Rest', xp: 'XP der Fahrt', clock: 'Uhrzeit', tss: 'TSS bisher', ghost: 'Abstand zum Geist', hrz: 'Pulszone', pz: 'Leistungszone',
-  lap: 'Rundenzeit', place: 'Platz im Feld', xspeed: 'Tempo (Sensor)', xtemp: 'Temperatur (Sensor)', xcustom: 'Eigener Sensorwert',
+  lap: 'Rundenzeit', place: 'Platz im Feld', xspeed: 'Tempo (Sensor)', xtemp: 'Temperatur (Sensor)', xhrv: 'HRV (Herzratenvariabilität)', xbal: 'Pedal-Balance', xcore: 'Körperkerntemperatur', xroom: 'Raumklima', xcustom: 'Eigener Sensorwert',
 };
 export const GRAPHS = { gp: 'Leistung (letzte 2 min)', gh: 'Puls (letzte 5 min)', gc: 'Trittfrequenz (letzte 2 min)' };
 

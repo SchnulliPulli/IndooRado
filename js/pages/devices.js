@@ -3,7 +3,7 @@ import { $, esc, bus, toast, dialog } from '../util.js';
 import { deviceCards } from '../components.js';
 import { click, logLines, setPower, setGrade, status, demo, devs } from '../ble.js';
 import { kv } from '../db.js';
-import { profile, saveProfile } from '../state.js';
+import { profile, saveProfile, live } from '../state.js';
 import * as SN from '../sensors.js';
 
 let off = [];
@@ -12,8 +12,8 @@ export async function render(el) {
   <section class="pagehead"><h1>Geräte</h1></section>
   <section class="card"><div id="devs"></div></section>
   <section class="grid2">
-    <div class="card"><h2>Click-Controller</h2>
-      <p class="small muted">Click v1 funktioniert direkt. Ein Click v2 muss laut Nutzerberichten etwa alle 24 Stunden einmal in der App des Herstellers verbunden werden, sonst bleibt er gesperrt. Falls + und − vertauscht sind oder nichts passiert: Taste anlernen.</p>
+    <div class="card"><h2>Lenkertasten</h2>
+      <p class="small muted">Schalt-Controller und Bluetooth-Tasten am Lenker. Manche Modelle müssen regelmäßig in der App des Herstellers verbunden werden, sonst bleiben sie gesperrt. Falls + und − vertauscht sind oder nichts passiert: Taste anlernen.</p>
       <div class="row"><button class="btn" id="lUp">+ anlernen</button><button class="btn" id="lDn">− anlernen</button><button class="btn ghost" id="lRs">Zurücksetzen</button></div>
       <p class="small" id="cmap"></p><p class="small muted" id="clast"></p>
     </div>
@@ -21,7 +21,7 @@ export async function render(el) {
       <p class="small muted">Prüft, ob der Trainer Befehle annimmt. Vorher treten.</p>
       <div class="row"><button class="btn" data-w="100">ERG 100 W</button><button class="btn" data-w="200">ERG 200 W</button><button class="btn" data-g="0">Steigung 0 %</button><button class="btn" data-g="5">Steigung 5 %</button></div>
       <h3 class="sub">So klappt die Verbindung</h3>
-      <ul class="small muted tips"><li>Andere Trainings-Apps schließen. Der D100 nimmt nur eine Verbindung an.</li><li>Den HRM-Dual anfeuchten und anlegen, sonst sendet er nicht.</li><li>Den Kadenzsensor kurz drehen, damit er aufwacht.</li><li>Auf Android braucht Chrome die Berechtigung „Geräte in der Nähe“.</li></ul>
+      <ul class="small muted tips"><li>Andere Trainings-Apps schließen – viele Trainer nehmen nur eine Verbindung gleichzeitig an.</li><li>Brustgurte senden oft erst, wenn sie leicht angefeuchtet anliegen.</li><li>Sensoren an Kurbel oder Rad kurz bewegen, damit sie aufwachen.</li><li>Auf Android braucht Chrome die Berechtigung „Geräte in der Nähe“.</li></ul>
     </div>
   </section>
   <section class="card form" id="snCard"></section>
@@ -41,22 +41,28 @@ export async function render(el) {
   const snCard = $('#snCard', el);
   const renderSn = () => {
     const open = new Set([...snCard.querySelectorAll('details[open]')].map(d => d.dataset.k));
-    snCard.innerHTML = `<div class="row between"><h2>Weitere Sensoren</h2><button class="btn pri sm" id="snAdd">+ Sensor hinzufügen</button></div>
-      <p class="small muted">Powermeter, Geschwindigkeitssensor, zweiter Puls- oder Kadenzsensor, Temperatursensor oder ein ganz unbekanntes Gerät. Bekannte Standards werden automatisch gelesen. Bei unbekannten Geräten siehst du alle Messwerte als Rohdaten und ordnest ihnen selbst eine Bedeutung zu.</p>
+    snCard.innerHTML = `<h2>Weitere Sensoren</h2>
+      <p class="small muted">Was möchtest du verbinden? Die Auswahl zeigt dann nur passende Geräte. Standards werden automatisch gelesen; bei unbekannten Geräten ordnest du die Rohdaten selbst zu.</p>
+      <div class="snpresets">${SN.PRESETS.map(([k, l, d]) => `<button class="snpre" data-pre="${k}"><b>${l}</b><small>${d}</small></button>`).join('')}</div>
       <div class="grid2 tight"><label class="f">Leistung kommt von<select class="inp" id="snSrc"><option value="trainer" ${profile.powerSource !== 'meter' ? 'selected' : ''}>Trainer</option><option value="meter" ${profile.powerSource === 'meter' ? 'selected' : ''}>Powermeter (falls verbunden)</option></select></label>
-      <label class="f">Zusätzliche Dienst-UUIDs (optional)<input class="inp" id="snUuids" placeholder="z. B. 0000fff0-0000-1000-8000-00805f9b34fb" value="${esc(localStorage.getItem('vvSnUuids') || '')}"></label></div>
-      <p class="small muted">Der Browser zeigt nur Dienste, die vorher genannt wurden. Alle Standard-Dienste und bekannte Herstellerdienste sind schon dabei. Fehlt etwas, die UUID aus der Herstellerdoku oder einer App wie nRF Connect hier eintragen (mehrere mit Komma).</p>
+      <label class="f">Lüfter folgt<select class="inp" id="snFan">${[['speed', 'dem Tempo'], ['hr', 'dem Puls'], ['fixed', 'fester Stufe'], ['off', 'aus']].map(([v, l]) => `<option value="${v}" ${(profile.fanMode || 'speed') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
+      <details class="snadv"><summary class="small">Für Fortgeschrittene: zusätzliche Dienst-UUIDs</summary><label class="f">Dienst-UUIDs (mehrere mit Komma)<input class="inp" id="snUuids" placeholder="z. B. 0000fff0-0000-1000-8000-00805f9b34fb" value="${esc(localStorage.getItem('vvSnUuids') || '')}"></label>
+      <p class="small muted">Der Browser zeigt nur Dienste, die vorher genannt wurden. Alle Standard-Dienste sind schon dabei. Fehlt etwas, die UUID aus der Herstellerdoku oder einer App wie nRF Connect eintragen.</p></details>
       ${SN.sensors.list.map(en => { const c = SN.sensors.conn.get(en.id); return `<div class="sncard" data-id="${esc(en.id)}">
-        <div class="row between"><b>${esc(en.name)}</b><span class="row small"><span class="snst ${c?.status || 'off'}">${{ on: 'verbunden', busy: 'verbindet …', error: 'getrennt' }[c?.status] || 'nicht verbunden'}</span>${c?.battery != null ? `<span class="muted">🔋 ${c.battery} %</span>` : ''}<button class="btn xs" data-snre>Verbinden</button><button class="btn xs ghost danger" data-sndel>Entfernen</button></span></div>
+        <div class="row between"><span><b>${esc(en.name)}</b>${c?.info ? `<small class="muted"> · ${esc([c.info.maker, c.info.model, c.info.fw && 'FW ' + c.info.fw].filter(Boolean).join(' · '))}</small>` : ''}</span><span class="row small"><span class="snst ${c?.status || 'off'}">${{ on: 'verbunden', busy: 'verbindet …', error: 'getrennt' }[c?.status] || 'nicht verbunden'}</span><button class="btn xs" data-snre>Verbinden</button><button class="btn xs ghost danger" data-sndel>Entfernen</button></span></div>
+        <div class="snvals" data-vals="${esc(en.id)}">${snVals(en)}</div>
+        <details class="snraw"><summary class="small muted">Rohdaten und eigene Zuordnungen</summary>
         ${(c?.services || []).filter(sv => sv.chars.length && !/^0x180[01a]$/.test(SN.short(sv.uuid))).map(sv => `<details data-k="${esc(en.id + sv.uuid)}" ${open.has(en.id + sv.uuid) ? 'open' : ''}><summary>${esc(sv.label)} <span class="muted small">${esc(SN.short(sv.uuid))}</span></summary>
           ${sv.chars.map(ch => { const mp = (en.maps || []).find(m => m.key === ch.key); return `<div class="snchar" data-key="${esc(ch.key)}"><div class="row between small"><span>${esc(SN.short(ch.uuid))} ${ch.notify ? '· live' : ch.read ? '· lesbar' : ''}</span><code class="snhex" data-hex="${esc(ch.key)}">${SN.hexOf(c.values[ch.key])}</code></div>
             ${mp ? `<div class="small">→ <b>${esc(mp.metric === 'custom' ? mp.label : SN.METRICS[mp.metric])}</b> aus ${SN.FORMATS[mp.fmt]} ab Byte ${mp.off} × ${mp.scale}${+mp.add ? ' + ' + mp.add : ''} = <b class="num" data-dec="${esc(ch.key)}">–</b> <button class="btn xs ghost" data-unmap>Zuordnung lösen</button></div>` : `<button class="btn xs ghost" data-map>Diesem Wert eine Bedeutung geben</button>`}</div>`; }).join('')}
         </details>`).join('') || (c?.status === 'on' ? '<p class="small muted">Keine lesbaren Messwerte gefunden.</p>' : '')}
+        </details>
         ${c?.services?.some(sv => ['0x1818', '0x1816', '0x180d'].includes(SN.short(sv.uuid))) ? `<div class="row small">Automatisch übernehmen: ${[['power', 'Leistung'], ['cad', 'Trittfrequenz'], ['speed', 'Tempo'], ['hr', 'Puls']].map(([k, l]) => `<label class="switch sm"><input type="checkbox" data-use="${k}" ${en.use?.[k] !== false ? 'checked' : ''}><span></span> ${l}</label>`).join('')}</div>` : ''}
       </div>`; }).join('') || '<p class="small muted">Noch keine weiteren Sensoren.</p>'}`;
   };
   renderSn(); SN.loadSensors().then(renderSn);
   off.push(bus.on('sensors', renderSn));
+  off.push(bus.on('data', () => { for (const en of SN.sensors.list) { const b = snCard.querySelector(`[data-vals="${CSS.escape(en.id)}"]`); if (b) b.innerHTML = snVals(en); } }));
   off.push(bus.on('sensorvalue', ({ id, key }) => {
     const c = SN.sensors.conn.get(id), v = c?.values[key], h = snCard.querySelector(`[data-hex="${CSS.escape(key)}"]`); if (h) h.textContent = SN.hexOf(v);
     const mp = (c?.entry.maps || []).find(m => m.key === key), d = snCard.querySelector(`[data-dec="${CSS.escape(key)}"]`);
@@ -64,11 +70,13 @@ export async function render(el) {
   }));
   snCard.onchange = async e => {
     if (e.target.id === 'snSrc') { profile.powerSource = e.target.value; saveProfile(); toast('Gespeichert', 900); return; }
+    if (e.target.id === 'snFan') { profile.fanMode = e.target.value; saveProfile(); toast('Gespeichert', 900); return; }
     if (e.target.id === 'snUuids') { localStorage.setItem('vvSnUuids', e.target.value); return; }
     const u = e.target.dataset.use; if (u) { const en = SN.sensors.list.find(x => x.id === e.target.closest('[data-id]').dataset.id); (en.use ||= {})[u] = e.target.checked; SN.updateSensor(en); }
   };
   snCard.onclick = async e => {
-    if (e.target.id === 'snAdd') { try { await SN.addSensor(($('#snUuids', el).value || '').split(',')); } catch (err) { if (err.name !== 'NotFoundError') toast(err.message, 5000); } return; }
+    const pre = e.target.closest('[data-pre]')?.dataset.pre;
+    if (pre) { try { await SN.addSensor(($('#snUuids', el)?.value || '').split(','), pre); } catch (err) { if (err.name !== 'NotFoundError') toast(err.message, 5000); } return; }
     const card = e.target.closest('[data-id]'); if (!card) return; const en = SN.sensors.list.find(x => x.id === card.dataset.id);
     if (e.target.closest('[data-sndel]')) { if (confirm('Sensor ' + en.name + ' entfernen?')) SN.removeSensor(en.id); return; }
     if (e.target.closest('[data-snre]')) { const c = SN.sensors.conn.get(en.id); if (c?.device) SN.connectSensor(en, c.device); else try { await SN.addSensor(($('#snUuids', el).value || '').split(',')); } catch (err) { } return; }
@@ -93,5 +101,14 @@ export async function render(el) {
   };
   const showLog = () => { $('#log', el).textContent = logLines.join('\n') || 'Noch keine Einträge.'; };
   showLog(); off.push(bus.on('log', showLog));
+}
+// Kurzüberblick der erkannten Werte eines Sensors
+const UNIT = { power: ['⚡', 'W', 0], cad: ['🔄', 'U/min', 0], hr: ['❤️', 'bpm', 0], speed: ['🚴', 'km/h', 1], hrv: ['💓', 'ms HRV', 0], bal: ['⚖️', '% links', 0], temp: ['🌡️', '°C', 1], core: ['🌡️', '°C Kern', 1], skin: ['✋', '°C Haut', 1], room: ['🏠', '°C', 1], hum: ['💧', '%', 0] };
+function snVals(en) {
+  const c = SN.sensors.conn.get(en.id), X = live.extra || {}, now = performance.now(), out = [];
+  for (const [k, [i, u, d]] of Object.entries(UNIT)) { const o = X[k]; if (o && o.src === en.name && now - o.t < 60000) out.push(`<span>${i} <b class="num">${(+o.v).toFixed(d).replace('.', ',')}</b> ${u}</span>`); }
+  if (c?.fan) out.push(`<span>🌬️ <b class="num">${c.fanPct ?? 0}</b> %</span>`);
+  if (c?.battery != null) out.push(`<span class="muted">🔋 ${c.battery} %</span>`);
+  return out.join('') || (c?.status === 'on' ? '<span class="muted small">wartet auf Messwerte …</span>' : '');
 }
 export function leave() { off.forEach(f => f()); off = []; }

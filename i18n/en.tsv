@@ -2239,3 +2239,43 @@ Jede Art lässt sich später einzeln abwählen: Einstellungen › App & Daten �
 Aktivieren	Turn on
 Später	Later
 Benachrichtigungen an	Notifications on
+Einstellungen durchsuchen …	Search settings …
+Einstellungen durchsuchen	Search settings
+Nichts gefunden	Nothing found
+Wird vorbereitet …	Preparing …
+Lenkertasten	Handlebar buttons
+Schalt-Controller und Bluetooth-Tasten am Lenker. Manche Modelle müssen regelmäßig in der App des Herstellers verbunden werden, sonst bleiben sie gesperrt. Falls + und − vertauscht sind oder nichts passiert: Taste anlernen.	Shift controllers and Bluetooth buttons on the handlebar. Some models must be connected in the manufacturer's app regularly, otherwise they stay locked. If + and − are swapped or nothing happens: learn the button.
+Andere Trainings-Apps schließen – viele Trainer nehmen nur eine Verbindung gleichzeitig an.	Close other training apps – many trainers accept only one connection at a time.
+Brustgurte senden oft erst, wenn sie leicht angefeuchtet anliegen.	Chest straps often only send when slightly moistened and worn.
+Sensoren an Kurbel oder Rad kurz bewegen, damit sie aufwachen.	Move sensors on the crank or wheel briefly to wake them up.
+Rolle mit Bluetooth-Steuerung (FTMS)	Trainer with Bluetooth control (FTMS)
+Brustgurt, Armband oder Uhr mit Pulsübertragung	Chest strap, armband or watch with HR broadcast
+Kurbel- oder Pedalsensor	Crank or pedal sensor
+Schalt-Controller – zum Aufwecken eine Taste drücken	Shift controller – press a button to wake it
+Was möchtest du verbinden? Die Auswahl zeigt dann nur passende Geräte. Standards werden automatisch gelesen; bei unbekannten Geräten ordnest du die Rohdaten selbst zu.	What would you like to connect? The selection then shows only matching devices. Standards are read automatically; for unknown devices you map the raw data yourself.
+Powermeter	Power meter
+Leistung, Trittfrequenz, Pedal-Balance	Power, cadence, pedal balance
+Tempo / Trittfrequenz	Speed / cadence
+Rad- oder Kurbelsensor	Wheel or crank sensor
+Zweiter Pulsmesser	Second heart rate monitor
+Puls und Herzratenvariabilität (HRV)	Heart rate and heart rate variability (HRV)
+Körpertemperatur	Body temperature
+Kerntemperatur-Sensor (experimentell)	Core temperature sensor (experimental)
+Raumklima	Room climate
+Temperatur und Luftfeuchte im Raum	Room temperature and humidity
+Lüfter	Fan
+Bluetooth-Lüfter, der dem Tempo oder Puls folgt (experimentell)	Bluetooth fan that follows speed or heart rate (experimental)
+Anderes Gerät	Other device
+alle Geräte in der Nähe, Werte selbst zuordnen	all nearby devices, map values yourself
+Lüfter folgt	Fan follows
+dem Tempo	speed
+dem Puls	heart rate
+fester Stufe	fixed level
+aus	off
+Für Fortgeschrittene: zusätzliche Dienst-UUIDs	Advanced: additional service UUIDs
+Dienst-UUIDs (mehrere mit Komma)	Service UUIDs (several with commas)
+Rohdaten und eigene Zuordnungen	Raw data and custom mappings
+wartet auf Messwerte …	waiting for readings …
+HRV (Herzratenvariabilität)	HRV (heart rate variability)
+Pedal-Balance	Pedal balance
+Körperkerntemperatur	Core body temperature

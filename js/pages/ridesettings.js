@@ -117,7 +117,7 @@ export async function render(el, params = []) {
       ${SW('p', 'tips', 'Trainer-Tipps zu Kadenz und Fahrweise')}
       ${SW('s', 'adaptive', 'Adaptive Workouts', 'Widerstand senken bei Kadenzeinbruch, Intensität senken bei Puls am Anschlag')}
       ${SW('p', 'ergSoft', 'Sanfter ERG-Einstieg', 'Große Wattsprünge über 5 Sekunden hochfahren')}
-      ${SW('p', 'tripleSkip', 'Click-Controller: dreimal schnell = Intervall vor/zurück')}
+      ${SW('p', 'tripleSkip', 'Lenkertasten: dreimal schnell = Intervall vor/zurück')}
       ${SW('p', 'liveShare', 'Live-Fahrt an die Companion-Ansicht senden', 'Über den NAS-Ordner alle 5 Sekunden, so siehst du die Fahrt auf dem Handy')}
     </div>
   </section>
