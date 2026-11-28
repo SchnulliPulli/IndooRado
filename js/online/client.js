@@ -72,6 +72,7 @@ function ensureDb(uid) {
 }
 export function rememberAccount() {
   const s = online.session || (online.user ? { user: online.user } : null); if (!s?.user) return;
+  setTimeout(acctCache, 0);
   dbFor(s.user.id); // aktuelles Konto behält die Datenbank, in der es gerade läuft
   const list = accounts(), old = list.find(x => x.uid === s.user.id) || {};
   setAccounts([{ ...old, uid: s.user.id, email: s.user.email, name: online.profile?.display_name || old.name || s.user.email, look: online.profile?.avatar || old.look || null, session: s }, ...list.filter(x => x.uid !== s.user.id)]);
@@ -85,6 +86,22 @@ export function switchAccount(uid) {
 // Weiteres Konto: aktuelles merken, ohne es abzumelden (Abmelden würde die Sitzung beim Server beenden), dann zur Anmeldung
 export function addAccount() { rememberAccount(); authStore.removeItem('vv-auth'); online.switching = true; location.hash = '#/account'; location.reload(); }
 export function forgetAccount(uid) { setAccounts(accounts().filter(x => x.uid !== uid)); }
+// Mit einem anderen gespeicherten Konto kurz etwas erledigen (z. B. Push für alle Konten anmelden), ohne zu wechseln.
+// Abgelaufene Sitzung: erneuern und die neue Sitzung gleich wieder speichern (sonst wäre der alte Schlüssel verbraucht).
+export async function withAccount(uid, fn) {
+  const t = accounts().find(x => x.uid === uid); if (!t?.session?.refresh_token || !configured()) return null;
+  const { createClient } = await import('../../vendor/supabase.esm.js'), c = config();
+  const mem = {}, store = { getItem: k => mem[k] ?? null, setItem: (k, v) => { mem[k] = v; }, removeItem: k => { delete mem[k]; } };
+  const sb = createClient(c.url, c.anonKey, { auth: { persistSession: true, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'vv-tmp-' + uid, storage: store } });
+  const { data, error } = await sb.auth.setSession({ access_token: t.session.access_token, refresh_token: t.session.refresh_token });
+  if (error || !data?.session) return null;
+  if (data.session.refresh_token !== t.session.refresh_token) setAccounts(accounts().map(x => x.uid === uid ? { ...x, session: data.session } : x)); // erneuert: merken
+  try { return await fn(sb); } finally { try { sb.realtime?.disconnect?.(); } catch (e) { } }
+}
+// Für den Service Worker: welches Konto ist gerade aktiv, welche gibt es (Namen für Meldungen an andere Konten)
+export async function acctCache() {
+  try { const cc = await caches.open('indoorado-acct'); await cc.put('/__acct.json', new Response(JSON.stringify({ cur: online.user?.id || null, list: accounts().map(a => ({ uid: a.uid, name: a.name || a.email || 'Konto' })) }), { headers: { 'Content-Type': 'application/json' } })); } catch (e) { }
+}
 
 // Live-Dienst braucht den Anmelde-Schlüssel für private Kanäle
 export async function realtimeAuth() { const sb = await client(); const { data } = await sb.auth.getSession(); if (data.session) await sb.realtime.setAuth(data.session.access_token); return !!data.session; }

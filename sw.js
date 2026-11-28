@@ -2,9 +2,9 @@
 // Schnellstart: Dateien kommen sofort aus dem Cache und werden im Hintergrund aktualisiert (stale-while-revalidate).
 // Eine neue App-Version bekommt einen neuen Cache-Namen; beim Wechsel lädt die Seite einmal neu (siehe app.js),
 // damit nie Dateien aus zwei Versionen gemischt werden.
-const CACHE = 'indoorado-v142';
+const CACHE = 'indoorado-v143';
 self.addEventListener('install', e => self.skipWaiting());
-self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())));
+self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE && k !== 'indoorado-acct').map(k => caches.delete(k)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
@@ -36,24 +36,27 @@ function appActive(list) {
 self.addEventListener('push', e => {
   let d = {}; try { d = e.data ? e.data.json() : {}; } catch (x) { }
   const safe = v => String(v || '').slice(0, 80), k = d.kind, call = k === 'call', missed = k === 'missed', from = encodeURIComponent(safe(d.from)), inf = d.info || {};
-  const url = call ? `./#/?pcall=${encodeURIComponent(safe(d.room))}&from=${from}&name=${encodeURIComponent(safe(d.name))}`
-    : k === 'friendreq' ? './#/friends'
-    : k === 'invite' ? './#/lobby'
-    : `./#/friends?open=${from}`;
+  const ac = /^[0-9a-f-]{36}$/i.test(d.acct || '') ? '&acct=' + d.acct : ''; // für welches Konto (mehrere Konten auf einem Gerät)
+  const url = call ? `./#/?pcall=${encodeURIComponent(safe(d.room))}&from=${from}&name=${encodeURIComponent(safe(d.name))}${ac}`
+    : k === 'friendreq' ? `./#/?pgo=friends${ac}`
+    : k === 'invite' ? `./#/?pgo=lobby${ac}`
+    : `./#/friends?open=${from}${ac}`;
   const acts = {
-    join: call ? url : k === 'invite' ? `./#/?pinv=1&from=${from}&k=${encodeURIComponent(safe(inf.k))}&lobby=${encodeURIComponent(safe(inf.lobby))}&route=${encodeURIComponent(safe(inf.route))}&name=${encodeURIComponent(safe(d.name))}` : null,
-    acc: k === 'friendreq' ? `./#/?pfreq=${from}` : null,
-    no: call ? `./#/?pdecline=${encodeURIComponent(safe(d.room))}&from=${from}` : null,
+    join: call ? url : k === 'invite' ? `./#/?pinv=1&from=${from}&k=${encodeURIComponent(safe(inf.k))}&lobby=${encodeURIComponent(safe(inf.lobby))}&route=${encodeURIComponent(safe(inf.route))}&name=${encodeURIComponent(safe(d.name))}${ac}` : null,
+    acc: k === 'friendreq' ? `./#/?pfreq=${from}${ac}` : null,
+    no: call ? `./#/?pdecline=${encodeURIComponent(safe(d.room))}&from=${from}${ac}` : null,
   };
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async list => {
     if (k === 'test') await new Promise(r => setTimeout(r, 6000)); // Zeit, zum Startbildschirm zu wechseln (Samsung zeigt für die App im Vordergrund kein Pop-up)
-    const fg = k !== 'test' && await appActive(list);
+    let A = null; try { A = await (await (await caches.open('indoorado-acct')).match('/__acct.json'))?.json(); } catch (x) { }
+    const other = d.acct && A?.cur && d.acct !== A.cur, who = other ? (A.list || []).find(x => x.uid === d.acct)?.name || 'anderes Konto' : '';
+    const fg = k !== 'test' && !other && await appActive(list); // Meldung für ein anderes Konto: immer als Gerätemeldung
     if (fg) { fg.postMessage({ type: 'pushIn', d: { kind: safe(k), from: safe(d.from), name: safe(d.name), room: safe(d.room), info: { k: safe(inf.k), lobby: safe(inf.lobby), title: safe(inf.title), route: safe(inf.route), routeName: safe(inf.routeName) } } }); return; }
     // Android zeigt eine ersetzte Meldung (gleiche Kennung) nicht erneut als Pop-up: ältere desselben Absenders schließen
     // und die neue mit eigener Kennung anlegen. Nur das wiederholte Klingeln ersetzt bewusst (kein Pop-up-Gewitter).
-    const base = call || missed ? 'call-' + safe(d.room) : k === 'test' ? 'test' : k + '-' + safe(d.from);
+    const base = (call || missed ? 'call-' + safe(d.room) : k === 'test' ? 'test' : k + '-' + safe(d.from)) + (other ? '@' + d.acct.slice(0, 8) : '');
     if (!(call && d.ring)) for (const n of await self.registration.getNotifications()) if (String(n.tag).startsWith(base)) n.close();
-    return self.registration.showNotification(safe(d.title) || 'IndooRado', {
+    return self.registration.showNotification((safe(d.title) || 'IndooRado') + (who ? ` · für ${who}` : ''), {
       body: safe(d.body), tag: call && d.ring ? base : base + (call ? '' : '#' + Date.now()), renotify: true, icon: 'icons/icon-192.png', badge: 'icons/badge-96.png', timestamp: Date.now(), silent: false,
       requireInteraction: call || k === 'invite', vibrate: call ? [600, 250, 600, 250, 600, 250, 600] : [120], data: { url, call, acts },
       actions: call ? [{ action: 'join', title: 'Annehmen' }, { action: 'no', title: 'Ablehnen' }]

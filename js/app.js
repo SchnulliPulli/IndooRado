@@ -369,6 +369,18 @@ function netIndicator() {
 }
 async function pushOpen(href) {
   let h = ''; try { h = new URL(href, location.href).hash; } catch (e) { return; }
+  // Meldung für ein anderes Konto auf diesem Gerät: erst dorthin wechseln, danach die Aktion ausführen
+  const acct = (h.match(/[?&]acct=([0-9a-f-]{36})/i) || [])[1];
+  if (acct) {
+    const O = await import('./online/client.js'); for (let i = 0; i < 40 && !O.online.ready; i++) await new Promise(r => setTimeout(r, 250));
+    if (O.online.user?.id !== acct) {
+      if (!O.accounts().some(a => a.uid === acct)) { toast('Dieses Konto ist auf diesem Gerät nicht mehr angemeldet', 5000); return; }
+      try { sessionStorage.setItem('vvPendingPush', href); } catch (e) { }
+      toast('Wechsle zum richtigen Konto …', 2500); O.switchAccount(acct); return;
+    }
+  }
+  const qp0 = new URLSearchParams(h.split('?')[1] || '');
+  if (qp0.has('pgo')) { location.hash = '#/' + (qp0.get('pgo') === 'lobby' ? 'lobby' : 'friends'); return; }
   const qp = new URLSearchParams(h.split('?')[1] || ''), waitOnline = async () => { const O = await import('./online/client.js'); for (let i = 0; i < 160 && !(O.loggedIn() && O.online.ready && O.access().ok); i++) await new Promise(r => setTimeout(r, 250)); return O; };
   if (qp.has('pdecline')) { // Anruf aus der Meldung abgelehnt
     history.replaceState(null, '', location.pathname + '#/'); const room = qp.get('pdecline'), from = qp.get('from'); await waitOnline();
@@ -387,7 +399,7 @@ async function pushOpen(href) {
     acceptInvite(inv); return;
   }
   const m = h.match(/[?&]pcall=(IndooRado-[A-Za-z0-9]{24})/);
-  if (!m) { const o = h.match(/^#\/friends\?open=([0-9a-f-]{36})$/i); if (o) { const O = await import('./online/client.js'); for (let i = 0; i < 120 && !(O.loggedIn() && O.online.ready); i++) await new Promise(r => setTimeout(r, 250)); (await import('./pages/friends.js')).openChatWith(o[1]); } return; }
+  if (!m) { const o = h.match(/^#\/friends\?open=([0-9a-f-]{36})(&|$)/i); if (o) { const O = await import('./online/client.js'); for (let i = 0; i < 120 && !(O.loggedIn() && O.online.ready); i++) await new Promise(r => setTimeout(r, 250)); (await import('./pages/friends.js')).openChatWith(o[1]); } return; }
   const q = new URLSearchParams(h.split('?')[1] || ''), peer = { id: q.get('from') || '', name: (q.get('name') || 'Freund').slice(0, 40) };
   history.replaceState(null, '', location.pathname + '#/'); route();
   // Nach dem Öffnen aus der Benachrichtigung läuft die Anmeldung oft noch: bis zu 45 s warten, dann annehmen
@@ -442,7 +454,9 @@ async function init() {
     }
   })().catch(() => { });
   // Aus einer Push-Benachrichtigung geöffnet: Anruf annehmen bzw. Chat öffnen
-  if (/[?&](pcall|pinv|pfreq|pdecline)=/.test(location.hash) || /^#\/friends\?open=/.test(location.hash)) pushOpen(location.href); // aus einer Gerätemeldung geöffnet
+  { let pend = null; try { pend = sessionStorage.getItem('vvPendingPush'); sessionStorage.removeItem('vvPendingPush'); } catch (e) { }
+    if (pend) pushOpen(pend); // nach dem Kontowechsel die gemerkte Aktion ausführen
+    else if (/[?&](pcall|pinv|pfreq|pdecline|pgo|acct)=/.test(location.hash) || /^#\/friends\?open=/.test(location.hash)) pushOpen(location.href); } // aus einer Gerätemeldung geöffnet
   navigator.serviceWorker?.addEventListener('message', e => {
     if (e.data?.type === 'ping' && e.ports?.[0]) { const port = e.ports[0], t0 = Date.now(); requestAnimationFrame(() => port.postMessage({ active: document.visibilityState === 'visible' && document.hasFocus() && Date.now() - t0 < 600 })); return; } // bei gesperrtem Handy zeichnet die Seite nicht – keine Antwort
     if (e.data?.type === 'pushOpen') pushOpen(e.data.url);

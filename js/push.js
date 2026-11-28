@@ -30,11 +30,18 @@ export async function enablePush() {
   const ok = await rpc('push_subscribe', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_prefs: prefs() }).catch(e => { throw new Error('Gerät konnte nicht angemeldet werden: ' + (/function|schema cache/i.test(e.message) ? 'schema.sql ausführen' : e.message)); });
   if (ok !== true) throw new Error('Gerät konnte nicht angemeldet werden (Konto nicht freigeschaltet oder gesperrt?)');
   try { localStorage.setItem('vvPush', '1'); } catch (e) { }
+  // Auch die anderen auf diesem Gerät gespeicherten Konten anmelden (einmal am Tag reicht)
+  for (const a of O.accounts()) if (a.uid !== O.online.user?.id) {
+    const k = 'vvPushAcc:' + a.uid; if (Date.now() - (+localStorage.getItem(k) || 0) < 864e5 && localStorage.getItem('vvPushEp') === j.endpoint) continue;
+    O.withAccount(a.uid, sb => sb.rpc('push_subscribe', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_prefs: prefs() })).then(r => { if (r && !r.error) localStorage.setItem(k, String(Date.now())); }).catch(() => { });
+  }
+  try { localStorage.setItem('vvPushEp', j.endpoint); } catch (e) { }
+  O.acctCache();
   return true;
 }
 export async function disablePush() {
   try { localStorage.setItem('vvPush', '0'); } catch (e) { }
-  try { const r = await navigator.serviceWorker.getRegistration(), sub = await r?.pushManager.getSubscription(); if (sub) { if (O.loggedIn()) await rpc('push_unsubscribe', { p_endpoint: sub.endpoint }).catch(() => { }); await sub.unsubscribe(); } } catch (e) { }
+  try { const r = await navigator.serviceWorker.getRegistration(), sub = await r?.pushManager.getSubscription(); if (sub) { if (O.loggedIn()) await rpc('push_unsubscribe', { p_endpoint: sub.endpoint }).catch(() => { }); for (const a of O.accounts()) if (a.uid !== O.online.user?.id) { await O.withAccount(a.uid, sb => sb.rpc('push_unsubscribe', { p_endpoint: sub.endpoint })).catch(() => { }); localStorage.removeItem('vvPushAcc:' + a.uid); } await sub.unsubscribe(); } } catch (e) { }
 }
 // Nach der Anmeldung bzw. bei geänderten Einstellungen erneut melden (Push-Adressen können sich ändern)
 export async function refreshPush() { if (pushWanted() && pushSupported() && O.loggedIn() && vapid() && Notification.permission === 'granted') try { await enablePush(); } catch (e) { } }
