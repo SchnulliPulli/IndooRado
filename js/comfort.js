@@ -132,4 +132,4 @@ export function downloadPlanIcs(p, done) { download((p.name.replace(/[^\wäöü�
 
 // Neue Nachrichten/Anfragen (Zähler aus der Kopfleiste), nur wenn die App gerade im Hintergrund ist
 let lastMsgN = null;
-bus.on('msgCount', n => { if (n != null && lastMsgN != null && n > lastMsgN && document.hidden) notify('💬 IndooRado', n - lastMsgN === 1 ? 'Du hast eine neue Nachricht oder Freundschaftsanfrage.' : `${n - lastMsgN} neue Nachrichten oder Anfragen.`, 'msg', 'msg'); if (n != null) lastMsgN = n; });
+bus.on('msgCount', async n => { if (n != null && lastMsgN != null && n > lastMsgN && document.hidden && !(await import('./push.js').then(P => P.pushActive()).catch(() => false))) notify('💬 IndooRado', n - lastMsgN === 1 ? 'Du hast eine neue Nachricht oder Freundschaftsanfrage.' : `${n - lastMsgN} neue Nachrichten oder Anfragen.`, 'msg', 'msg'); if (n != null) lastMsgN = n; });

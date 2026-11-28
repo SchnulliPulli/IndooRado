@@ -114,7 +114,7 @@ export async function hangUp(notify = true) {
    from/to; jedes Paar handelt seine eigene WebRTC-Verbindung mit „perfekter Aushandlung“ aus. */
 async function openWindow(room, peer, mode = 'av') {
   await hangUp(false); call.room = room; call.peer = peer; call.mode = mode;
-  callState(room, 'join'); clearInterval(call.aliveT); call.aliveT = setInterval(() => call.room === room ? callState(room, 'alive') : clearInterval(call.aliveT), 30e3);
+  import('./push.js').then(P => P.closeNotes('call-')).catch(() => { }); callState(room, 'join'); clearInterval(call.aliveT); call.aliveT = setInterval(() => call.room === room ? callState(room, 'alive') : clearInterval(call.aliveT), 30e3);
   let g = {}; try { g = JSON.parse(localStorage.getItem('vvCallWin') || '{}'); } catch (e) { }
   const w = document.createElement('div'); w.className = 'callwin'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-label', 'Videoanruf');
   Object.assign(w.style, { width: (g.w || 340) + 'px', height: (g.h || 260) + 'px', left: (g.x ?? Math.max(8, innerWidth - (g.w || 340) - 16)) + 'px', top: (g.y ?? 80) + 'px' });
@@ -279,7 +279,7 @@ async function inviteToLobby() {
 
 // Klingeln und Auflegen vom Gegenüber
 bus.on('callsignal', async s => {
-  if (s.kind === 'callend') { if (call.peers.has(s.uid)) call.dropPeer?.(s.uid, `📴 ${s.name} hat aufgelegt`); else if (call.peer?.id === s.uid && !call.peers.size) { toast(`📴 ${s.name} hat aufgelegt`); hangUp(false); } return; }
+  if (s.kind === 'callend') { import('./push.js').then(P => P.closeNotes('call-')).catch(() => { }); if (call.peers.has(s.uid)) call.dropPeer?.(s.uid, `📴 ${s.name} hat aufgelegt`); else if (call.peer?.id === s.uid && !call.peers.size) { toast(`📴 ${s.name} hat aufgelegt`); hangUp(false); } return; }
   if (call.room) return; // schon im Gespräch
   // Einladung aus dem privaten Chat holen (nur Freunde können sie schreiben); älter als 3 Minuten = verpasst
   const sb = await O.client(), me = O.online.user?.id; if (!me) return;
@@ -287,13 +287,15 @@ bus.on('callsignal', async s => {
   const room = callRoom(data?.[0]?.body); if (!room || Date.now() - new Date(data[0].created_at) > 180e3) return;
   { const st = (await callStates([room])).get(room); if (st && (st.ended_at || st.declined)) return; } // schon vorbei
   const { avatarSvg } = await import('./components.js');
-  if (document.hidden) import('./comfort.js').then(C => C.notify(`📹 ${s.name} ruft an`, 'Videoanruf in IndooRado – zum Annehmen die App öffnen.', 'call', 'call')).catch(() => { });
+  { const P = await import('./push.js');
+    if (document.hidden) { if (!(await P.pushActive())) import('./comfort.js').then(C => C.notify(`📹 ${s.name} ruft an`, 'Videoanruf in IndooRado – zum Annehmen die App öffnen.', 'call-' + room, 'call')).catch(() => { }); } // mit Push kommt die Meldung schon vom Server
+    else setTimeout(() => P.closeNotes('call-' + room), 1500); } // App ist offen: Klingel-Fenster reicht, Meldung in der Leiste schließen
   const c = document.createElement('div'); c.className = 'invcard callring'; c.setAttribute('role', 'alertdialog');
   c.innerHTML = `<div class="row">${avatarSvg(s.look || {}, 40)}<div><b>📹 ${esc(s.name)} ruft an</b><div class="small muted">Videoanruf</div></div></div><div class="row end"><button class="btn sm ghost" data-no>📵 Ablehnen</button><button class="btn sm pri" data-ok>📞 Annehmen</button></div>`;
   document.body.appendChild(c); const t = setTimeout(() => c.remove(), 60e3);
   try { (await import('./sound.js')).sound.beep(true); } catch (e) { }
   c.onclick = async e => {
-    if (e.target.closest('[data-no]')) { clearTimeout(t); c.remove(); callState(room, 'decline'); (await import('./online/presence.js')).callSignal(s.uid, 'callend'); return; }
+    if (e.target.closest('[data-no]')) { clearTimeout(t); c.remove(); callState(room, 'decline'); import('./push.js').then(P => P.closeNotes('call-' + room)).catch(() => { }); (await import('./online/presence.js')).callSignal(s.uid, 'callend'); return; }
     if (e.target.closest('[data-ok]')) { clearTimeout(t); c.remove(); joinCall(room, { id: s.uid, name: s.name }); }
   };
 });

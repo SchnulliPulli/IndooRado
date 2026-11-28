@@ -64,3 +64,12 @@ export async function selfTest() {
   if (!data?.sent) throw new Error('Push-Dienst lehnt ab: ' + (data?.errors || []).join(', ') + ' – passt VAPID_PUBLIC_KEY zum Schlüssel in online.json?');
   return data;
 }
+
+// Ist Push auf diesem Gerät aktiv? Dann keine zusätzlichen eigenen Meldungen (sonst doppelt)
+export async function pushActive() {
+  try { if (!pushWanted() || !pushSupported() || Notification.permission !== 'granted') return false; const r = await navigator.serviceWorker.getRegistration(); return !!(await r?.pushManager.getSubscription()); } catch (e) { return false; }
+}
+// Meldungen in der Leiste schließen (z. B. wenn das Klingeln in der App erscheint oder der Anruf vorbei ist)
+export async function closeNotes(prefix) {
+  try { const r = await navigator.serviceWorker?.getRegistration(); for (const n of await r?.getNotifications() || []) if (!prefix || String(n.tag).startsWith(prefix)) n.close(); } catch (e) { }
+}
