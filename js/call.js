@@ -92,19 +92,22 @@ export async function startCall(friend) {
   if (!error) import('./push.js').then(P => P.pushTo(friend.id, 'call', room)).catch(() => { });
   if (error) return toast('Anruf nicht möglich: ' + (/row-level/i.test(error.message) ? 'ihr seid nicht (mehr) befreundet oder zu viele Nachrichten' : error.message));
   const PR = await import('./online/presence.js'); const n = await PR.callSignal(friend.id, 'call');
-  openWindow(room, { id: friend.id, name: friend.display_name || friend.name }, mode);
+  openWindow(room, { id: friend.id, name: friend.display_name || friend.name }, mode); call.isCaller = true;
+  // Keine Antwort nach 45 s: auflegen, der Freund bekommt „Verpasster Anruf“
+  setTimeout(async () => { if (call.room !== room) return; const st = (await callStates([room])).get(room); if (st && !st.answered_at && !st.ended_at) { toast(`📵 ${friend.display_name || friend.name} hat nicht abgenommen`, 4000); hangUp(); } }, 45e3);
   toast(n ? `📞 Es klingelt bei ${friend.display_name || friend.name} …` : `${friend.display_name || friend.name} ist gerade nicht online – die Einladung liegt im Chat`, 4000);
 }
 // Beitreten (aus dem Chat oder beim Klingeln)
 export async function joinCall(room, peer) { if (!/^IndooRado-[A-Za-z0-9]{24}$/.test(room) || !(await allowed())) return; const mode = await pickMode(`Anruf von ${peer?.name || 'Freund'} annehmen`, peer); if (mode) openWindow(room, peer, mode); }
 export async function hangUp(notify = true) {
   const notifyIds = [...new Set([call.peer?.id, ...call.peers.keys()].filter(Boolean))];
+  if (call.room && call.isCaller && call.peer?.id) { const room = call.room, to = call.peer.id; callStates([room]).then(m => { const st = m.get(room); if (st && !st.answered_at && !st.declined) import('./push.js').then(P => P.pushTo(to, 'missed', room)); }).catch(() => { }); }
   if (call.room) { clearInterval(call.aliveT); const others = [...call.peers.values()].some(P => P.pc?.connectionState === 'connected'); if (!others || call.peers.size <= 1) callState(call.room, 'end'); } // letzter im Anruf (bzw. Zweiergespräch): Anruf ist vorbei
   try { call.ch?.send({ type: 'broadcast', event: 'sig', payload: { t: 'bye', from: O.online.user?.id } }); } catch (e) { }
   for (const P of call.peers.values()) { try { P.pc.close(); } catch (e) { } }
   call.local?.getTracks().forEach(t => t.stop());
   try { if (call.ch) (await O.client()).removeChannel(call.ch); } catch (e) { }
-  call.win?.remove(); call.peers.clear(); call.away = null; Object.assign(call, { win: null, room: null, peer: null, pc: null, ch: null, local: null });
+  call.win?.remove(); call.peers.clear(); call.away = null; Object.assign(call, { win: null, room: null, peer: null, pc: null, ch: null, local: null, isCaller: false });
   // Klingeln beenden, falls noch niemand abgenommen hat
   if (notify) { try { const PR = await import('./online/presence.js'); for (const id of notifyIds) PR.callSignal(id, 'callend'); } catch (e) { } }
 }
@@ -293,12 +296,26 @@ bus.on('callsignal', async s => {
   const c = document.createElement('div'); c.className = 'invcard callring'; c.setAttribute('role', 'alertdialog');
   c.innerHTML = `<div class="row">${avatarSvg(s.look || {}, 40)}<div><b>📹 ${esc(s.name)} ruft an</b><div class="small muted">Videoanruf</div></div></div><div class="row end"><button class="btn sm ghost" data-no>📵 Ablehnen</button><button class="btn sm pri" data-ok>📞 Annehmen</button></div>`;
   document.body.appendChild(c); const t = setTimeout(() => c.remove(), 60e3);
-  try { (await import('./sound.js')).sound.beep(true); } catch (e) { }
+  const stopRing = ringTone(); const obs = new MutationObserver(() => { if (!c.isConnected) { stopRing(); obs.disconnect(); } }); obs.observe(document.body, { childList: true });
   c.onclick = async e => {
     if (e.target.closest('[data-no]')) { clearTimeout(t); c.remove(); callState(room, 'decline'); import('./push.js').then(P => P.closeNotes('call-' + room)).catch(() => { }); (await import('./online/presence.js')).callSignal(s.uid, 'callend'); return; }
     if (e.target.closest('[data-ok]')) { clearTimeout(t); c.remove(); joinCall(room, { id: s.uid, name: s.name }); }
   };
 });
+// Klingeln in der offenen App: Ton wie ein Telefon (zwei Töne, Pause) und Vibration, bis angenommen, abgelehnt oder 45 s
+function ringTone() {
+  let ac = null, stop = false; const until = Date.now() + 45e3;
+  try { ac = new (window.AudioContext || window.webkitAudioContext)(); ac.resume?.(); } catch (e) { }
+  const tone = (f, t0, d) => { if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.value = f; g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(.18, t0 + .02); g.gain.setValueAtTime(.18, t0 + d - .05); g.gain.linearRampToValueAtTime(0, t0 + d); o.connect(g).connect(ac.destination); o.start(t0); o.stop(t0 + d + .02); };
+  const ring = () => {
+    if (stop || Date.now() > until) return;
+    if (ac) { const t = ac.currentTime + .02; for (let i = 0; i < 2; i++) { tone(880, t + i * .5, .38); tone(1175, t + i * .5, .38); } }
+    try { navigator.vibrate?.([450, 200, 450]); } catch (e) { }
+    setTimeout(ring, 2600);
+  };
+  ring();
+  return () => { stop = true; try { navigator.vibrate?.(0); } catch (e) { } try { ac?.close(); } catch (e) { } };
+}
 // App verlassen (Handy gesperrt, andere App): Kamera und Mikrofon pausieren, die anderen sehen „pausiert“.
 // Zurück in der App: alles wie vorher an, abgerissene Verbindungen werden neu ausgehandelt.
 function callAway() {
