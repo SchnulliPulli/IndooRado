@@ -1,5 +1,6 @@
 // Einstellungen: Profil (Fahrer, Trainer, Avatar), App (Thema, Grafik, Daten), Verbindungen (NAS/Cloud, Strava)
 import * as I18N from '../i18n.js';
+import { NOTIF as C_NOTIF } from '../comfort.js';
 import { $, esc, toast, dialog, download, fmtDate, bus } from '../util.js';
 import { profile, saveProfile, progress, levelOf } from '../state.js';
 import { UNLOCKS } from '../game.js';
@@ -233,8 +234,11 @@ export async function render(el, params = []) {
       <label class="f">Thema<select class="inp" id="appTheme">${[['dark', 'Dunkel'], ['light', 'Hell'], ['system', 'Wie das Gerät']].map(([v, l]) => `<option value="${v}" ${theme === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <div class="f">Akzentfarbe<div class="swatches" id="appAcc">${['#ff6a3d', '#3fa7f5', '#4fd18b', '#f5c542', '#b06cf0', '#ef4458', '#00c2c7'].map(c => `<button style="background:${c}" data-c="${c}" aria-pressed="${acc === c}" aria-label="Farbe ${c}"></button>`).join('')}</div></div>
       <p class="small muted">Gilt für Menüs und Seiten. Die Anzeige während der Fahrt hat einen eigenen Stil unter <a href="#/ridesettings">Fahransicht</a>.</p>
-      <label class="switch"><input type="checkbox" id="remOn" ${profile.reminders === true ? 'checked' : ''}><span></span> <div class="swt"><i style="font-style:normal">🔔 Erinnerungen</i><small class="muted">Training des Tages, Serie in Gefahr (20:30) und wenn ein Freund losfährt – als Benachrichtigung, solange IndooRado geöffnet ist (auch im Hintergrund).</small></div></label>
-      <label class="f">Uhrzeit für die Trainings-Erinnerung<input class="inp" id="remAt" type="time" value="${esc(profile.remindAt || '18:00')}"></label>
+      <label class="switch"><input type="checkbox" id="remOn" ${profile.reminders === true ? 'checked' : ''}><span></span> <div class="swt"><i style="font-style:normal">🔔 Benachrichtigungen</i><small class="muted">Erinnerungen und Hinweise des Geräts, solange IndooRado geöffnet ist (auch im Hintergrund). Was genau, wählst du darunter.</small></div></label>
+      <div class="notifkinds" id="notifKinds" ${profile.reminders === true ? '' : 'hidden'}>
+        ${C_NOTIF.map(([k, l, d]) => `<label class="chk"><input type="checkbox" data-notif="${k}" ${profile.notif?.[k] !== false ? 'checked' : ''}><span><b>${l}</b><small class="muted">${d}</small></span></label>${k === 'plan' ? `<label class="f notifat">Uhrzeit für das Training des Tages<input class="inp" id="remAt" type="time" value="${esc(profile.remindAt || '18:00')}"></label>` : ''}`).join('')}
+        <div class="row"><button class="btn sm" id="notifTest">🔔 Test-Benachrichtigung</button></div>
+      </div>
       <div class="row" id="instRow" hidden><button class="btn" id="instBtn">📲 IndooRado als App installieren</button></div>
       <label class="f">Mapillary-Schlüssel für Straßenbilder <span class="muted small">(optional)</span><input class="inp" id="mlyTok" autocomplete="off" spellcheck="false" placeholder="MLY|…" value="${esc(profile.mlyToken || '')}"><small class="muted">Öffentlicher Client-Schlüssel von mapillary.com › Developers (kostenlos). Ohne Eintrag gilt der Schlüssel des Betreibers, falls vorhanden.</small></label>
       <label class="switch"><input type="checkbox" id="tvMode" ${localStorage.getItem('vvTv') === '1' ? 'checked' : ''}><span></span> <div class="swt"><i style="font-style:normal">📺 Fernseher-Modus <b class="muted small" style="font-weight:400">(nur dieses Gerät)</b></i><small class="muted">Große Schrift, Bedienung mit den Pfeiltasten der Fernbedienung (Enter = auswählen, Zurück = zurück). Gamepads gehen immer: Steuerkreuz, A, B, Start = Pause, LB/RB = Gang, X = Kamera, Y = Ride On. Handy als Fernbedienung: in der Handy-Ansicht mit demselben Konto.</small></div></label>
@@ -292,7 +296,9 @@ export async function render(el, params = []) {
   el.querySelectorAll('[data-revoke]').forEach(b => b.onclick = async () => { (await import('../consent.js')).revoke(b.dataset.revoke); toast('Einwilligung widerrufen'); b.closest('.row').remove(); });
   on('#appTheme', 'onchange', e => { profile.appTheme = e.target.value; saveProfile(); applyAppTheme(); });
   on('#mlyTok', 'onchange', e => { const v = e.target.value.trim(); if (v && !/^MLY\|[\w|]{10,200}$/.test(v)) { toast('Das sieht nicht wie ein Mapillary-Client-Schlüssel (MLY|…) aus'); return; } profile.mlyToken = v; saveProfile(); toast(v ? 'Mapillary-Schlüssel gespeichert' : 'Mapillary-Schlüssel entfernt'); });
-  on('#remOn', 'onchange', async e => { const C = await import('../comfort.js'); if (!(await C.enableReminders(e.target.checked))) e.target.checked = false; else toast(e.target.checked ? '🔔 Erinnerungen an' : 'Erinnerungen aus'); });
+  on('#remOn', 'onchange', async e => { const C = await import('../comfort.js'); if (!(await C.enableReminders(e.target.checked))) e.target.checked = false; else toast(e.target.checked ? '🔔 Benachrichtigungen an' : 'Benachrichtigungen aus'); const k = $('#notifKinds', el); if (k) k.hidden = !e.target.checked; });
+  el.querySelectorAll('[data-notif]').forEach(x => x.onchange = async () => { (await import('../comfort.js')).setNotif(x.dataset.notif, x.checked); toast('Gespeichert', 900); });
+  on('#notifTest', 'onclick', async () => { if (!(await (await import('../comfort.js')).testNotify())) toast('Keine Benachrichtigung möglich – im Browser oder Gerät erlaubt?', 5000); });
   on('#remAt', 'onchange', async e => { profile.remindAt = e.target.value || '18:00'; saveProfile(); (await import('../comfort.js')).scheduleReminders(); });
   import('../comfort.js').then(C => { const r = $('#instRow', el); if (r && C.canInstall()) { r.hidden = false; $('#instBtn', el).onclick = () => C.install(); } });
   on('#appLang', 'onchange', e => I18N.setLang(e.target.value));

@@ -146,7 +146,7 @@ window.__route = () => route();
 let msgN = null, msgT = 0;
 async function msgUpd(force = false) {
   if (!force && msgN != null && Date.now() - msgT < 8000) return paint(); msgT = Date.now();
-  try { msgN = await (await import('./inbox.js')).newCount(); } catch (e) { msgN = null; } paint();
+  try { msgN = await (await import('./inbox.js')).newCount(); } catch (e) { msgN = null; } paint(); bus.emit('msgCount', msgN);
 }
 function paint() {
   for (const b of document.querySelectorAll('[data-inbox]')) {
@@ -157,6 +157,7 @@ function paint() {
 }
 document.addEventListener('click', e => { const b = e.target.closest('[data-inbox],[data-inbox-open]'); if (b) import('./inbox.js').then(m => m.openInbox()); });
 setInterval(() => document.hidden || msgUpd(true), 30e3);
+setInterval(() => { if (document.hidden && profile.reminders === true && profile.notif?.msg !== false) msgUpd(true); }, 60e3); // im Hintergrund für Benachrichtigungen
 bus.on('online', () => setTimeout(() => msgUpd(true), 500)); bus.on('inbox', () => msgUpd(true));
 async function route() {
   const raw = location.hash.replace(/^#\/?/, '');

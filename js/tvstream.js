@@ -26,14 +26,14 @@ function iceFor(token) {
   return iceP;
 }
 const wait = ms => new Promise(r => setTimeout(r, ms));
-const gathered = pc => new Promise(res => { if (pc.iceGatheringState === 'complete') return res(); const t = setTimeout(res, 5000); pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } }); });
+const gathered = pc => new Promise(res => { if (pc.iceGatheringState === 'complete') return res(); const t = setTimeout(res, 8000); pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } }); });
 const rpc = async (n, a) => { const { data, error } = await (await O.client()).rpc(n, a); if (error) throw error; return data; };
 
 /* ---------- Fahrgerät: auf Fernseher warten und das Bild senden ---------- */
 const TX = { token: null, timer: null, last: 0, peers: new Map(), stream: null, getStream: null };
 export function startSender(token, getStream) {
   if (TX.token === token) return; stopSender(); Object.assign(TX, { token, getStream, last: 0 });
-  iceFor(token); // Weiterleitung schon vorab holen, damit das Angebot den Fernseher schnell erreicht
+  iceFor(token).then(() => { if (iceWhy && iceWhy !== 'ok') import('./util.js').then(U => U.toast('📺 TV-Bild: keine Weiterleitung (' + iceWhy + ') – in manchen WLANs kommt das Bild dann nicht an', 6000)); }); // Weiterleitung schon vorab holen, damit das Angebot den Fernseher schnell erreicht
   const poll = async () => {
     if (!TX.token) return;
     try {
@@ -77,6 +77,16 @@ async function route(pc) {
     return t.includes('relay') ? 'über Weiterleitung' : t.includes('srflx') || t.includes('prflx') ? 'über das Internet' : t[0] ? 'direkt im WLAN' : '';
   } catch (e) { return ''; }
 }
+// Verbindungsstand: ältere Fernseher-Browser kennen connectionState nicht, dann zählen ICE-Stand und laufendes Bild
+function state(pc, video) {
+  const c = pc.connectionState, i = pc.iceConnectionState;
+  if (c === 'connected' || i === 'connected' || i === 'completed' || (video.videoWidth > 0 && video.readyState >= 2)) return 'connected';
+  if (c === 'failed' || i === 'failed') return 'failed';
+  if (c === 'closed' || i === 'closed') return 'closed';
+  if (c === 'disconnected' || i === 'disconnected') return 'disconnected';
+  return 'connecting';
+}
+export const VERSION = 'tv3';
 export function startReceiver(token, video, onState = () => { }) {
   const viewer = Math.random().toString(36).slice(2, 12).padEnd(10, '0');
   let pc = null, stopped = false;
@@ -84,7 +94,7 @@ export function startReceiver(token, video, onState = () => { }) {
   const run = async () => {
     while (!stopped) {
       try {
-        onState('wait'); info('Bild wird beim Fahrgerät angefragt …');
+        onState('wait'); info('Bild wird beim Fahrgerät angefragt … (' + VERSION + ')');
         const rid = Math.random().toString(36).slice(2, 10);
         await rpc('tv_send', { p_token: token, p_viewer: viewer, p_kind: 'want', p_payload: { rid } });
         let off = null;
@@ -102,7 +112,7 @@ export function startReceiver(token, video, onState = () => { }) {
         // verbunden halten; bei Abbruch neu anfordern
         let t0 = Date.now(), shown = false;
         for (;;) {
-          await wait(1500); if (stopped) return; const s = pc.connectionState;
+          await wait(1500); if (stopped) return; const s = state(pc, video);
           if (s === 'connected') { if (!shown) { shown = true; onState('live'); info('Live · ' + (await route(pc))); } }
           else if (s === 'failed' || s === 'closed' || s === 'disconnected' && shown || (!shown && Date.now() - t0 > 30000)) break;
         }

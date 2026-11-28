@@ -248,6 +248,7 @@ bus.on('callsignal', async s => {
   const { data } = await sb.from('chat_messages').select('body,created_at').eq('sender', s.uid).eq('recipient', me).like('body', '[[call:%').order('created_at', { ascending: false }).limit(1);
   const room = callRoom(data?.[0]?.body); if (!room || Date.now() - new Date(data[0].created_at) > 180e3) return;
   const { avatarSvg } = await import('./components.js');
+  if (document.hidden) import('./comfort.js').then(C => C.notify(`📹 ${s.name} ruft an`, 'Videoanruf in IndooRado – zum Annehmen die App öffnen.', 'call', 'call')).catch(() => { });
   const c = document.createElement('div'); c.className = 'invcard callring'; c.setAttribute('role', 'alertdialog');
   c.innerHTML = `<div class="row">${avatarSvg(s.look || {}, 40)}<div><b>📹 ${esc(s.name)} ruft an</b><div class="small muted">Videoanruf</div></div></div><div class="row end"><button class="btn sm ghost" data-no>📵 Ablehnen</button><button class="btn sm pri" data-ok>📞 Annehmen</button></div>`;
   document.body.appendChild(c); const t = setTimeout(() => c.remove(), 60e3);

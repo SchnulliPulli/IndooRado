@@ -19,10 +19,22 @@ export async function install() {
    Benachrichtigungen des Geräts, solange IndooRado geöffnet ist (auch im Hintergrund). Echte Push-Nachrichten bei
    geschlossener App bräuchten einen eigenen Server-Dienst und sind hier bewusst nicht eingebaut. */
 const today = () => new Date().toISOString().slice(0, 10);
-async function notify(title, body, tag) {
-  if (profile.reminders !== true || typeof Notification === 'undefined' || Notification.permission !== 'granted') return false;
+// Arten von Benachrichtigungen, einzeln an- und abwählbar (profile.notif[k] === false = aus)
+export const NOTIF = [
+  ['plan', '🚴 Training des Tages', 'zur eingestellten Uhrzeit, wenn du heute noch nicht gefahren bist'],
+  ['streak', '🔥 Serie in Gefahr', 'um 20:30, wenn deine Serie heute endet'],
+  ['missions', '🎯 Wochenmissionen', 'Sonntag um 18:00, wenn noch Missionen offen sind'],
+  ['friend', '👥 Freund fährt gerade', 'wenn ein Freund eine Fahrt startet (nur angemeldet)'],
+  ['msg', '💬 Nachrichten und Freundschaftsanfragen', 'neue Nachricht oder Anfrage (nur angemeldet)'],
+  ['call', '📹 Eingehender Anruf', 'wenn dich ein Freund anruft (nur angemeldet)'],
+];
+export const notifOn = k => profile.reminders === true && profile.notif?.[k] !== false;
+export function setNotif(k, on) { profile.notif = { ...(profile.notif || {}), [k]: !!on }; saveProfile(); scheduleReminders(); }
+export async function notify(title, body, tag, kind) {
+  if ((kind && !notifOn(kind)) || profile.reminders !== true || typeof Notification === 'undefined' || Notification.permission !== 'granted') return false;
   try { const reg = await navigator.serviceWorker?.getRegistration(); if (reg) await reg.showNotification(title, { body, tag, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png' }); else new Notification(title, { body, tag }); return true; } catch (e) { return false; }
 }
+export const testNotify = () => notify('🔔 IndooRado', 'So sehen Benachrichtigungen aus.', 'test');
 export async function enableReminders(on) {
   if (on) {
     if (typeof Notification === 'undefined') { toast('Dieser Browser kann keine Benachrichtigungen'); return false; }
@@ -39,22 +51,27 @@ export function scheduleReminders() {
   at(profile.remindAt || '18:00', async () => {
     if (await rodeToday() || progress.lastRemind === today()) return; progress.lastRemind = today();
     const P = await import('./plans.js'), n = P.nextWorkout?.();
-    notify('🚴 Zeit fürs Training', n ? `Heute steht „${n.name}“ an.` : 'Eine kurze Runde hält die Form – und deine Serie.', 'plan');
+    notify('🚴 Zeit fürs Training', n ? `Heute steht „${n.name}“ an.` : 'Eine kurze Runde hält die Form – und deine Serie.', 'plan', 'plan');
+  });
+  // Wochenmissionen: Sonntag 18:00, wenn noch offen
+  if (new Date().getDay() === 0) at('18:00', async () => {
+    const G = await import('./game.js'), { db } = await import('./db.js'), open = G.missionState(await db.all('rides')).filter(m => !m.done);
+    if (open.length) notify('🎯 Wochenmissionen', `Noch ${open.length} offen bis heute Nacht: ${open.map(m => m.text || m.name || '').filter(Boolean).slice(0, 2).join(', ')}`, 'missions', 'missions');
   });
   // Serie in Gefahr (20:30)
   at('20:30', async () => {
     const A = await import('./analysis.js'), { db } = await import('./db.js'), t = A.totals(await db.all('rides'));
-    if (t.streak >= 2 && !(await rodeToday())) notify('🔥 Deine Serie endet heute', `${t.streak} Tage am Stück – schon 15 Minuten reichen, um sie zu halten.`, 'streak');
+    if (t.streak >= 2 && !(await rodeToday())) notify('🔥 Deine Serie endet heute', `${t.streak} Tage am Stück – schon 15 Minuten reichen, um sie zu halten.`, 'streak', 'streak');
   });
 }
 // Freund startet eine Fahrt (nur angemeldet, nur wenn die App gerade im Hintergrund ist)
 let friends = null, riding = new Set();
 bus.on('presence', async () => {
-  if (profile.reminders !== true || !document.hidden) return;
+  if (!notifOn('friend') || !document.hidden) return;
   try {
     const PR = await import('./online/presence.js'), O = await import('./online/client.js'); if (!O.loggedIn()) return;
     if (!friends) { const { data } = await (await O.client()).rpc('friend_list'); friends = new Map((data || []).filter(f => f.status === 'accepted').map(f => [f.id, f.display_name])); }
-    for (const p of PR.P.peers.values()) { const uid = p.uid, where = p.where; if (!uid || !friends.has(uid)) continue; if (where === 'ride' && !riding.has(uid)) { riding.add(uid); notify(`🚴 ${friends.get(uid)} fährt gerade`, `${p.routeName ? 'Auf ' + p.routeName + ' – ' : ''}fahr mit!`, 'friend-' + uid); } if (where !== 'ride') riding.delete(uid); }
+    for (const p of PR.P.peers.values()) { const uid = p.uid, where = p.where; if (!uid || !friends.has(uid)) continue; if (where === 'ride' && !riding.has(uid)) { riding.add(uid); notify(`🚴 ${friends.get(uid)} fährt gerade`, `${p.routeName ? 'Auf ' + p.routeName + ' – ' : ''}fahr mit!`, 'friend-' + uid, 'friend'); } if (where !== 'ride') riding.delete(uid); }
   } catch (e) { }
 });
 
@@ -101,3 +118,7 @@ export function planIcs(p, done = {}, time = profile.remindAt || '18:00') {
   return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//IndooRado//Trainingsplan//DE', `X-WR-CALNAME:IndooRado · ${p.name}`, ...out, 'END:VCALENDAR'].join('\r\n');
 }
 export function downloadPlanIcs(p, done) { download((p.name.replace(/[^\wäöüÄÖÜß -]+/g, '').trim() || 'plan') + '.ics', planIcs(p, done), 'text/calendar'); }
+
+// Neue Nachrichten/Anfragen (Zähler aus der Kopfleiste), nur wenn die App gerade im Hintergrund ist
+let lastMsgN = null;
+bus.on('msgCount', n => { if (n != null && lastMsgN != null && n > lastMsgN && document.hidden) notify('💬 IndooRado', n - lastMsgN === 1 ? 'Du hast eine neue Nachricht oder Freundschaftsanfrage.' : `${n - lastMsgN} neue Nachrichten oder Anfragen.`, 'msg', 'msg'); if (n != null) lastMsgN = n; });

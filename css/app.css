@@ -1351,3 +1351,9 @@ body.watchtv .tvprof { height: 15vh; }
   body.printrep .rptile{background:#f2f2f2}body.printrep .rpbars rect{fill:#ff6a3d}
   body.printrep *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
+/* Benachrichtigungen einzeln wählen */
+.notifkinds{display:flex;flex-direction:column;gap:6px;margin:4px 0 8px 8px;padding-left:10px;border-left:2px solid rgba(127,127,127,.25)}
+.notifkinds .chk{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+.notifkinds .chk input{margin-top:4px;width:18px;height:18px;flex:none;accent-color:var(--acc)}
+.notifkinds .chk span{display:flex;flex-direction:column}
+.notifkinds .notifat{margin:0 0 4px 28px;max-width:260px}

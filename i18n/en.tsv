@@ -2198,3 +2198,20 @@ Das ist keine gültige Adresse	That's not a valid address
 Der Server erlaubt das Laden aus anderen Apps nicht (CORS) oder ist nicht erreichbar. Datei herunterladen und über „Importieren“ wählen.	The server doesn't allow loading from other apps (CORS) or can't be reached. Download the file and choose it via “Import”.
 Auf dieser Seite wurden keine Workout-Dateien gefunden. Direkt den Link auf die .zwo-Datei nehmen.	No workout files found on this page. Use the direct link to the .zwo file.
 Geht mit direkten Links auf .zwo, .erg, .mrc, .json, .zip oder .txt sowie mit Seiten, die solche Dateien verlinken. GitHub- und Gist-Links werden automatisch umgewandelt. Die Datei wird direkt von dieser Adresse geladen; manche Seiten erlauben das nicht – dann die Datei herunterladen und über „Importieren“ wählen.	Works with direct links to .zwo, .erg, .mrc, .json, .zip or .txt and with pages linking to such files. GitHub and Gist links are converted automatically. The file is loaded directly from that address; some sites don't allow this – then download the file and choose it via “Import”.
+Benachrichtigungen	Notifications
+Erinnerungen und Hinweise des Geräts, solange IndooRado geöffnet ist (auch im Hintergrund). Was genau, wählst du darunter.	Reminders and device notifications while IndooRado is open (also in the background). Choose below what exactly.
+Training des Tages	Today's workout
+zur eingestellten Uhrzeit, wenn du heute noch nicht gefahren bist	at the set time if you haven't ridden today
+Serie in Gefahr	Streak in danger
+um #:#, wenn deine Serie heute endet	at #:# if your streak ends today
+Wochenmissionen	Weekly missions
+Sonntag um #:#, wenn noch Missionen offen sind	Sunday at #:# if missions are still open
+Freund fährt gerade	Friend is riding
+wenn ein Freund eine Fahrt startet (nur angemeldet)	when a friend starts a ride (signed in only)
+Nachrichten und Freundschaftsanfragen	Messages and friend requests
+neue Nachricht oder Anfrage (nur angemeldet)	new message or request (signed in only)
+Eingehender Anruf	Incoming call
+wenn dich ein Freund anruft (nur angemeldet)	when a friend calls you (signed in only)
+Test-Benachrichtigung	Test notification
+Uhrzeit für das Training des Tages	Time for today's workout
+Bild wird beim Fahrgerät angefragt … (tv3)	Requesting the picture from the riding device … (tv3)
