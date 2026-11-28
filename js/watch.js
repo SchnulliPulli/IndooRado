@@ -67,6 +67,7 @@ export async function castToTv(name) {
     await dialog({ title: '📺 Auf dem Fernseher anzeigen', cls: 'castdlg', html: apple0
       ? '<p><b>Apple TV / AirPlay</b><br><span class="small muted">Kontrollzentrum öffnen › <b>Bildschirmsynchronisierung</b> › Apple TV wählen.</span></p>'
       : '<p><b>Chromecast / Google TV</b><br><span class="small muted">Chrome-Menü <b>⋮</b> › <b>Streamen …</b> (am Handy: Teilen › Streamen bzw. Schnelleinstellungen › <b>Bildschirm übertragen</b>) und den Fernseher wählen.</span></p>' +
+        (/Windows/.test(navigator.userAgent) ? '<p><b>Windows: Drahtlose Anzeige (Miracast)</b><br><span class="small muted"><b>Windows-Taste + K</b> drücken und den Fernseher wählen (Samsung, LG, Fire TV und viele andere mit „Screen Mirroring“). Spiegelt den ganzen Bildschirm mit 3D-Welt.</span></p>' : '') +
         '<p class="small muted">Mit IndooRado-Konto gibt es zusätzlich die große Fahrtanzeige direkt auf dem Fernseher (Chromecast oder indoorado.de/tv mit Code) – das spart Akku, weil nur die Werte übertragen werden.</p>',
       buttons: [{ label: 'OK', value: null, cls: 'pri' }] });
     return;
@@ -79,6 +80,7 @@ export async function castToTv(name) {
     ${canCast ? '<p><b>Chromecast / Google TV</b><br><span class="small muted">Fernseher im selben WLAN auswählen – er zeigt dann die große Fahrtanzeige.</span></p>' : ''}
     <p><b>Fernseher mit Browser</b> <span class="small muted">(Fire TV, Android TV, Smart-TV, Spielkonsole)</span><br>Dort <code>${esc(host)}</code> öffnen und diesen Code eingeben:</p>
     <div class="castcode num">${tvCode(t)}</div>
+    ${/Windows/.test(navigator.userAgent) ? '<p><b>Windows: Drahtlose Anzeige (Miracast)</b><br><span class="small muted"><b>Windows-Taste + K</b> drücken und den Fernseher wählen (Samsung, LG, Fire TV und viele andere mit „Screen Mirroring“). Spiegelt den ganzen Bildschirm mit 3D-Welt.</span></p>' : ''}
     ${apple ? '<p><b>Apple TV / AirPlay</b><br><span class="small muted">iPhone und iPad können Webseiten nicht direkt an den Fernseher senden. Öffne das Kontrollzentrum › <b>Bildschirmsynchronisierung</b> und wähle dein Apple TV – dann siehst du die komplette Fahrt mit 3D-Welt auf dem Fernseher.</span></p>' : ''}
     <p class="small muted">Gezeigt werden Name, Strecke, Tempo, Leistung, Distanz, Höhenmeter, Zeit und das Workout – kein Puls. Der Fernseher braucht kein Konto. Beenden über ⋯ › Zuschauer.</p>`,
     buttons: [{ label: 'Schließen', value: null }, ...(canCast ? [{ label: '📺 Fernseher wählen', value: 'cast', cls: 'pri' }] : [])] });

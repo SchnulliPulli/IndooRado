@@ -108,10 +108,12 @@ async function liveTick(el) {
   const rc = $('#cRemote', el); if (rc) { const wo = $('#rmWo', el); if (wo) wo.hidden = !(fresh && L.wo); const dm = $('#rmDemo', el); if (dm) { dm.hidden = !(fresh && L.demo); if (L?.demo) { $('#dmCad', el).textContent = L.demo.cad; $('#dmW', el).textContent = L.demo.w; } } }
   if (!fresh) return;
   const pct = L.total ? Math.min(100, (L.pos / L.total) * 100) : 0, w = L.wo;
+  const map = await (await import('../livemap.js')).liveMapSvg(L.routeId, L.pos); if (!el.isConnected) return;
   box.innerHTML = `<div class="row between"><div><span class="livedot"></span> <a href="#/live"><b>Live</b> ›</a> <span class="small muted">· ${esc(L.route)}${L.state === 'paused' || L.state === 'auto' ? ' · Pause' : ''}</span></div><span class="small muted num">${fmtT(L.t)}</span></div>
     <div class="livebig"><div><b class="num">${L.p}</b><span>Watt</span></div><div><b class="num" style="color:var(--hr)">${L.hr ?? '–'}</b><span>Puls</span></div><div><b class="num" style="color:var(--cad)">${L.cad ?? '–'}</b><span>U/min</span></div></div>
     <div class="tiles">${[[String(L.v).replace('.', ','), 'km/h'], [fmtKm(L.odo), 'km'], [L.asc, 'Hm'], [String(L.grade).replace('.', ',') + ' %', 'Steigung'], ...(L.place ? [[L.place + '.', 'Platz']] : []), ...(L.ghost != null ? [[(L.ghost >= 0 ? '−' : '+') + Math.abs(L.ghost) + ' m', 'zum Geist']] : [])].map(([v, l]) => `<div class="tile"><b class="num">${v}</b><span>${l}</span></div>`).join('')}</div>
     ${w ? `<div class="livewo"><div class="row between small"><b>${esc(w.name)}</b><span class="num">${w.i ? `Intervall ${w.i}/${w.n} · noch ${fmtT(w.left)}` : 'fertig'}</span></div>${w.target ? `<div class="small">Ziel <b class="num">${w.target} W</b></div>` : ''}<div class="bar"><i style="width:${Math.min(100, w.done / w.total * 100).toFixed(1)}%"></i></div></div>` : ''}
+    ${map}
     ${!L.loop ? `<div class="small muted">Strecke ${pct.toFixed(0)} % · noch ${fmtKm(Math.max(0, L.total - L.pos))} km</div><div class="bar thin"><i style="width:${pct.toFixed(1)}%"></i></div>` : ''}`;
 }
 export function leave() { clearInterval(timer); timer = null; offSync?.(); offSync = null; }

@@ -1278,3 +1278,12 @@ body.watchtv .tvprof { height: 15vh; }
 .dmb.brake { background: rgba(239,68,88,.3); }
 .dmb.sprint { background: rgba(255,138,61,.32); }
 @media (max-width: 380px) { .remote .rmgrid { grid-template-columns: repeat(3, 1fr); } }
+
+/* Live-Ansicht: Strecke mit Position */
+.livemap { width: 100%; height: 120px; display: block; margin: 2px auto; }
+.livemap .lmroad { fill: none; stroke: var(--soft); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; opacity: .8; }
+.livemap .lmstart { fill: #4fd18b; } .livemap .lmend { fill: #fff; stroke: #222; stroke-width: .6; }
+.livemap .lmme { fill: var(--acc, #ff6a3d); stroke: #fff; stroke-width: .9; }
+.livemap .lmhalo { fill: var(--acc, #ff6a3d); opacity: .25; animation: lmpulse 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes lmpulse { 50% { transform: scale(1.6); opacity: .08; } }
+@media (prefers-reduced-motion: reduce) { .livemap .lmhalo { animation: none; } }

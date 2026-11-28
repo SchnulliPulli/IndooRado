@@ -22,8 +22,9 @@ export async function render(el) {
   const off = bus.on('liveRt', () => { if (!timer) return off?.(); tick(); }); // sofort neu zeichnen, wenn der Echtzeitkanal etwas bringt
 }
 const fresh = L => liveFresh(L);
-function draw(el, L) {
+async function draw(el, L) {
   const body = $('#lvBody', el); if (!body) return;
+  const map = fresh(L) ? await (await import('../livemap.js')).liveMapSvg(L.routeId, L.pos) : '';
   $('#lvUpd', el).textContent = L?.ts ? 'Stand: vor ' + Math.max(0, Math.round((Date.now() - L.ts) / 1000)) + ' s' : '';
   if (!fresh(L)) { body.innerHTML = `<section class="card"><p class="muted">Gerade läuft keine Fahrt mit deinem Konto.${L?.state === 'ended' ? ' Die letzte Fahrt wurde beendet.' : ''}</p><div class="row"><a class="btn pri" href="#/ride">Selbst eine Fahrt starten</a><a class="btn" href="#/history">Zum Verlauf</a></div></section>`; return; }
   const pct = L.total ? Math.min(100, (L.pos / L.total) * 100) : 0, w = L.wo, paused = L.state === 'paused' || L.state === 'auto' || L.state === 'ready';
@@ -33,6 +34,7 @@ function draw(el, L) {
       <div class="livebig"><div><b class="num">${L.p ?? 0}</b><span>Watt</span></div><div><b class="num" style="color:var(--hr)">${L.hr ?? '–'}</b><span>Puls</span></div><div><b class="num" style="color:var(--cad)">${L.cad ?? '–'}</b><span>U/min</span></div></div>
       <div class="tiles">${[[String(L.v ?? 0).replace('.', ','), 'km/h'], [fmtKm(L.odo || 0), 'km'], [L.asc ?? 0, 'Hm'], [String(L.grade ?? 0).replace('.', ',') + ' %', 'Steigung'], [L.np ?? '–', 'NP'], [L.kj ?? 0, 'kJ'], ...(L.place ? [[L.place + '.', 'Platz']] : [])].map(([v, l]) => `<div class="tile"><b class="num">${v}</b><span>${l}</span></div>`).join('')}</div>
       ${w ? `<div class="livewo"><div class="row between small"><b>${esc(w.name)}</b><span class="num">${w.i ? `Intervall ${w.i}/${w.n} · noch ${fmtT(w.left)}` : 'fertig'}</span></div>${w.target ? `<div class="small">Ziel <b class="num">${w.target} W</b></div>` : ''}<div class="bar thin"><i style="width:${Math.min(100, w.done / (w.total || 1) * 100).toFixed(1)}%"></i></div></div>` : ''}
+      ${map}
       ${!L.loop && L.total ? `<div class="small muted">Strecke ${pct.toFixed(0)} % · noch ${fmtKm(Math.max(0, L.total - L.pos))} km</div><div class="bar thin"><i style="width:${pct.toFixed(1)}%"></i></div>` : ''}
     </section>
     <section class="card"><h2>Verlauf</h2>${(L.hist || []).length > 2 ? '<canvas id="lvChart" class="lvchart"></canvas>' : '<p class="small muted">Der Verlauf erscheint nach den ersten Minuten.</p>'}</section>`;
