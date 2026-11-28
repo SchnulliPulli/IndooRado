@@ -4,8 +4,25 @@
 import * as O from './online/client.js';
 
 const ICE = [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.nextcloud.com:443'] }];
+// Weiterleitung (TURN, Cloudflare) für WLANs mit Client-Isolierung oder gesperrtem UDP: Zugangsdaten über den
+// Zuschauer-Link von der Supabase-Funktion „turn“, je Link begrenzt. Darum je Gerät nur einmal holen (gilt 2 h).
+let iceP = null, iceTok = '', iceAt = 0;
+function iceFor(token) {
+  if (iceP && iceTok === token && Date.now() - iceAt < 100 * 60e3) return iceP;
+  iceTok = token; iceAt = Date.now();
+  iceP = (async () => {
+    try {
+      const sb = await O.client();
+      const r = await Promise.race([sb.functions.invoke('turn', { body: { tv: token } }), new Promise(res => setTimeout(() => res(null), 5000))]);
+      const list = r && !r.error && Array.isArray(r.data?.iceServers) ? r.data.iceServers.filter(x => x && x.urls) : [];
+      if (!list.length) iceAt = Date.now() - 95 * 60e3; // nichts bekommen: in 5 Minuten erneut versuchen
+      return list.length ? [...ICE, ...list] : ICE;
+    } catch (e) { iceAt = Date.now() - 95 * 60e3; return ICE; }
+  })();
+  return iceP;
+}
 const wait = ms => new Promise(r => setTimeout(r, ms));
-const gathered = pc => new Promise(res => { if (pc.iceGatheringState === 'complete') return res(); const t = setTimeout(res, 3500); pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } }); });
+const gathered = pc => new Promise(res => { if (pc.iceGatheringState === 'complete') return res(); const t = setTimeout(res, 5000); pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } }); });
 const rpc = async (n, a) => { const { data, error } = await (await O.client()).rpc(n, a); if (error) throw error; return data; };
 
 /* ---------- Fahrgerät: auf Fernseher warten und das Bild senden ---------- */
@@ -26,7 +43,8 @@ async function offer(viewer) {
   if (TX.peers.size >= 2) return; // höchstens zwei Fernseher gleichzeitig (Akku, Upload)
   const st = TX.stream && TX.stream.getVideoTracks()[0]?.readyState === 'live' ? TX.stream : (TX.stream = TX.getStream?.());
   const track = st?.getVideoTracks()[0]; if (!track) return;
-  const pc = new RTCPeerConnection({ iceServers: ICE }); TX.peers.set(viewer, pc);
+  const tok = TX.token, ice = await iceFor(tok); if (TX.token !== tok || TX.peers.size >= 2) return;
+  const pc = new RTCPeerConnection({ iceServers: ice }); TX.peers.set(viewer, pc);
   const snd = pc.addTrack(track, st);
   pc.onconnectionstatechange = () => { if (['failed', 'closed'].includes(pc.connectionState)) { TX.peers.delete(viewer); try { pc.close(); } catch (e) { } } };
   await pc.setLocalDescription(await pc.createOffer()); await gathered(pc);
@@ -53,7 +71,7 @@ export function startReceiver(token, video, onState = () => { }) {
         for (let i = 0; i < 12 && !stopped && !off; i++) { await wait(1000); const r = (await rpc('tv_recv', { p_token: token, p_viewer: viewer, p_kind: 'offer', p_after: lastOffer }).catch(() => [])) || []; if (r.length) { off = r.at(-1); lastOffer = off.id; } }
         if (!off) { onState('none'); await wait(15000); continue; } // Fahrgerät sendet (noch) kein Bild
         try { pc?.close(); } catch (e) { }
-        pc = new RTCPeerConnection({ iceServers: ICE });
+        pc = new RTCPeerConnection({ iceServers: await iceFor(token) });
         pc.ontrack = e => { video.srcObject = e.streams[0] || new MediaStream([e.track]); video.play().catch(() => { }); onState('live'); };
         await pc.setRemoteDescription({ type: 'offer', sdp: off.payload.sdp });
         await pc.setLocalDescription(await pc.createAnswer()); await gathered(pc);
