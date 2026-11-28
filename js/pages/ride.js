@@ -815,23 +815,46 @@ async function videoSetup(S, el) {
 }
 /* ---------- Tagesform vor dem Workout: passt Intensität und Dauer an ---------- */
 const FORMS = [['top', '💪', 'Top fit', 3], ['ok', '🙂', 'Normal', 0], ['tired', '😴', 'Müde', -7], ['legs', '🦵', 'Beine schwer', -10], ['short', '⏱️', 'Wenig Zeit', 0]];
+const FORM_TXT = { top: 'Ausgeruht und motiviert', ok: 'Ganz normal', tired: 'Wenig Schlaf, etwas schlapp', legs: 'Muskelkater oder schwere Beine', short: 'Heute nur kurz Zeit' };
+// Kleines Profil des Workouts (Balken je Abschnitt, Farbe nach Zone)
+function woProfile(wo, off = 0) {
+  const segs = wo.segs || [], tot = segs.reduce((a, g) => a + g.dur, 0) || 1, W = 300, H = 46; let x = 0;
+  return `<svg class="fdprof" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${segs.map(g => {
+    const w = g.dur / tot * W, a = g.a == null ? .55 : g.a * (1 + off / 100), b = g.b == null ? a : g.b * (1 + off / 100), y1 = H - Math.min(1.6, a) / 1.6 * H, y2 = H - Math.min(1.6, b) / 1.6 * H;
+    const out = `<polygon points="${x},${H} ${x},${y1} ${x + w},${y2} ${x + w},${H}" fill="${g.a == null ? '#56606a' : zoneColor((a + b) / 2)}"/>`; x += w; return out; }).join('')}</svg>`;
+}
 async function dayForm(S) {
   const tot = woTotal(S.wo), mins = [20, 30, 45, 60].filter(m => m * 60 < tot - 120);
   const wrap = document.createElement('div'); wrap.className = 'modal on';
-  wrap.innerHTML = `<div class="card dlg formdlg" role="dialog" aria-modal="true" aria-labelledby="formT"><h2 id="formT">Wie fühlst du dich heute?</h2><div class="dlg-body">
-    <p class="muted small">„${esc(S.wo.name)}“ (${Math.round(tot / 60)} min) passt sich an. Abschalten unter Einstellungen › Fahrt &amp; Ton.</p>
-    <div class="formgrid">${FORMS.filter(f => f[0] !== 'short' || mins.length).map(([k, i, l, d]) => `<button class="btn formbtn" data-form="${k}"><b>${i}</b><span>${l}</span><small class="muted">${k === 'short' ? 'kürzer fahren' : d ? (d > 0 ? '+' : '') + d + ' %' : 'wie geplant'}</small></button>`).join('')}</div>
-    <div class="row formmins" id="formMins" hidden><span class="small muted">Wie viel Zeit hast du?</span>${mins.map(m => `<button class="btn sm pri" data-min="${m}">${m} min</button>`).join('')}</div>
-    </div><div class="row end"><button class="btn ghost" data-form="skip">Überspringen</button></div></div>`;
-  document.body.appendChild(wrap); wrap.querySelector('[data-form="ok"]')?.focus();
+  wrap.innerHTML = `<div class="card dlg formdlg" role="dialog" aria-modal="true" aria-labelledby="formT">
+    <div class="fdhead"><h2 id="formT">Wie fühlst du dich heute?</h2><p class="small muted">Das Workout passt sich deiner Tagesform an.</p></div>
+    <div class="fdwo"><div class="row between"><b>${esc(S.wo.name)}</b><span class="small muted num">${Math.round(tot / 60)} min</span></div><div id="fdProf">${woProfile(S.wo)}</div><div class="small fdeff" id="fdEff">wie geplant</div></div>
+    <div class="formgrid" role="radiogroup">${FORMS.filter(f => f[0] !== 'short' || mins.length).map(([k, i, l, d]) => `<button class="formbtn ${k === 'ok' ? 'on' : ''}" role="radio" aria-checked="${k === 'ok'}" data-form="${k}"><span class="fdi" aria-hidden="true">${i}</span><span class="fdl"><b>${l}</b><small>${FORM_TXT[k]}</small></span><em class="fdchip ${d > 0 ? 'up' : d < 0 ? 'down' : ''}">${k === 'short' ? 'kürzer' : k === 'legs' ? d + ' %, ohne Spitzen' : d ? (d > 0 ? '+' : '') + d + ' %' : 'wie geplant'}</em></button>`).join('')}</div>
+    <div class="formmins" id="formMins" hidden><span class="small muted">Wie viel Zeit hast du?</span><div class="row">${mins.map(m => `<button class="btn sm" data-min="${m}">${m} min</button>`).join('')}</div></div>
+    <div class="fdfoot"><label class="chk small"><input type="checkbox" id="fdNever"> Nicht mehr fragen <span class="muted">(Einstellungen › Fahrt &amp; Ton)</span></label>
+      <div class="row end"><button class="btn ghost" data-form="skip">Überspringen</button><button class="btn pri" data-go>Los geht’s</button></div></div></div>`;
+  document.body.appendChild(wrap);
+  let cur = 'ok', curMin = null;
+  const sel_ = k => {
+    cur = k; wrap.querySelectorAll('.formbtn').forEach(x => { const on = x.dataset.form === k; x.classList.toggle('on', on); x.setAttribute('aria-checked', on); });
+    wrap.querySelector('#formMins').hidden = k !== 'short';
+    const f = FORMS.find(x => x[0] === k), eff = wrap.querySelector('#fdEff');
+    let wo = S.wo; if (k === 'legs') wo = { ...wo, segs: wo.segs.map(g => g.a == null ? g : { ...g, a: Math.min(g.a, 1.05), b: Math.min(g.b, 1.05) }) };
+    if (k === 'short' && curMin) wo = shortenWorkout(S.wo, curMin * 60);
+    wrap.querySelector('#fdProf').innerHTML = woProfile(wo, f[3]);
+    eff.textContent = k === 'short' ? (curMin ? `auf ${curMin} min gekürzt` : 'Zeit wählen') : f[3] ? `Intensität ${f[3] > 0 ? '+' : ''}${f[3]} %${k === 'legs' ? ', keine Spitzen über 105 % FTP' : ''}` : 'wie geplant';
+    wrap.querySelector('[data-go]').disabled = k === 'short' && !curMin;
+  };
+  wrap.querySelector('[data-go]').focus();
   return new Promise(res => {
-    const done = (k, m) => { wrap.remove(); removeEventListener('keydown', esc_); if (k && k !== 'skip') applyForm(S, k, m); res(); };
-    const esc_ = e => { if (e.key === 'Escape') done(null); }; addEventListener('keydown', esc_);
+    const done = k => { if (wrap.querySelector('#fdNever').checked) { profile.askForm = false; saveProfile(); toast('Tagesform-Abfrage aus – wieder einschalten unter Einstellungen › Fahrt & Ton', 4000); } wrap.remove(); removeEventListener('keydown', key); if (k && k !== 'skip' && k !== 'ok') applyForm(S, k, curMin); res(); };
+    const key = e => { if (e.key === 'Escape') done(null); else if (e.key === 'Enter' && !e.target.closest('button,input')) { e.preventDefault(); done(cur); } }; addEventListener('keydown', key);
     wrap.onclick = e => {
-      const m = e.target.closest('[data-min]'); if (m) return done('short', +m.dataset.min);
+      const m = e.target.closest('[data-min]'); if (m) { curMin = +m.dataset.min; wrap.querySelectorAll('[data-min]').forEach(x => x.classList.toggle('pri', x === m)); sel_('short'); return; }
+      if (e.target.closest('[data-go]')) return done(cur);
       const b = e.target.closest('[data-form]'); if (!b) return;
-      if (b.dataset.form === 'short') { wrap.querySelector('#formMins').hidden = false; wrap.querySelectorAll('.formbtn').forEach(x => x.classList.toggle('on', x === b)); return; }
-      done(b.dataset.form);
+      if (b.dataset.form === 'skip') return done('skip');
+      sel_(b.dataset.form); if (e.detail === 2 && b.dataset.form !== 'short') done(cur);
     };
   });
 }

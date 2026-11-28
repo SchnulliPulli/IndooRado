@@ -1108,11 +1108,24 @@ body[data-page=ride] #rw #bigMap, body[data-page=ride] #rw .tbpop, body[data-pag
 .dlg > .row.end { flex: none; }
 
 /* Tagesform-Abfrage */
-.formgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin: 10px 0; }
-.formbtn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 8px; height: auto; white-space: normal; }
-.formbtn b { font-size: 26px; line-height: 1; }
-.formbtn.on { outline: 2px solid var(--accent, #ff6a3d); }
-.formmins { flex-wrap: wrap; gap: 8px; align-items: center; }
+/* Tagesform vor dem Workout */
+.formdlg { max-width: 520px; display: flex; flex-direction: column; gap: 12px; max-height: calc(100dvh - 24px); overflow-y: auto; }
+.fdhead h2 { margin: 0; } .fdhead p { margin: 2px 0 0; }
+.fdwo { padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, currentColor 5%, transparent); display: flex; flex-direction: column; gap: 6px; }
+.fdprof { width: 100%; height: 46px; display: block; border-radius: 6px; }
+.fdeff { color: var(--acc); font-weight: 600; }
+.formgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.formbtn { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 10px; row-gap: 4px; align-items: center; text-align: left; padding: 10px 12px; border-radius: 12px; border: 2px solid rgba(127,127,127,.22); background: color-mix(in srgb, currentColor 4%, transparent); color: inherit; font: inherit; cursor: pointer; transition: border-color .15s, background .15s; }
+.formbtn:hover { border-color: rgba(127,127,127,.5); }
+.formbtn.on { border-color: var(--acc); background: color-mix(in srgb, var(--acc) 13%, transparent); }
+.formbtn:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.fdi { font-size: 28px; line-height: 1; grid-row: 1 / 3; }
+.fdl { display: flex; flex-direction: column; min-width: 0; } .fdl b { font-size: .98rem; } .fdl small { font-size: .75rem; opacity: .7; line-height: 1.25; }
+.fdchip { grid-column: 2; justify-self: start; font-style: normal; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 99px; background: rgba(127,127,127,.18); }
+.fdchip.up { background: color-mix(in srgb, #4fd18b 25%, transparent); } .fdchip.down { background: color-mix(in srgb, #3fa7f5 25%, transparent); }
+.formmins { display: flex; flex-direction: column; gap: 6px; } .formmins .row { flex-wrap: wrap; gap: 6px; }
+.fdfoot { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid rgba(127,127,127,.18); padding-top: 10px; }
+@media (max-width: 420px) { .formgrid { grid-template-columns: 1fr; } .fdl small { display: none; } .formbtn { padding: 8px 10px; } .fdi { font-size: 24px; } }
 
 /* Videofahrt */
 .ridewrap > video.ridevid { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; z-index: 0; }
