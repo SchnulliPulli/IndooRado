@@ -32,7 +32,7 @@ export const notifOn = k => profile.reminders === true && profile.notif?.[k] !==
 export function setNotif(k, on) { profile.notif = { ...(profile.notif || {}), [k]: !!on }; saveProfile(); scheduleReminders(); }
 export async function notify(title, body, tag, kind) {
   if ((kind && !notifOn(kind)) || profile.reminders !== true || typeof Notification === 'undefined' || Notification.permission !== 'granted') return false;
-  try { const reg = await navigator.serviceWorker?.getRegistration(); if (reg) await reg.showNotification(title, { body, tag, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png' }); else new Notification(title, { body, tag }); return true; } catch (e) { return false; }
+  try { const reg = await navigator.serviceWorker?.getRegistration(); if (reg) await reg.showNotification(title, { body, tag, icon: 'icons/icon-192.png', badge: 'icons/badge-96.png' }); else new Notification(title, { body, tag }); return true; } catch (e) { return false; }
 }
 export const testNotify = () => notify('🔔 IndooRado', 'So sehen Benachrichtigungen aus.', 'test');
 // Beim ersten Öffnen (nach der Einrichtung) einmal fragen, ob Benachrichtigungen an sollen. „Später“ fragt nach 3 Tagen erneut.

@@ -363,9 +363,18 @@ async function pushOpen(href) {
   let h = ''; try { h = new URL(href, location.href).hash; } catch (e) { return; }
   const m = h.match(/[?&]pcall=(IndooRado-[A-Za-z0-9]{24})/);
   if (!m) { if (/^#\/friends\?open=[0-9a-f-]{36}$/i.test(h)) location.hash = h; return; }
-  const q = new URLSearchParams(h.split('?')[1] || ''); history.replaceState(null, '', location.pathname + '#/'); route();
-  const O = await import('./online/client.js'); for (let i = 0; i < 40 && !O.loggedIn(); i++) await new Promise(r => setTimeout(r, 250));
-  (await import('./call.js')).joinCall(m[1], { id: q.get('from') || '', name: (q.get('name') || 'Freund').slice(0, 40) });
+  const q = new URLSearchParams(h.split('?')[1] || ''), peer = { id: q.get('from') || '', name: (q.get('name') || 'Freund').slice(0, 40) };
+  history.replaceState(null, '', location.pathname + '#/'); route();
+  // Nach dem Öffnen aus der Benachrichtigung läuft die Anmeldung oft noch: bis zu 45 s warten, dann annehmen
+  const O = await import('./online/client.js');
+  const ready = () => O.loggedIn() && O.online.ready && O.access().ok;
+  if (!ready()) toast(`📹 Anruf von ${peer.name} wird verbunden …`, 4000);
+  for (let i = 0; i < 180 && !ready(); i++) {
+    await new Promise(r => setTimeout(r, 250));
+    if (i === 40 && O.access().mfa) toast('Bitte zuerst die Zwei-Faktor-Anmeldung abschließen – danach geht der Anruf weiter', 6000);
+  }
+  if (!ready()) { toast(O.loggedIn() ? 'Anruf: Anmeldung noch nicht abgeschlossen – bitte im Chat erneut beitreten' : 'Anruf: Auf diesem Gerät ist niemand angemeldet', 7000); return; }
+  (await import('./call.js')).joinCall(m[1], peer);
 }
 async function init() {
   { const I = await import('./i18n.js'); await I.initI18n(); if (!I.langChosen() && !/^#\/(watch\/|tv\b)/.test(location.hash) && await I.pickLanguage()) return; } // Sprache wählen (erstes Öffnen)
