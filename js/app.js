@@ -444,7 +444,7 @@ async function init() {
   // Aus einer Push-Benachrichtigung geöffnet: Anruf annehmen bzw. Chat öffnen
   if (/[?&]pcall=/.test(location.hash)) pushOpen(location.href);
   navigator.serviceWorker?.addEventListener('message', e => {
-    if (e.data?.type === 'ping' && e.ports?.[0]) { const port = e.ports[0]; requestAnimationFrame(() => port.postMessage({ active: document.visibilityState === 'visible' && document.hasFocus() })); return; } // bei gesperrtem Handy zeichnet die Seite nicht – keine Antwort
+    if (e.data?.type === 'ping' && e.ports?.[0]) { const port = e.ports[0], t0 = Date.now(); requestAnimationFrame(() => port.postMessage({ active: document.visibilityState === 'visible' && document.hasFocus() && Date.now() - t0 < 600 })); return; } // bei gesperrtem Handy zeichnet die Seite nicht – keine Antwort
     if (e.data?.type === 'pushOpen') pushOpen(e.data.url);
     // Push bei offener App im Fokus: statt Gerätemeldung der Hinweis in der App
     if (e.data?.type === 'pushIn') { const d = e.data.d || {}; if (!/^[0-9a-f-]{36}$/i.test(d.from || '')) return;

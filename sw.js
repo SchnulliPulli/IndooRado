@@ -2,7 +2,7 @@
 // Schnellstart: Dateien kommen sofort aus dem Cache und werden im Hintergrund aktualisiert (stale-while-revalidate).
 // Eine neue App-Version bekommt einen neuen Cache-Namen; beim Wechsel lädt die Seite einmal neu (siehe app.js),
 // damit nie Dateien aus zwei Versionen gemischt werden.
-const CACHE = 'indoorado-v138';
+const CACHE = 'indoorado-v139';
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', e => {
@@ -51,11 +51,11 @@ self.addEventListener('push', e => {
     return self.registration.showNotification(safe(d.title) || 'IndooRado', {
       body: safe(d.body), tag: call || missed ? 'call-' + safe(d.room) : k === 'test' ? 'test' : k + '-' + safe(d.from), renotify: !missed, icon: 'icons/icon-192.png', badge: 'icons/badge-96.png', timestamp: Date.now(), silent: false,
       requireInteraction: call || k === 'invite', vibrate: call ? [600, 250, 600, 250, 600, 250, 600] : [120], data: { url, call, acts },
-      actions: call ? [{ action: 'join', title: '📹 Annehmen' }, { action: 'no', title: 'Ablehnen' }]
-        : k === 'msg' ? [{ action: 'open', title: '💬 Antworten' }]
-        : missed ? [{ action: 'open', title: '💬 Chat öffnen' }]
-        : k === 'friendreq' ? [{ action: 'acc', title: '✅ Annehmen' }, { action: 'open', title: 'Ansehen' }]
-        : k === 'invite' ? [{ action: 'join', title: '🚴 Beitreten' }, { action: 'open', title: 'Ansehen' }] : [],
+      actions: call ? [{ action: 'join', title: 'Annehmen' }, { action: 'no', title: 'Ablehnen' }]
+        : k === 'msg' ? [{ action: 'open', title: 'Antworten' }]
+        : missed ? [{ action: 'open', title: 'Chat öffnen' }]
+        : k === 'friendreq' ? [{ action: 'acc', title: 'Annehmen' }, { action: 'open', title: 'Ansehen' }]
+        : k === 'invite' ? [{ action: 'join', title: 'Beitreten' }, { action: 'open', title: 'Ansehen' }] : [],
     });
   }));
 });

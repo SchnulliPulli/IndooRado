@@ -77,5 +77,6 @@ export async function closeNotes(prefix) {
 // Ist die App wirklich aktiv (sichtbar, im Fokus, Display an)? Bei gesperrtem Handy zeichnet die Seite keine Bilder mehr.
 export function appActive(ms = 700) {
   if (document.visibilityState !== 'visible' || !document.hasFocus()) return Promise.resolve(false);
-  return new Promise(res => { const t = setTimeout(() => res(false), ms); requestAnimationFrame(() => { clearTimeout(t); res(document.visibilityState === 'visible'); }); });
+  // Uhrzeit vergleichen: bei gesperrtem Handy ruhen Bild und Zeitgeber – das Bild nach dem Entsperren zählt nicht
+  const t0 = Date.now(); return new Promise(res => { const t = setTimeout(() => res(false), ms); requestAnimationFrame(() => { clearTimeout(t); res(document.visibilityState === 'visible' && Date.now() - t0 < ms); }); });
 }

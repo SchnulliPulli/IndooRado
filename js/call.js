@@ -109,7 +109,7 @@ export async function hangUp(notify = true) {
   for (const P of call.peers.values()) { try { P.pc.close(); } catch (e) { } }
   call.local?.getTracks().forEach(t => t.stop());
   try { if (call.ch) (await O.client()).removeChannel(call.ch); } catch (e) { }
-  call.win?.remove(); call.peers.clear(); call.away = null; Object.assign(call, { win: null, room: null, peer: null, pc: null, ch: null, local: null, isCaller: false });
+  call.win?.remove(); call.peers.clear(); call.away = null; Object.assign(call, { win: null, room: null, peer: null, pc: null, ch: null, local: null, isCaller: false, maxPeers: 0 });
   // Klingeln beenden, falls noch niemand abgenommen hat
   if (notify) { try { const PR = await import('./online/presence.js'); for (const id of notifyIds) PR.callSignal(id, 'callend'); } catch (e) { } }
 }
@@ -174,7 +174,7 @@ async function openWindow(room, peer, mode = 'av') {
     const tile = document.createElement('div'); tile.className = 'cwtile'; tile.innerHTML = `<video autoplay playsinline></video><span class="cwname">${esc(name || 'Freund')}</span><span class="cwtsas" hidden></span>`;
     grid.appendChild(tile); w.querySelector('.cwwait')?.remove();
     const P = { uid, name: name || 'Freund', pc, tile, polite: me > uid, makingOffer: false, ignoreOffer: false, started: false, relay: null, restartT: null };
-    call.peers.set(uid, P); if (!call.pc) call.pc = pc; names();
+    call.peers.set(uid, P); call.maxPeers = Math.max(call.maxPeers || 0, call.peers.size); if (!call.pc) call.pc = pc; names();
     P.start = () => { if (P.started) return; P.started = true; for (const t of call.local.getTracks()) { const snd = pc.addTrack(t, call.local); if (t.kind === 'video') { try { const pr = snd.getParameters(); pr.encodings = pr.encodings?.length ? pr.encodings : [{}]; pr.encodings[0].maxBitrate = 600000; pr.degradationPreference = 'balanced'; snd.setParameters(pr).catch(() => { }); } catch (e) { } } } bitrate(); };
     pc.onnegotiationneeded = async () => { try { P.makingOffer = true; await pc.setLocalDescription(); send(uid, { desc: pc.localDescription.toJSON() }); } catch (e) { console.warn('Anruf', e); } finally { P.makingOffer = false; } };
     pc.onicecandidate = ({ candidate }) => { if (candidate) send(uid, { cand: candidate.toJSON() }); };
@@ -201,8 +201,8 @@ async function openWindow(room, peer, mode = 'av') {
   const drop = (uid, why) => {
     const P = call.peers.get(uid); if (!P) return; try { P.pc.close(); } catch (e) { } P.tile.remove(); call.peers.delete(uid);
     if (call.pc === P.pc) call.pc = [...call.peers.values()][0]?.pc || null; names(); bitrate(); status();
-    if (why) toast(why, 3000);
-    if (!call.peers.size) setTimeout(() => { if (call.room === room && !call.peers.size) { toast('📴 Alle haben aufgelegt'); hangUp(false); } }, 1500);
+    if (why) hangToast(why);
+    if (!call.peers.size) setTimeout(() => { if (call.room === room && !call.peers.size) { if (call.maxPeers > 1) hangToast('📴 Alle haben aufgelegt'); hangUp(false); } }, 1500); // Zweiergespräch: „… hat aufgelegt“ reicht
   };
   call.dropPeer = drop; call.sendAll = payload => send(null, payload);
   call.resume = () => { for (const P of call.peers.values()) if (!P.polite && P.pc.connectionState !== 'connected') { try { P.pc.restartIce(); } catch (e) { } } };
@@ -284,7 +284,7 @@ async function inviteToLobby() {
 
 // Klingeln und Auflegen vom Gegenüber
 bus.on('callsignal', async s => {
-  if (s.kind === 'callend') { document.querySelectorAll(`.callring[data-uid="${CSS.escape(s.uid || '')}"]`).forEach(x => x.remove()); import('./push.js').then(P => P.closeNotes('call-')).catch(() => { }); if (call.peers.has(s.uid)) call.dropPeer?.(s.uid, `📴 ${s.name} hat aufgelegt`); else if (call.peer?.id === s.uid && !call.peers.size) { toast(`📴 ${s.name} hat aufgelegt`); hangUp(false); } return; }
+  if (s.kind === 'callend') { document.querySelectorAll(`.callring[data-uid="${CSS.escape(s.uid || '')}"]`).forEach(x => x.remove()); import('./push.js').then(P => P.closeNotes('call-')).catch(() => { }); if (call.peers.has(s.uid)) call.dropPeer?.(s.uid, `📴 ${s.name} hat aufgelegt`); else if (call.peer?.id === s.uid && !call.peers.size) { hangToast(`📴 ${s.name} hat aufgelegt`); hangUp(false); } return; }
   if (call.room) return; // schon im Gespräch
   // Einladung aus dem privaten Chat holen (nur Freunde können sie schreiben); älter als 3 Minuten = verpasst
   const sb = await O.client(), me = O.online.user?.id; if (!me) return;
@@ -293,8 +293,8 @@ bus.on('callsignal', async s => {
   { const st = (await callStates([room])).get(room); if (st && (st.ended_at || st.declined)) return; } // schon vorbei
   const { avatarSvg } = await import('./components.js');
   { const P = await import('./push.js');
-    if (!(await P.appActive())) { if (!(await P.pushActive())) import('./comfort.js').then(C => C.notify(`📹 ${s.name} ruft an`, 'Videoanruf in IndooRado – zum Annehmen die App öffnen.', 'call-' + room, 'call')).catch(() => { }); } // mit Push kommt die Meldung schon vom Server
-    else setTimeout(() => P.closeNotes('call-' + room), 1500); } // App ist offen: Klingel-Fenster reicht, Meldung in der Leiste schließen
+    if (!(await P.appActive())) { if (!(await P.pushActive())) import('./comfort.js').then(C => C.notify(`📹 ${s.name} ruft an`, 'Videoanruf in IndooRado – zum Annehmen die App öffnen.', 'call-' + room, 'call')).catch(() => { }); return; } // mit Push kommt die Meldung schon vom Server
+    setTimeout(() => P.closeNotes('call-' + room), 1500); } // gesperrt/Hintergrund: nur Gerätemeldung, kein Klingeln in der App. App ist offen: Klingel-Fenster reicht, Meldung in der Leiste schließen
   if (document.querySelector(`.callring[data-uid="${CSS.escape(s.uid)}"]`)) return; // klingelt schon (Live-Signal und Push gleichzeitig)
   const c = document.createElement('div'); c.className = 'invcard callring'; c.dataset.uid = s.uid; c.setAttribute('role', 'alertdialog');
   c.innerHTML = `<div class="row">${avatarSvg(s.look || {}, 40)}<div><b>📹 ${esc(s.name)} ruft an</b><div class="small muted">Videoanruf</div></div></div><div class="row end"><button class="btn sm ghost" data-no>📵 Ablehnen</button><button class="btn sm pri" data-ok>📞 Annehmen</button></div>`;
@@ -305,6 +305,9 @@ bus.on('callsignal', async s => {
     if (e.target.closest('[data-ok]')) { clearTimeout(t); c.remove(); joinCall(room, { id: s.uid, name: s.name }); }
   };
 });
+// Auflegen-Meldungen nur einmal (Signal über den Anrufkanal und über die Lobby kommen beide an)
+let lastHang = 0;
+function hangToast(t) { if (Date.now() - lastHang < 5000) return; lastHang = Date.now(); toast(t, 3000); }
 // Klingeln in der offenen App: Ton wie ein Telefon (zwei Töne, Pause) und Vibration, bis angenommen, abgelehnt oder 45 s
 function ringTone() {
   let ac = null, stop = false; const until = Date.now() + 45e3;
