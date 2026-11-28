@@ -16,7 +16,7 @@ export async function openInbox() {
   if (!O.loggedIn() || !O.access().ok) { location.hash = '#/account'; return; }
   document.querySelector('.inboxdlg')?.closest('.modal')?.remove();
   const w = document.createElement('div'); w.className = 'modal on';
-  w.innerHTML = `<div class="card dlg inboxdlg" role="dialog" aria-modal="true" aria-label="Nachrichten"><div class="row between"><h2>💬 Nachrichten</h2><span class="row"><button class="btn sm ghost" data-clear title="Alle Benachrichtigungen aus der Liste entfernen">🧹 Alle löschen</button><a class="btn sm ghost" href="#/friends">Alle Freunde</a><button class="btn sm ghost" data-x aria-label="Schließen">✕</button></span></div><div class="ibl"><div class="pageload"><div class="spinner"></div></div></div></div>`;
+  w.innerHTML = `<div class="card dlg inboxdlg" role="dialog" aria-modal="true" aria-label="Nachrichten"><div class="ibhead"><h2>💬 Nachrichten</h2><span class="ibbtns"><button class="btn sm ghost" data-clear title="Alle Benachrichtigungen aus der Liste entfernen">🧹 Alle löschen</button><a class="btn sm ghost" href="#/friends">👥 Alle Freunde</a></span><button class="btn sm ghost ibx" data-x aria-label="Schließen">✕</button></div><div class="ibl"><div class="pageload"><div class="spinner"></div></div></div></div>`;
   document.body.appendChild(w); let iv = null;
   const close = () => { w.remove(); clearInterval(iv); document.removeEventListener('keydown', k, true); bus.emit('inbox'); };
   const k = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } }; document.addEventListener('keydown', k, true);
@@ -53,10 +53,11 @@ async function fill(box, close) {
     const a = e.target.closest('[data-acc],[data-dec]');
     if (a) { e.stopPropagation(); const acc = !!a.dataset.acc; const { error } = await sb.rpc('friend_respond', { p_other: a.dataset.acc || a.dataset.dec, p_accept: acc }); if (error) return toast(error.message); toast(acc ? '🎉 Ihr seid jetzt Freunde' : 'Abgelehnt'); draw(); return; }
     const j = e.target.closest('[data-join]'); if (j) { e.stopPropagation(); close(); const f = (await sb.rpc('friend_list')).data?.find(x => x.id === j.dataset.peer); C.joinCall(j.dataset.join, { id: j.dataset.peer, name: f?.display_name || 'Freund' }); return; }
-    const r = e.target.closest('[data-open]'); if (r) { close(); location.hash = '#/friends?open=' + encodeURIComponent(r.dataset.open); }
+    const r = e.target.closest('[data-open]'); if (r) { close(); (await import('./pages/friends.js')).openChatWith(r.dataset.open); }
   });
   await draw();
   // Einmal angezeigt = gelesen (die Hervorhebung bleibt bis zum nächsten Öffnen sichtbar)
   try { const { data } = await sb.rpc('friend_list'); await Promise.all((data || []).filter(f => f.status === 'accepted' && +f.unread > 0).map(f => sb.rpc('chat_read', { p_other: f.id }))); } catch (e) { }
+  let dt = null; const offNew = bus.on('chatnew', () => { if (!box.isConnected) return offNew(); clearTimeout(dt); dt = setTimeout(draw, 400); }); // gesendete und neue Nachrichten sofort
   bus.emit('inbox'); iv = setInterval(() => document.hidden || draw(), 20e3); return iv;
 }

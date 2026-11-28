@@ -65,10 +65,19 @@ export async function render(el, params = [], query = '') {
 }
 
 // Profil eines Freundes mit Chat
+// Chat mit einem Freund von überall öffnen (Nachrichtencenter, Hinweis unten rechts, Push)
+export async function openChatWith(id, { focus = true } = {}) {
+  const ex = document.querySelector(`.frdlg[data-chat="${CSS.escape(id)}"]`); if (ex) { ex.querySelector('#chTxt')?.focus(); return; }
+  document.querySelector('.frdlg')?.closest('.modal')?.remove();
+  const sb = await O.client(), me = O.online.user?.id; if (!me) return;
+  const { data } = await sb.rpc('friend_list'); const f = (data || []).find(x => x.id === id && x.status === 'accepted'); if (!f) return toast('Chat nicht gefunden');
+  await openFriend(sb, me, f, () => { });
+  if (!focus) document.activeElement?.blur();
+}
 async function openFriend(sb, me, f, redraw) {
   if (!f) return;
   const w = document.createElement('div'); w.className = 'modal on';
-  w.innerHTML = `<div class="card dlg frdlg" role="dialog" aria-modal="true" aria-label="${esc(f.display_name)}"><div class="row between"><div class="row">${avatarSvg(f.avatar || {}, 44)}<div><h2 style="margin:0">${esc(f.display_name)}</h2><div class="small muted" id="fpSub">Level ${f.level}</div></div></div><button class="btn sm ghost" data-x aria-label="Schließen">✕</button></div>
+  w.innerHTML = `<div class="card dlg frdlg" data-chat="${esc(f.id)}" role="dialog" aria-modal="true" aria-label="${esc(f.display_name)}"><div class="row between"><div class="row">${avatarSvg(f.avatar || {}, 44)}<div><h2 style="margin:0">${esc(f.display_name)}</h2><div class="small muted" id="fpSub">Level ${f.level}</div></div></div><button class="btn sm ghost" data-x aria-label="Schließen">✕</button></div>
     <div class="row between"><div class="frtabs seg sm"><button aria-pressed="true" data-tab="chat">💬 Chat</button><button aria-pressed="false" data-tab="prof">📊 Profil</button></div><span class="row"><button class="btn sm ghost" data-clear title="Chat löschen">🗑</button><button class="btn sm pri" data-call title="Videoanruf">📹 Anrufen</button></span></div>
     <div data-pane="chat"><div class="chat" id="chLog"><div class="pageload"><div class="spinner"></div></div></div>
       <form class="chatin" id="chForm"><input class="inp" id="chTxt" maxlength="1000" placeholder="Nachricht schreiben …" autocomplete="off"><button class="btn pri" type="submit">Senden</button></form></div>
@@ -101,7 +110,7 @@ async function openFriend(sb, me, f, redraw) {
   };
   w.querySelector('#chForm').onsubmit = async e => {
     e.preventDefault(); const inp = w.querySelector('#chTxt'), body = inp.value.trim(); if (!body) return;
-    inp.disabled = true; const { error } = await sb.from('chat_messages').insert({ recipient: f.id, body }); inp.disabled = false; if (!error) import('../push.js').then(P => P.pushTo(f.id, 'msg')).catch(() => { });
+    inp.disabled = true; const { error } = await sb.from('chat_messages').insert({ recipient: f.id, body }); inp.disabled = false; if (!error) { import('../push.js').then(P => P.pushTo(f.id, 'msg')).catch(() => { }); import('../online/presence.js').then(PR => PR.callSignal(f.id, 'msg')).catch(() => { }); bus.emit('chatnew', { uid: f.id }); }
     if (error) return toast(/row-level security/i.test(error.message) ? 'Nicht gesendet (zu viele Nachrichten in kurzer Zeit oder keine Freundschaft mehr)' : miss(error));
     inp.value = ''; inp.focus(); loadChat();
   };
@@ -128,5 +137,7 @@ async function openFriend(sb, me, f, redraw) {
     if (e.target.closest('[data-block]')) { if (await dialog({ title: `${f.display_name} blockieren?`, html: '<p class="muted">Die Freundschaft endet, und ihr könnt euch keine Anfragen oder Nachrichten mehr schicken. Unter „Blockiert“ kannst du das rückgängig machen.</p>', buttons: [{ label: 'Abbrechen', value: 0 }, { label: 'Blockieren', value: 1, cls: 'danger' }] })) { await sb.rpc('friend_block', { p_other: f.id }); toast('Blockiert'); close(); } return; }
   });
   loadChat(); clearInterval(chatT); chatT = setInterval(() => w.isConnected ? loadChat() : clearInterval(chatT), 5000);
+  const offNew = bus.on('chatnew', x => { if (!w.isConnected) return offNew(); if (x?.uid === f.id) loadChat(); }); // neue Nachricht sofort anzeigen
+  w.dataset.chat = f.id;
   setTimeout(() => w.querySelector('#chTxt')?.focus(), 50);
 }

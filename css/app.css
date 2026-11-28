@@ -1417,3 +1417,29 @@ body.watchtv .tvprof { height: 15vh; }
 .cpnote { margin: 0; }
 .callpick .cpgo { min-width: 140px; }
 @media (max-width: 420px) { .cpmodes { gap: 6px; } .cpmode { padding: 12px 4px 10px; } .cpi { font-size: 26px; } .cpmode small { display: none; } }
+/* Nachrichtencenter: Kopfzeile mit Titel und Knöpfen auf einer Höhe */
+.ibhead { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
+.ibhead h2 { margin: 0; font-size: 1.25rem; line-height: 34px; white-space: nowrap; }
+.ibbtns { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ibbtns .btn { height: 34px; min-height: 34px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; line-height: 1; }
+.ibbtns [data-x] { width: 34px; padding: 0; justify-content: center; }
+@media (max-width: 480px) { .ibbtns .btn { padding: 0 10px; font-size: 13px; } }
+/* Chat: Nachrichten klar abgesetzt, Anruf-Infos dezent */
+.chat .msg { background: var(--panel2, #252d36); border: 1px solid rgba(127,127,127,.22); box-shadow: 0 1px 2px rgba(0,0,0,.18); font-size: 15px; }
+.chat .msg.me { background: color-mix(in srgb, var(--acc) 82%, #000); border-color: transparent; }
+.chat .msg.call { background: color-mix(in srgb, #4fd18b 16%, var(--panel2, #252d36)); border-color: color-mix(in srgb, #4fd18b 45%, transparent); }
+.calllog { font-size: 11px; opacity: .5; background: none; padding: 2px 8px; margin: 2px 0; }
+.calllog.missed { opacity: .8; }
+/* Neue Nachricht: Hinweis unten rechts */
+.invcard.msgpop { position: fixed; right: 16px; bottom: 90px; z-index: 9440; flex-direction: column; gap: 6px; width: min(340px, calc(100vw - 24px)); background: var(--panel); border-radius: 16px; padding: 14px 14px 12px; border: 1px solid color-mix(in srgb, var(--acc) 55%, transparent); box-shadow: 0 16px 40px rgba(0,0,0,.5); }
+.msgpop .mprow { margin: 0; align-items: flex-start; gap: 10px; cursor: pointer; flex-wrap: nowrap; }
+.msgpop .mpt { min-width: 0; padding-right: 18px; } .msgpop .mpbody { margin-top: 2px; opacity: .85; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.msgpop .mpx { position: absolute; top: 8px; right: 8px; border: 0; background: none; color: inherit; opacity: .6; cursor: pointer; font-size: 14px; padding: 4px; }
+.msgpop .row.end { margin-top: 4px; }
+.callring ~ .msgpop, .msgpop ~ .callring { bottom: 260px; }
+@media (max-width: 520px) { .invcard.msgpop { left: 12px; right: 12px; width: auto; bottom: 84px; } }
+.ibhead { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; }
+.ibhead .ibx { width: 34px; height: 34px; min-height: 34px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+@media (max-width: 520px) { .ibhead { grid-template-columns: 1fr auto; } .ibhead .ibbtns { grid-column: 1 / -1; grid-row: 2; } .ibhead .ibx { grid-column: 2; grid-row: 1; } }
+.msgpop .row.end { justify-content: flex-end; gap: 8px; }
+.invcard.msgpop .row.end { align-self: stretch; justify-content: flex-end; }

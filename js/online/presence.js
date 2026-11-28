@@ -69,6 +69,7 @@ export async function joinPresence() {
   P.ch.on('broadcast', { event: 'invite' }, ({ payload: m }) => {
     if (!m || m.to !== sid || typeof m.from !== 'string' || m.from.length > 40) return;
     // Anruf-Signale: nur „es klingelt“ bzw. „aufgelegt“ – der Raum selbst steht ausschließlich in der privaten Chat-Nachricht
+    if (m.kind === 'msg') { const peer = P.peers.get(m.from); if (peer?.uid) bus.emit('chatsignal', { uid: peer.uid, name: peer.name, look: peer.look }); return; } // neue Chat-Nachricht (Inhalt nur in der Datenbank)
     if (m.kind === 'call' || m.kind === 'callend') { const peer = P.peers.get(m.from); if (peer?.uid) bus.emit('callsignal', { kind: m.kind, sid: m.from, uid: peer.uid, name: peer.name, look: peer.look }); return; }
     if (!['lobby', 'ride'].includes(m.kind)) return;
     const inv = { kind: m.kind, from: m.from, name: txt(m.name, 30) || 'Fahrer', lobby: txt(m.lobby, 24), title: txt(m.title, 40), route: txt(m.route, 40), routeName: txt(m.routeName, 40), startAt: Number(m.startAt) || 0 };

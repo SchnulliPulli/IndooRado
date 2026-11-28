@@ -362,7 +362,7 @@ function netIndicator() {
 async function pushOpen(href) {
   let h = ''; try { h = new URL(href, location.href).hash; } catch (e) { return; }
   const m = h.match(/[?&]pcall=(IndooRado-[A-Za-z0-9]{24})/);
-  if (!m) { if (/^#\/friends\?open=[0-9a-f-]{36}$/i.test(h)) location.hash = h; return; }
+  if (!m) { const o = h.match(/^#\/friends\?open=([0-9a-f-]{36})$/i); if (o) { const O = await import('./online/client.js'); for (let i = 0; i < 120 && !(O.loggedIn() && O.online.ready); i++) await new Promise(r => setTimeout(r, 250)); (await import('./pages/friends.js')).openChatWith(o[1]); } return; }
   const q = new URLSearchParams(h.split('?')[1] || ''), peer = { id: q.get('from') || '', name: (q.get('name') || 'Freund').slice(0, 40) };
   history.replaceState(null, '', location.pathname + '#/'); route();
   // Nach dem Öffnen aus der Benachrichtigung läuft die Anmeldung oft noch: bis zu 45 s warten, dann annehmen
@@ -424,7 +424,7 @@ async function init() {
   // Barrierefreiheit: Sprunglink zum Inhalt (ohne den Hash-Router zu stören), Tastenkürzel-Übersicht mit ?
   const sk = document.getElementById('skipLink'); if (sk) sk.onclick = e => { e.preventDefault(); document.getElementById('view')?.focus(); };
   import('./shortcuts.js').then(m => m.initShortcuts());
-  import('./online/client.js').then(O => { if (O.configured()) import('./call.js'); }); // Videoanrufe: nur mit Online-Konto, lädt nichts Externes ohne Anruf
+  import('./online/client.js').then(O => { if (O.configured()) { import('./call.js'); import('./msgpop.js'); } }); // Videoanrufe: nur mit Online-Konto, lädt nichts Externes ohne Anruf
   import('./sensors.js').then(m => m.reconnectSensors()).catch(() => { });
   // NAS-Abgleich: neuerer Stand vom NAS wird übernommen, danach Seite neu aufbauen
   // Erst den Online-Login abwarten: angemeldet läuft der Abgleich über das Konto (bindOnline), sonst wie bisher über NAS/Cloud
