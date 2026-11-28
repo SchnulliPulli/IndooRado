@@ -250,7 +250,7 @@ export async function render(el, params = []) {
       <p class="small muted">Belegt: ${u ? (u.usage / 1048576).toFixed(1).replace('.', ',') + ' MB' : 'unbekannt'} · Dauerhafter Speicher: ${pers ? 'ja' : 'nicht bestätigt'}</p>
       <label class="switch"><input type="checkbox" id="bkSec"><span></span> <div class="swt">Anmeldungen mitsichern<small class="muted">Strava, Cloud-Speicher und NAS, mit einem Passwort verschlüsselt. So bist du nach dem Einspielen sofort wieder angemeldet.</small></div></label>
       <div class="row"><button class="btn" id="bk">Sicherung herunterladen</button><label class="btn">Sicherung einspielen<input type="file" id="rs" accept=".json" hidden></label></div>
-      <div class="row"><button class="btn ghost danger" id="wp">App zurücksetzen (alle lokalen Daten löschen)</button></div>
+      <div class="row"><button class="btn ghost danger" id="wp">🗑 App zurücksetzen</button></div><p class="small muted">Löscht alle Daten der App auf diesem Gerät (Werkseinstellungen). Was in deinem Konto online gespeichert ist, bleibt erhalten.</p>
     </div>
   </section>
   <section class="card form"><h2>Einwilligungen</h2>
