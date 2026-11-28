@@ -1,5 +1,7 @@
 # Lebenszeichen für Supabase: Kostenlose Projekte werden nach etwa einer Woche ohne Aktivität pausiert.
 # Alle zwei Tage ein kleiner Datenbank-Aufruf (Funktion public.ping). Adresse und öffentlicher Schlüssel stehen in online.json.
+# GitHub schaltet zeitgesteuerte Workflows in öffentlichen Repos nach 60 Tagen ohne Commit ab. Der letzte Schritt meldet den
+# Workflow deshalb bei jedem Lauf erneut als aktiv an (ohne Dummy-Commits). Die Seite selbst (GitHub Pages) läuft ohnehin unbegrenzt.
 name: Supabase wach halten
 on:
   schedule:
@@ -7,6 +9,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: write # damit sich der Workflow selbst aktiv halten kann (siehe letzter Schritt)
 jobs:
   ping:
     runs-on: ubuntu-latest
@@ -22,3 +25,8 @@ jobs:
             echo "Versuch $i: HTTP $code $(cat out.txt)"; [ "$code" = 200 ] && exit 0; sleep 20
           done
           echo "::error::Supabase antwortet nicht (Projekt pausiert?)"; exit 1
+      - name: Workflow aktiv halten (60-Tage-Regel)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/keepalive.yml/enable" && echo "Workflow bleibt aktiv"
