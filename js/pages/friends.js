@@ -25,6 +25,8 @@ export async function render(el, params = [], query = '') {
       <h3 class="sub">Privatsphäre</h3>
       <label class="switch"><input type="checkbox" id="frShare" ${O.online.profile?.share_rides ? 'checked' : ''}><span></span> <div class="swt">Freunde dürfen meine einzelnen Fahrten sehen<small class="muted">Datum, Strecke, Distanz, Dauer, Höhenmeter, Ø Watt. Ohne diese Erlaubnis sehen Freunde nur Level und Summen. Puls, Gewicht und Alter sieht nie jemand.</small></div></label>
       <label class="switch"><input type="checkbox" id="frFind" ${O.online.profile?.discoverable !== false ? 'checked' : ''}><span></span> <div class="swt">In der Suche auffindbar<small class="muted">Andere angemeldete Spieler finden dich über deinen Namen und sehen dabei Name, Avatar und Level. Standardmäßig an. Ausgeschaltet können dich Freunde trotzdem per Freundescode oder über die Online-Liste anfragen.</small></div></label>
+      <label class="switch"><input type="checkbox" id="frCalls" ${O.online.profile?.allow_calls !== false ? 'checked' : ''}><span></span> <div class="swt">Freunde dürfen mich anrufen<small class="muted">Ausgeschaltet kann dich niemand per Video- oder Sprachanruf erreichen. Du selbst kannst weiter anrufen. Standardmäßig an.</small></div></label>
+      <label class="switch"><input type="checkbox" id="frMsgs" ${O.online.profile?.allow_msgs !== false ? 'checked' : ''}><span></span> <div class="swt">Freunde dürfen mir Nachrichten schreiben<small class="muted">Ausgeschaltet kommen keine neuen Chat-Nachrichten mehr an; der bisherige Verlauf bleibt. Standardmäßig an.</small></div></label>
     </div>
   </section>`;
   let list = [];
@@ -55,7 +57,7 @@ export async function render(el, params = [], query = '') {
     if (t.id === 'frCodeGo') { const c = $('#frCode', el).value.trim(); if (c.replace(/[^a-z0-9]/gi, '').length !== 8) return toast('Der Code hat 8 Zeichen'); const { data, error } = await sb.rpc('friend_request_code', { p_code: c }); if (error) return toast(miss(error)); $('#frCode', el).value = ''; toast(data === 'friend' ? '🎉 Ihr seid jetzt Freunde' : 'Anfrage gesendet'); draw(); return; }
   };
   el.onchange = async e => {
-    const k = e.target.id === 'frShare' ? 'share_rides' : e.target.id === 'frFind' ? 'discoverable' : null; if (!k) return;
+    const k = { frShare: 'share_rides', frFind: 'discoverable', frCalls: 'allow_calls', frMsgs: 'allow_msgs' }[e.target.id]; if (!k) return;
     try { await O.updateProfile({ [k]: e.target.checked }); toast('Gespeichert', 900); } catch (er) { e.target.checked = !e.target.checked; toast(miss(er)); }
   };
   const loadCode = async (fresh = false) => { const { data, error } = await sb.rpc('my_friend_code', { p_new: fresh }); $('#frMy', el).textContent = error ? '–' : String(data).replace(/^(.{4})/, '$1-'); if (error) toast(miss(error)); };
@@ -111,7 +113,7 @@ async function openFriend(sb, me, f, redraw) {
   w.querySelector('#chForm').onsubmit = async e => {
     e.preventDefault(); const inp = w.querySelector('#chTxt'), body = inp.value.trim(); if (!body) return;
     inp.disabled = true; const { error } = await sb.from('chat_messages').insert({ recipient: f.id, body }); inp.disabled = false; if (!error) { import('../push.js').then(P => P.pushTo(f.id, 'msg')).catch(() => { }); import('../online/presence.js').then(PR => PR.callSignal(f.id, 'msg')).catch(() => { }); bus.emit('chatnew', { uid: f.id }); }
-    if (error) return toast(/Chat-Filter: /.test(error.message) ? '🛡️ ' + error.message.replace(/^.*Chat-Filter: /, '') + ' – die Nachricht wurde nicht gesendet' : /row-level security/i.test(error.message) ? 'Nicht gesendet (zu viele Nachrichten in kurzer Zeit oder keine Freundschaft mehr)' : miss(error), 6000);
+    if (error) return toast(/Chat-Filter: /.test(error.message) ? '🛡️ ' + error.message.replace(/^.*Chat-Filter: /, '') + ' – die Nachricht wurde nicht gesendet' : /row-level security/i.test(error.message) ? 'Nicht gesendet (zu viele Nachrichten in kurzer Zeit, keine Freundschaft mehr oder dein Freund empfängt gerade keine Nachrichten)' : miss(error), 6000);
     inp.value = ''; inp.focus(); loadChat();
   };
   const loadProf = async () => {
@@ -136,6 +138,12 @@ async function openFriend(sb, me, f, redraw) {
     if (e.target.closest('[data-rm]')) { if (await dialog({ title: `Freundschaft mit ${f.display_name} beenden?`, html: '<p class="muted">Ihr seht dann keine Profile mehr und könnt nicht mehr chatten. Bisherige Nachrichten bleiben bei euch beiden gespeichert, bis ihr sie löscht oder sie nach 12 Monaten entfernt werden.</p>', buttons: [{ label: 'Abbrechen', value: 0 }, { label: 'Beenden', value: 1, cls: 'danger' }] })) { await sb.rpc('friend_remove', { p_other: f.id }); close(); } return; }
     if (e.target.closest('[data-block]')) { if (await dialog({ title: `${f.display_name} blockieren?`, html: '<p class="muted">Die Freundschaft endet, und ihr könnt euch keine Anfragen oder Nachrichten mehr schicken. Unter „Blockiert“ kannst du das rückgängig machen.</p>', buttons: [{ label: 'Abbrechen', value: 0 }, { label: 'Blockieren', value: 1, cls: 'danger' }] })) { await sb.rpc('friend_block', { p_other: f.id }); toast('Blockiert'); close(); } return; }
   });
+  // Darf ich diesen Freund anrufen bzw. anschreiben? (Einstellung des Freundes, vom Server geprüft)
+  sb.rpc('friend_privacy', { p_other: f.id }).then(({ data }) => {
+    if (!data || !w.isConnected) return;
+    const cb = w.querySelector('[data-call]'); if (data.calls === false && cb) { cb.disabled = true; cb.title = `${f.display_name} nimmt keine Anrufe an`; }
+    if (data.msgs === false) { const fm = w.querySelector('#chForm'); fm.classList.add('chatoff'); fm.innerHTML = `<p class="small muted">🔕 ${esc(f.display_name)} empfängt gerade keine Nachrichten.</p>`; }
+  }, () => { });
   loadChat(); clearInterval(chatT); chatT = setInterval(() => w.isConnected ? loadChat() : clearInterval(chatT), 5000);
   const offNew = bus.on('chatnew', x => { if (!w.isConnected) return offNew(); if (x?.uid === f.id) loadChat(); }); // neue Nachricht sofort anzeigen
   w.dataset.chat = f.id;

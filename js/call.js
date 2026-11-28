@@ -86,7 +86,7 @@ export async function startCall(friend) {
   const mode = await pickMode(`${friend.display_name || friend.name} anrufen`, friend); if (!mode) return;
   const sb = await O.client();
   // Raum vom Server: nur unter Freunden, kryptografisch zufällig, Kanal danach nur für euch beide
-  const cr = await sb.rpc('call_create', { p_friend: friend.id }); if (cr.error) return toast('Anruf nicht möglich: ' + (/function|schema cache/i.test(cr.error.message) ? 'Datenbankschema erneut ausführen' : cr.error.message));
+  const cr = await sb.rpc('call_create', { p_friend: friend.id }); if (cr.error) return toast(/Anrufe nicht erlaubt/.test(cr.error.message) ? `📵 ${friend.name || friend.display_name || 'Dein Freund'} nimmt gerade keine Anrufe an` : 'Anruf nicht möglich: ' + (/function|schema cache/i.test(cr.error.message) ? 'Datenbankschema erneut ausführen' : cr.error.message));
   const room = cr.data;
   const { error } = await sb.from('chat_messages').insert({ recipient: friend.id, body: `[[call:${room}]]` });
   if (!error) import('./push.js').then(P => P.pushTo(friend.id, 'call', room)).catch(() => { });
