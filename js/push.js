@@ -27,7 +27,8 @@ export async function enablePush() {
   if (sub && sub.options?.applicationServerKey && enc(sub.options.applicationServerKey) !== enc(key)) { await sub.unsubscribe().catch(() => { }); sub = null; } // Schlüssel gewechselt
   if (!sub) sub = await r.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
   const j = sub.toJSON();
-  await rpc('push_subscribe', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_prefs: prefs() });
+  const ok = await rpc('push_subscribe', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_prefs: prefs() }).catch(e => { throw new Error('Gerät konnte nicht angemeldet werden: ' + (/function|schema cache/i.test(e.message) ? 'schema.sql ausführen' : e.message)); });
+  if (ok !== true) throw new Error('Gerät konnte nicht angemeldet werden (Konto nicht freigeschaltet oder gesperrt?)');
   try { localStorage.setItem('vvPush', '1'); } catch (e) { }
   return true;
 }
@@ -58,7 +59,8 @@ export async function selfTest() {
   if (error) { const st = error.context?.status; throw new Error(st === 404 ? 'Edge Function „push“ nicht gefunden' : st === 401 ? 'Edge Function lehnt die Anmeldung ab (401)' : 'Edge Function: ' + (st || error.message)); }
   if (data?.why === 'not-configured') throw new Error('In Supabase fehlen die Secrets VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY');
   if (data?.why === 'not-allowed') throw new Error('Zu viele Tests (höchstens 5 pro Stunde) oder Schema veraltet (schema.sql ausführen)');
-  if (data?.why === 'no-device') throw new Error('Kein Gerät angemeldet – Schema ausgeführt?');
+  if (data?.why === 'no-device') throw new Error('Kein Gerät gefunden, obwohl dieses Gerät eben angemeldet wurde – Funktion „push“ und schema.sql auf dem neuesten Stand?');
+  if (data?.why === 'db') throw new Error('Datenbank: ' + (data.detail || '') + ' – schema.sql erneut ausführen');
   if (!data?.sent) throw new Error('Push-Dienst lehnt ab: ' + (data?.errors || []).join(', ') + ' – passt VAPID_PUBLIC_KEY zum Schlüssel in online.json?');
   return data;
 }
