@@ -42,6 +42,10 @@ export async function render(el, [id], query) {
       ${ride.mp ? `<div class="small" style="color:#9ff3ff">🌐 Mit ${ride.mp.riders.map(esc).join(', ')} gefahren · zusammen ${Math.round(ride.mp.together / 60)} min${ride.mp.won || ride.mp.lost ? ` · Duelle ${ride.mp.won}:${ride.mp.lost}` : ''}${ride.mp.goal ? ` · 🏆 Gruppenziel ${ride.mp.goal} km` : ''}</div>` : ''}
       ${ride.rideOns && (ride.rideOns.got || ride.rideOns.given) ? `<div class="small muted">👍 ${ride.rideOns.got} Ride Ons bekommen, ${ride.rideOns.given} verteilt</div>` : ''}</div>
     </section>` : ''}
+  ${ride.workoutName && ride.rpe == null && !ride.imported ? `<section class="card rpecard" id="rpeCard"><h2>Wie hart war's?</h2><p class="small muted">Deine Einschätzung hilft dem Trainingsplan, die nächsten Einheiten passend zu machen.</p>
+    <div class="rpegrid">${[[1, '😌', 'Locker'], [2, '🙂', 'Gut machbar'], [3, '😤', 'Fordernd'], [4, '🥵', 'Sehr hart'], [5, '💀', 'Am Limit']].map(([v, i, l]) => `<button class="btn rpeb" data-rpe="${v}"><b>${i}</b><span>${l}</span></button>`).join('')}</div></section>` : ''}
+  ${(() => { const kj = ride.sum?.kj || 0, IF = ride.sum?.IF || .65, h = (ride.sum?.dur || 0) / 3600; if (kj < 150) return ''; const carb = Math.round(kj * Math.min(.9, Math.max(.3, .35 + (IF - .55) * 1.2)) / 4);
+    return `<section class="card small fuel">🍌 <b>Energie:</b> ca. ${Math.round(kj)} kcal verbraucht, davon etwa <b>${carb} g Kohlenhydrate</b>. ${h >= 1 ? `Bei Fahrten dieser Länge und Härte ${IF > .75 ? '60–90' : '30–60'} g Kohlenhydrate pro Stunde während der Fahrt zuführen.` : 'Nach der Fahrt: Kohlenhydrate und etwas Eiweiß in der nächsten Stunde helfen der Erholung.'} <span class="muted">(Richtwerte)</span></section>`; })()}
   <section class="card act">
     <div class="acthead"><div class="actav" style="background:${esc(profile.jersey || '#ff6a3d')}">${esc((profile.name || 'F')[0].toUpperCase())}</div>
       <div style="flex:1;min-width:0"><div class="small muted">${esc(profile.name)} · ${fmtDate(ride.date, { dateStyle: 'full', timeStyle: 'short' })} · ${ride.imported ? 'übernommen aus ' + (ride.imported === 'strava' ? 'Strava' : 'FIT-Datei') : 'Indoor mit IndooRado'}</div>
@@ -68,7 +72,7 @@ export async function render(el, [id], query) {
       <div class="actmap"><canvas id="map"></canvas></div>
     </div>
     <div class="row actbtns">
-      <button class="btn sm pri" id="eStrava" title="FIT-Datei speichern und Strava-Upload öffnen">Zu Strava</button><button class="btn sm" id="eShare">📤 Teilen</button><button class="btn sm" id="eGhost" title="Freunde fahren gegen diese Fahrt">👻 Als Geist</button><button class="btn sm" id="eFit">FIT</button><button class="btn sm" id="eTcx">TCX</button>${hasTrack(ride) ? '<button class="btn sm" id="eGpx" title="Gefahrene virtuelle Strecke als GPX">GPX</button>' : ''}<button class="btn sm ghost" id="eRen">Umbenennen</button><button class="btn sm ghost danger" id="eDel">Löschen</button>
+      <button class="btn sm pri" id="eStrava" title="FIT-Datei speichern und Strava-Upload öffnen">Zu Strava</button><button class="btn sm" id="eIcu" title="Zu intervals.icu hochladen (eigener API-Schlüssel)">intervals.icu</button><button class="btn sm" id="eShare">📤 Teilen</button><button class="btn sm" id="eGhost" title="Freunde fahren gegen diese Fahrt">👻 Als Geist</button><button class="btn sm" id="eFit">FIT</button><button class="btn sm" id="eTcx">TCX</button>${hasTrack(ride) ? '<button class="btn sm" id="eGpx" title="Gefahrene virtuelle Strecke als GPX">GPX</button>' : ''}<button class="btn sm ghost" id="eRen">Umbenennen</button><button class="btn sm ghost danger" id="eDel">Löschen</button>
     </div>
   </section>
   ${ride.test ? `<section class="card testbox"><h2>${esc(ride.test.type)}: neue FTP ${ride.test.ftp} W</h2><p class="muted">${esc(ride.test.basis)}. Aktuell eingetragen: ${profile.ftp} W.</p>${ride.test.ftp !== profile.ftp ? '<button class="btn pri" id="ftpApply">FTP übernehmen</button>' : '<p>Bereits übernommen.</p>'}</section>` : ''}
@@ -151,6 +155,15 @@ export async function render(el, [id], query) {
     window.open('https://www.strava.com/upload/select', '_blank', 'noopener');
   };
   $('#eShare', el).onclick = () => shareDialog(ride, shots);
+  $('#eIcu', el).onclick = async () => (await import('../intervals.js')).upload(ride);
+  // Gefühlte Anstrengung: steuert zusammen mit den Messwerten die Anpassung des Plans
+  el.querySelector('#rpeCard')?.addEventListener('click', async e => {
+    const b = e.target.closest('[data-rpe]'); if (!b) return; const v = +b.dataset.rpe;
+    ride.rpe = v; await db.put('rides', ride);
+    const { saveProgress } = await import('../state.js'), old = progress.planAdapt || 0;
+    if (ride.planId || ride.workoutName) { progress.planAdapt = Math.max(-15, Math.min(10, old + ({ 1: 2, 2: 1, 3: 0, 4: -2, 5: -4 })[v])); saveProgress(); }
+    $('#rpeCard', el).innerHTML = `<p>${['', '😌 Locker – die nächsten Einheiten werden etwas fordernder.', '🙂 Gut so – leicht nach oben angepasst.', '😤 Passt genau.', '🥵 Sehr hart – die nächsten Einheiten werden etwas leichter.', '💀 Am Limit – nächstes Mal deutlich leichter. Gute Erholung!'][v]}${progress.planAdapt !== old ? ` <span class="muted small">(Intensität im Plan: ${progress.planAdapt > 0 ? '+' : ''}${progress.planAdapt} %)</span>` : ''}</p>`;
+  });
   $('#eGhost', el).onclick = () => import('../ghostui.js').then(m => m.shareGhost(ride, ride.routeName));
   const gpx = () => { if (hasTrack(ride)) download(fileBase(ride) + '.gpx', toGpx(ride), 'application/gpx+xml'); };
   if ($('#eGpx', el)) $('#eGpx', el).onclick = gpx;

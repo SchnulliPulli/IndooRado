@@ -1301,3 +1301,13 @@ body.watchtv .tvprof { height: 15vh; }
 .tvw.withvid .tvt span { font-size: clamp(12px, 1.2vw, 22px); }
 .tvw.withvid .tviv { flex-direction: column; align-items: flex-start; font-size: clamp(14px, 1.5vw, 26px); }
 .tvw.withvid .tvprof { height: 11vh; }
+
+/* Wie hart war's? / Energie */
+.rpegrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 8px; }
+.rpeb { height: auto; padding: 10px 4px; display: flex; flex-direction: column; align-items: center; gap: 4px; white-space: normal; }
+.rpeb b { font-size: 28px; line-height: 1; } .rpeb span { font-size: 12px; }
+.fuel { line-height: 1.5; }
+@media (max-width: 480px) { .rpegrid { grid-template-columns: repeat(3, 1fr); } }
+.rtype { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+.rtrow { display: grid; grid-template-columns: 150px 1fr 64px; gap: 10px; align-items: center; font-size: 14px; }
+.rtrow b { text-align: right; }

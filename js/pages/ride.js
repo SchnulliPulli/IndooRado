@@ -187,7 +187,9 @@ async function start(el) {
     np: { buf: [], bs: 0, s4: 0, n: 0 }, field: [], npcOn: sel.npcs !== false, odo: 0, beamed: false, lastBeep: -1, nextDrink: (profile.drinkEvery || 15) * 60,
   };
   setSurface(route); // Belag und Schwerkraft der Strecke
-  setUpgrades(profile.upgradesOn !== false ? upgradeEffect() : null); // Werkstatt-Teile (bei echten Mitfahrern wieder neutral, siehe unten)
+  // Bei Workouts standardmäßig ohne Spiel-Extras, die Tempo und Strecke verfälschen (Power-ups, Werkstatt-Teile)
+  S.gameOff = !!wo && !profile.gameInWorkouts;
+  setUpgrades(profile.upgradesOn !== false && !S.gameOff ? upgradeEffect() : null); // Werkstatt-Teile (bei echten Mitfahrern wieder neutral, siehe unten)
   // Gruppenfahrt: alle übernehmen die Einstellungen des Gastgebers (nur für diese Fahrt, eigene Einstellungen bleiben)
   S.group = (() => { try { return JSON.parse(sessionStorage.getItem('groupRide') || 'null'); } catch (e) { return null; } })(); sessionStorage.removeItem('groupRide');
   if (S.group) { const G = S.group.settings || {}; S.npcOn = G.npcs !== false; }
@@ -316,7 +318,7 @@ function syncRemote() {
   const pos = p => { const g = gapOf(R, p.d || 0, S.dist), a = Math.abs(g); return a < 30 ? 'direkt bei dir' : (a < 1000 ? Math.round(a) + ' m' : (a / 1000).toFixed(1).replace('.', ',') + ' km') + (g > 0 ? ' vor dir' : ' hinter dir'); };
   // Kurz weg und wieder da (Verbindung, gedrosselter Hintergrund-Tab): leise melden statt erneut „beigetreten“ mit Ton
   const gone = S.peerGone ||= new Map();
-  setUpgrades(peers.size || profile.upgradesOn === false ? null : upgradeEffect()); // mit echten Mitfahrern: gleiche Bedingungen für alle
+  setUpgrades(peers.size || profile.upgradesOn === false || S.gameOff ? null : upgradeEffect()); // mit echten Mitfahrern: gleiche Bedingungen für alle
   for (const [id, p] of peers) if (!was.has(id)) { if (performance.now() - (gone.get(id) || -1e9) < 120e3) flash(`🌐 ${p.name} ist wieder da`, 1500); else { flash(`🌐 ${p.name} ist deiner Fahrt beigetreten · ${pos(p)}`, 3500); sound.pass(); say(p.name + ' fährt jetzt mit', 'mp'); } }
   for (const [id, name] of was) if (!now.has(id)) { gone.set(id, performance.now()); flash(`👋 ${name} hat die Strecke verlassen`, 2500); }
   S.peerNames = now;
@@ -957,6 +959,8 @@ function step(dt, first) {
   }
   if (first && !S.demoUsed && (S.eggT = (S.eggT || 0) + 1) % 10 === 0) rideEggs(S, flash);
   if (profile.drinkTips !== false && S.t > S.nextDrink) { S.nextDrink += (profile.drinkEvery || 15) * 60; flash('💧 Kurz trinken', 2000); }
+  // Ernährung: ab 45 min alle 25 min an Kohlenhydrate erinnern (bei harten Fahrten mehr)
+  if (profile.fuelTips !== false && S.t > (S.nextFuel ??= 45 * 60)) { S.nextFuel += 25 * 60; const IF = S.np.n ? Math.pow(S.np.s4 / S.np.n, .25) / profile.ftp : .6; flash(`🍌 Zeit für Kohlenhydrate: ${IF > .75 ? '20–30 g (Gel, Riegel)' : '15–20 g (Banane, Riegel, Saftschorle)'}`, 3000); }
   if (S.wo) S.wT += dt;
   if (S.dist >= R.total) {
     if (R.loop) { S.dist -= R.total; S.lap++; flash('Runde ' + (S.lap + 1) + ' · letzte Runde ' + fmtT(S.t - S.lapT0), 2500); say(`Runde ${S.lap + 1}. Letzte Runde in ${fmtT(S.t - S.lapT0)}`, 'lap'); S.lapT0 = S.t; lapReset(S); S.climbs.forEach(c => c.state = 'pending'); S.sprints.forEach(c => c.state = 'pending'); }

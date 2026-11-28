@@ -11,7 +11,7 @@ export const SCHEMA = 2; // bei Änderungen am Datenmodell erhöhen und unten ei
 const STORES = ['rides', 'routes', 'workouts'];
 // Diese kv-Schlüssel sind Zugangsdaten bzw. gerätebezogen; sie wandern nur verschlüsselt ins Paket
 export const SECRET_KEYS = ['sync', 'strava', 'cloudApps'];
-const LOCAL_ONLY = ['syncMeta', 'musicFiles', 'device', 'kvTimes', 'videoHandles'];
+const LOCAL_ONLY = ['syncMeta', 'musicFiles', 'device', 'kvTimes', 'videoHandles', 'intervalsIcu'];
 
 // Migrationen: from -> to, jeweils idempotent
 const MIGRATIONS = {

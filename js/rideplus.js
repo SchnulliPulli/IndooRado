@@ -71,7 +71,7 @@ export async function plusInit(S) {
   // Mini-Profil im Anstiegskasten
   const cp = document.createElement('canvas'); cp.id = 'clProf'; cp.className = 'clprof'; $('#climbBox', el).appendChild(cp);
   // Power-ups auf der Strecke: alle 2,5 km, nicht in Tunneln
-  if (S.group ? S.group.settings?.powerups !== false : profile.powerups !== false) {
+  if (!S.gameOff && (S.group ? S.group.settings?.powerups !== false : profile.powerups !== false)) {
     S.pups = []; for (let d = 1200; d < R.total - 300; d += 2500) if (!R.tunnelAt(d, 30)) S.pups.push({ d, got: false, k: Object.keys(PUPS)[(S.pups.length * 7 + 3) % 3] });
     S.world.setPickups?.(S.pups.map(p => ({ d: p.d, icon: '⚡' })));
   }

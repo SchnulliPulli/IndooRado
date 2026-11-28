@@ -23,6 +23,7 @@ export async function render(el) {
   <section class="card">${levelBar()}<div style="margin-top:12px">${statTiles([[t.rides, 'Fahrten'], [fmtKm(t.dist), 'km gesamt'], [fmtDur(t.dur), 'Fahrzeit'], [Math.round(t.asc).toLocaleString('de-DE'), 'Höhenmeter'], [Math.round(t.kj).toLocaleString('de-DE'), 'kJ'], [t.streak, 'Tage am Stück']])}</div></section>
   <section class="grid2">
     <div class="card" id="lgCard"><h2>🏆 Wochenliga</h2><div class="spinner"></div></div>
+    <div class="card">${riderType(b90, profile.ftp)}</div>
     <div class="card"><h2>🔥 Serie</h2><div class="tiles">${[[t.streak, 'Tage am Stück'], ['🧊 ' + frz, 'Serien-Schutz']].map(([v, l]) => `<div class="tile"><b class="num">${v}</b><span>${l}</span></div>`).join('')}</div><p class="small muted">Serien-Schutz überbrückt automatisch einen Tag ohne Fahrt, damit deine Serie (und der XP-Bonus bis +50 %) nicht reißt. Du bekommst einen für jede Woche mit mindestens 3 Fahrtagen, höchstens 2 auf Vorrat.</p></div>
   </section>
   <section class="grid2">
@@ -51,3 +52,17 @@ export async function render(el) {
   $('#ftpEst', el)?.addEventListener('click', async () => { await applyFtp(est, 'Schätzung 20 min'); toast('FTP auf ' + est + ' W gesetzt'); render(el); });
 }
 function kw(d) { const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); const day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day); const y = new Date(Date.UTC(t.getUTCFullYear(), 0, 1)); return Math.ceil(((t - y) / 864e5 + 1) / 7); }
+
+/* ---------- Fahrertyp (wie Wahoo 4DP): Stärken aus den Bestwerten der letzten 90 Tage ----------
+   Verglichen wird jeweils mit einem typischen Verhältnis zur FTP: 5 s ≈ 3,0×, 1 min ≈ 1,6×, 5 min ≈ 1,18×, 20 min ≈ 1,05×. */
+function riderType(best, ftp) {
+  const D = [[5, 3.0, '⚡ Sprint', 'Sprinter', 'w-sprint', 'Sprints'], [60, 1.6, '💥 Attacke (1 min)', 'Puncheur', 'w-3030', '30/30 Intervalle'], [300, 1.18, '🏔️ VO2max (5 min)', 'Kletterer', 'w-vo5', 'VO2max 5×3'], [1200, 1.05, '⏱️ Schwelle (20 min)', 'Zeitfahrer', 'w-thr2', 'Schwelle 2×15']];
+  const have = D.filter(d => best[d[0]]?.w);
+  if (have.length < 3 || !ftp) return '<h2>🧬 Dein Fahrertyp</h2><p class="small muted">Fahre ein paar Einheiten mit vollen Antritten und längeren harten Abschnitten (oder einen FTP-Test), dann zeigt die App hier deine Stärken und Schwächen.</p>';
+  const sc = have.map(d => ({ d, v: best[d[0]].w, r: best[d[0]].w / ftp / d[1] }));
+  const max = Math.max(...sc.map(x => x.r)), strong = sc.find(x => x.r === max), weak = sc.reduce((a, x) => x.r < a.r ? x : a);
+  const type = max - Math.min(...sc.map(x => x.r)) < .08 ? 'Allrounder' : strong.d[3];
+  return `<h2>🧬 Dein Fahrertyp: ${type}</h2>
+    <div class="rtype">${sc.map(x => `<div class="rtrow"><span>${x.d[2]}</span><div class="bar thin"><i style="width:${Math.min(100, Math.round(x.r / 1.3 * 100))}%"></i></div><b class="num">${Math.round(x.v)} W</b></div>`).join('')}</div>
+    <p class="small muted">Stärke: ${strong.d[2]}. Ausbaufähig: ${weak.d[2]} – passendes Workout: <a href="#/workouts">${weak.d[5]}</a>. Grundlage: Bestwerte der letzten 90 Tage im Verhältnis zu deiner FTP (${ftp} W).</p>`;
+}

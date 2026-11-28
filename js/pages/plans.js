@@ -8,7 +8,7 @@ import { stats, drawWorkout, parseZwo } from '../workouts.js';
 export async function render(el) {
   const pr = planProgress();
   el.innerHTML = `
-  <section class="pagehead"><h1>Trainingspläne</h1><span class="row"><label class="btn">Plan-Datei importieren<input type="file" id="cpPlanFile" accept=".json,.zip,.txt" multiple hidden></label><a class="btn pri" href="#/planner">+ Neuer Plan</a></span></section>
+  <section class="pagehead"><h1>Trainingspläne</h1><span class="row"><label class="btn">Plan-Datei importieren<input type="file" id="cpPlanFile" accept=".json,.zip,.txt" multiple hidden></label><button class="btn pri" id="pbGoal">🎯 Plan für mein Ziel</button><a class="btn" href="#/planner">+ Neuer Plan</a></span></section>
   <p class="muted">Jeder Plan ist eine Folge von Workouts, Woche für Woche. Alle Ziele hängen an deiner FTP (${profile.ftp} W) und passen sich automatisch an, wenn sie sich ändert. Eine Einheit zählt als erledigt, wenn du mindestens 90 % davon fährst.</p>
   ${pr ? active(pr) : ''}
   <section class="card form"><h2>Plan importieren</h2>
@@ -64,6 +64,7 @@ export async function render(el) {
     render(el);
   };
   el.querySelectorAll('canvas.pwc').forEach(c => { const w = pr.p.all.find(x => x.id === c.dataset.id); drawWorkout(c, w); });
+  $('#pbGoal', el).onclick = () => goalDialog(el);
   el.onclick = async e => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.start) {
@@ -107,4 +108,33 @@ function active(pr) {
     }).join('')}</div>`).join('')}</div>
     <div class="row end"><button class="btn sm ghost danger" data-stop>Plan beenden</button></div>
   </section>`;
+}
+
+/* ---------- Planbauer mit Zieldatum ---------- */
+async function goalDialog(el) {
+  const PB = await import('../planbuilder.js');
+  const d0 = new Date(Date.now() + 10 * 7 * 864e5).toISOString().slice(0, 10);
+  const w = document.createElement('div'); w.className = 'modal on';
+  w.innerHTML = `<div class="card dlg" role="dialog" aria-modal="true"><h2>🎯 Plan für mein Ziel</h2><div class="dlg-body form">
+    <label class="f">Dein Ziel<input class="inp" id="gName" maxlength="40" placeholder="z. B. Alpenmarathon, 100 km am Stück, Bergzeitfahren"></label>
+    <div class="grid2 tight"><label class="f">Datum<input class="inp" id="gDate" type="date" value="${d0}" min="${new Date(Date.now() + 28 * 864e5).toISOString().slice(0, 10)}"></label>
+    <label class="f">Schwerpunkt<select class="inp" id="gFocus">${Object.entries(PB.FOCUS).map(([k, f]) => `<option value="${k}">${f.n}</option>`).join('')}</select></label></div>
+    <div class="grid2 tight"><label class="f">Stunden pro Woche<input class="inp" id="gHours" type="number" min="2" max="20" step="0.5" value="6"></label>
+    <label class="f">Einheiten pro Woche<input class="inp" id="gPer" type="number" min="2" max="7" value="4"></label></div>
+    <p class="small muted" id="gInfo"></p></div>
+    <div class="row end"><button class="btn ghost" data-x>Abbrechen</button><button class="btn pri" id="gGo">Plan erstellen</button></div></div>`;
+  document.body.appendChild(w);
+  const read = () => ({ goal: w.querySelector('#gName').value.trim(), date: w.querySelector('#gDate').value, hours: +w.querySelector('#gHours').value || 6, perWeek: +w.querySelector('#gPer').value || 4, focus: w.querySelector('#gFocus').value });
+  const info = () => { const o = read(), p = PB.buildPlan(o); w.querySelector('#gInfo').textContent = `${p.weeks} Wochen: ${p.phases.base} Grundlage, ${p.phases.build} Aufbau, ${p.phases.peak} Spitze, 1 Woche Formaufbau. Jede 4. Woche ist eine Erholungswoche. Die lange Ausfahrt liegt jeweils am Ende der Woche.`; };
+  w.addEventListener('input', info); info();
+  w.addEventListener('click', async e => {
+    if (e.target === w || e.target.closest('[data-x]')) { w.remove(); return; }
+    if (e.target.closest('#gGo')) {
+      const o = read(); if (!o.date) return toast('Bitte ein Datum wählen');
+      const p = PB.buildPlan(o), id = await addCustomPlan(p.name, p.perWeek, p.wos, p.layout);
+      w.remove();
+      if (!plan.active || await dialog({ title: 'Plan gleich starten?', html: '<p class="muted">Dein aktueller Plan wird dann beendet.</p>', buttons: [{ label: 'Später', value: false }, { label: 'Starten', value: true, cls: 'pri' }] })) { if (plan.active) stopPlan(); startPlan(id); }
+      toast(`Plan „${p.name}“ erstellt: ${p.weeks} Wochen bis zum Ziel`, 4000); render(el);
+    }
+  });
 }

@@ -129,9 +129,11 @@ export async function render(el, params = []) {
       ${RNG('p', 'gearDiff', 'Steigungsgefühl bei virtuellen Gängen', 25, 100, 5, profile.gearDiff, FMT.gearDiff)}
       ${RNG('p', 'simDiff', 'Steigungsgefühl im Steigungsmodus', 10, 100, 5, profile.simDiff, FMT.simDiff)}
       ${SW('p', 'autoPause', 'Automatische Pause, wenn du aufhörst zu treten')}
+      ${SW('p', 'gameInWorkouts', 'Spiel-Extras auch bei Workouts', 'Aus (Standard): Bei Workouts gibt es keine Power-ups und Werkstatt-Teile, damit Tempo, Strecke und Strava-Daten echt bleiben. An: alles wie bei freien Fahrten.', false)}
       ${SW('p', 'askForm', 'Vor Workouts nach der Tagesform fragen', 'Müde, Beine schwer oder wenig Zeit: das Workout passt sich an')}
       ${SW('p', 'streetImgs', 'Echte Straßenbilder bei GPX-Strecken', 'Fotos der echten Straße (Mapillary) neben der Fahrt. Nur mit Konto und Einwilligung; Schlüssel unter App &amp; Daten')}
       ${SW('p', 'drinkTips', 'Ans Trinken erinnern')}
+      ${SW('p', 'fuelTips', 'Bei langen Fahrten an Kohlenhydrate erinnern', 'Ab 45 Minuten alle 25 Minuten, mit Mengen je nach Härte')}
       ${RNG('p', 'drinkEvery', 'Erinnerung alle', 5, 40, 5, profile.drinkEvery ?? 15, FMT.drinkEvery)}
       ${SW('p', 'autoShots', 'Automatische Fotos')}
       ${RNG('p', 'shotEvery', 'Foto alle', 3, 60, 1, profile.shotEvery, FMT.shotEvery)}
