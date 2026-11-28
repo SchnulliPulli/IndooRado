@@ -397,6 +397,15 @@ async function init() {
   if (!/^#\/(watch\/|tv\b)/.test(location.hash)) import('./onboard.js').then(m => m.onboarding()).catch(e => console.error(e)); // Zuschauer sehen keine Einführung
   import('./eggs.js').then(m => m.initEggs()).catch(e => console.error(e));
   setTimeout(() => import('./ridesnap.js').then(m => m.offerResume()).catch(e => console.warn(e)), 1200); // unterbrochene Fahrt?
+  // Nach der Einrichtung einmal nach Benachrichtigungen fragen (wartet, bis kein anderes Fenster offen ist)
+  if (!/^#\/(watch\/|tv\b)/.test(location.hash)) (async () => {
+    const { kv } = await import('./db.js');
+    for (let i = 0; i < 120; i++) {
+      await new Promise(r => setTimeout(r, 3000));
+      if (document.hidden || document.querySelector('.modal.on, .tour') || document.body.dataset.page === 'ride' || !(await kv.get('onboarded', false))) continue;
+      return (await import('./comfort.js')).askNotifications();
+    }
+  })().catch(() => { });
   // Aus einer Push-Benachrichtigung geöffnet: Anruf annehmen bzw. Chat öffnen
   if (/[?&]pcall=/.test(location.hash)) pushOpen(location.href);
   navigator.serviceWorker?.addEventListener('message', e => { if (e.data?.type === 'pushOpen') pushOpen(e.data.url); });

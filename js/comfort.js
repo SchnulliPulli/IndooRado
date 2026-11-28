@@ -35,6 +35,17 @@ export async function notify(title, body, tag, kind) {
   try { const reg = await navigator.serviceWorker?.getRegistration(); if (reg) await reg.showNotification(title, { body, tag, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png' }); else new Notification(title, { body, tag }); return true; } catch (e) { return false; }
 }
 export const testNotify = () => notify('🔔 IndooRado', 'So sehen Benachrichtigungen aus.', 'test');
+// Beim ersten Öffnen (nach der Einrichtung) einmal fragen, ob Benachrichtigungen an sollen. „Später“ fragt nach 3 Tagen erneut.
+export async function askNotifications() {
+  if (typeof Notification === 'undefined' || profile.kid) return;
+  const ls = k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } };
+  if (Notification.permission === 'denied' || ls('vvNotifAsked') === 'done' || +ls('vvNotifLater') > Date.now()) return;
+  if (Notification.permission === 'granted') { if (profile.reminders == null) { profile.reminders = true; saveProfile(); scheduleReminders(); } set('vvNotifAsked', 'done'); import('./push.js').then(m => m.refreshPush()).catch(() => { }); return; }
+  const v = await dialog({ title: '🔔 Benachrichtigungen aktivieren?', html: `<p>IndooRado kann dich benachrichtigen:</p><ul class="tips"><li>💬 <b>Nachrichten und 📹 Anrufe</b> von Freunden – auch wenn die App geschlossen ist</li><li>🚴 ans <b>Training des Tages</b> und wenn deine <b>Serie</b> in Gefahr ist</li><li>👥 wenn ein Freund gerade fährt</li></ul><p class="small muted">Jede Art lässt sich später einzeln abwählen: Einstellungen › App &amp; Daten › Benachrichtigungen. Nachrichten und Anrufe bei geschlossener App brauchen ein Konto; der Hinweis (ohne Nachrichteninhalt) läuft verschlüsselt über den Push-Dienst deines Geräts.</p>`, buttons: [{ label: 'Später', value: false }, { label: '🔔 Aktivieren', value: true, cls: 'pri' }] });
+  if (!v) { set('vvNotifLater', String(Date.now() + 3 * 864e5)); return; }
+  set('vvNotifAsked', 'done');
+  if (await enableReminders(true)) { toast('🔔 Benachrichtigungen an'); import('./push.js').then(m => m.refreshPush()).catch(() => { }); }
+}
 export async function enableReminders(on) {
   if (on) {
     if (typeof Notification === 'undefined') { toast('Dieser Browser kann keine Benachrichtigungen'); return false; }

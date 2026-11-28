@@ -1,5 +1,5 @@
 // Push-Benachrichtigungen bei geschlossener App (Web-Push): neue Nachricht und eingehender Anruf.
-// Pro Gerät einschaltbar (localStorage „vvPush“). Das Gerät meldet seine Push-Adresse bei IndooRado Online an
+// Standardmäßig an, je Gerät abschaltbar (localStorage „vvPush“ = '0'). Das Gerät meldet seine Push-Adresse bei IndooRado Online an
 // (push_subscribe); der Absender löst nach dem Senden über die Edge Function „push“ eine kurze Meldung aus.
 // Der öffentliche VAPID-Schlüssel steht in online.json („vapid“), der private nur als Secret in Supabase.
 // iPhone/iPad: nur wenn IndooRado als App auf dem Home-Bildschirm installiert ist (ab iOS 16.4).
@@ -10,7 +10,7 @@ const b64u = s => { const p = '='.repeat((4 - s.length % 4) % 4), b = atob((s + 
 const enc = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 export const vapid = () => String(O.config?.()?.vapid || '').trim();
 export const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && typeof Notification !== 'undefined' && (location.protocol === 'https:' || location.hostname === 'localhost');
-export const pushWanted = () => { try { return localStorage.getItem('vvPush') === '1'; } catch (e) { return false; } };
+export const pushWanted = () => { try { return localStorage.getItem('vvPush') !== '0'; } catch (e) { return true; } }; // Standard: an (abschaltbar je Gerät)
 const prefs = () => ({ msg: profile.notif?.msg !== false, call: profile.notif?.call !== false });
 const rpc = async (n, a) => { const { data, error } = await (await O.client()).rpc(n, a); if (error) throw error; return data; };
 

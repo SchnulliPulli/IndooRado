@@ -2225,3 +2225,17 @@ Push ist noch nicht eingerichtet (öffentlicher Schlüssel fehlt in online.json)
 Dieser Browser kann keine Push-Benachrichtigungen	This browser can't do push notifications
 Auf dem iPhone erst IndooRado zum Home-Bildschirm hinzufügen und von dort öffnen	On iPhone, first add IndooRado to the home screen and open it from there
 Test-Push	Test push
+Benachrichtigungen aktivieren?	Turn on notifications?
+IndooRado kann dich benachrichtigen:	IndooRado can notify you about:
+Nachrichten und	Messages and
+Anrufe	calls
+von Freunden – auch wenn die App geschlossen ist	from friends – even when the app is closed
+ans	your
+und wenn deine	and when your
+in Gefahr ist	is in danger
+wenn ein Freund gerade fährt	when a friend is riding
+Jede Art lässt sich später einzeln abwählen: Einstellungen › App &amp; Daten › Benachrichtigungen. Nachrichten und Anrufe bei geschlossener App brauchen ein Konto; der Hinweis (ohne Nachrichteninhalt) läuft verschlüsselt über den Push-Dienst deines Geräts.	You can switch off each type later: Settings › App & data › Notifications. Messages and calls while the app is closed need an account; the notice (without message content) goes encrypted via your device's push service.
+Jede Art lässt sich später einzeln abwählen: Einstellungen › App & Daten › Benachrichtigungen. Nachrichten und Anrufe bei geschlossener App brauchen ein Konto; der Hinweis (ohne Nachrichteninhalt) läuft verschlüsselt über den Push-Dienst deines Geräts.	You can switch off each type later: Settings › App & data › Notifications. Messages and calls while the app is closed need an account; the notice (without message content) goes encrypted via your device's push service.
+Aktivieren	Turn on
+Später	Later
+Benachrichtigungen an	Notifications on
