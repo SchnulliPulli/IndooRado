@@ -20,7 +20,8 @@ export async function schemaOk() { try { const { data, error } = await (await cl
 export function config() {
   let o = {}; try { o = JSON.parse(localStorage.getItem(LS) || '{}'); } catch (e) { }
   const s = site || {};
-  return { url: s.url || o.url || CONFIG.url, anonKey: s.anonKey || o.anonKey || CONFIG.anonKey, providers: s.providers || CONFIG.providers, site: !!s.url };
+  return { url: s.url || o.url || CONFIG.url, anonKey: s.anonKey || o.anonKey || CONFIG.anonKey, providers: s.providers || CONFIG.providers, site: !!s.url,
+    mapillary: typeof s.mapillary === 'string' ? s.mapillary : '', vapid: typeof s.vapid === 'string' ? s.vapid : '' }; // öffentliche Schlüssel aus online.json
 }
 export function setConfig(url, anonKey) { localStorage.setItem(LS, JSON.stringify({ url: url.trim().replace(/\/$/, ''), anonKey: anonKey.trim() })); online.client = null; }
 export const configured = () => { const c = config(); return !!(c.url && c.anonKey); };
