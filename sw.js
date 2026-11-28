@@ -2,7 +2,7 @@
 // Schnellstart: Dateien kommen sofort aus dem Cache und werden im Hintergrund aktualisiert (stale-while-revalidate).
 // Eine neue App-Version bekommt einen neuen Cache-Namen; beim Wechsel lädt die Seite einmal neu (siehe app.js),
 // damit nie Dateien aus zwei Versionen gemischt werden.
-const CACHE = 'indoorado-v139';
+const CACHE = 'indoorado-v140';
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', e => {
@@ -48,8 +48,12 @@ self.addEventListener('push', e => {
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async list => {
     const fg = k !== 'test' && await appActive(list);
     if (fg) { fg.postMessage({ type: 'pushIn', d: { kind: safe(k), from: safe(d.from), name: safe(d.name), room: safe(d.room), info: { k: safe(inf.k), lobby: safe(inf.lobby), title: safe(inf.title), route: safe(inf.route), routeName: safe(inf.routeName) } } }); return; }
+    // Android zeigt eine ersetzte Meldung (gleiche Kennung) nicht erneut als Pop-up: ältere desselben Absenders schließen
+    // und die neue mit eigener Kennung anlegen. Nur das wiederholte Klingeln ersetzt bewusst (kein Pop-up-Gewitter).
+    const base = call || missed ? 'call-' + safe(d.room) : k === 'test' ? 'test' : k + '-' + safe(d.from);
+    if (!(call && d.ring)) for (const n of await self.registration.getNotifications()) if (String(n.tag).startsWith(base)) n.close();
     return self.registration.showNotification(safe(d.title) || 'IndooRado', {
-      body: safe(d.body), tag: call || missed ? 'call-' + safe(d.room) : k === 'test' ? 'test' : k + '-' + safe(d.from), renotify: !missed, icon: 'icons/icon-192.png', badge: 'icons/badge-96.png', timestamp: Date.now(), silent: false,
+      body: safe(d.body), tag: call && d.ring ? base : base + (call ? '' : '#' + Date.now()), renotify: true, icon: 'icons/icon-192.png', badge: 'icons/badge-96.png', timestamp: Date.now(), silent: false,
       requireInteraction: call || k === 'invite', vibrate: call ? [600, 250, 600, 250, 600, 250, 600] : [120], data: { url, call, acts },
       actions: call ? [{ action: 'join', title: 'Annehmen' }, { action: 'no', title: 'Ablehnen' }]
         : k === 'msg' ? [{ action: 'open', title: 'Antworten' }]
