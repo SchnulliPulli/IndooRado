@@ -90,6 +90,7 @@ async function open_(O) {
     rch.send({ type: 'broadcast', event: 'ack', payload: { ok: true, c } }); // erst bestätigen, dann ausführen
     try { bus.emit('remoteCmd', c); } catch (e) { console.warn('Fernbedienung', e); } // die Fahrt führt alles direkt aus (ride.js)
   });
+  rch.on('broadcast', { event: 'revoke' }, () => import('./online/devices.js').then(m => m.checkRevoked()).catch(() => { })); // Gerät wurde anderswo abgemeldet
   rch.on('broadcast', { event: 'ack' }, ({ payload }) => { if (payload?.ok) bus.emit('remoteAck', payload); }); // Absagen älterer App-Stände ignorieren
   // Live-Stand einer Fahrt auf einem anderen Gerät desselben Kontos (sofort, ohne Umweg über den Speicher)
   rch.on('broadcast', { event: 'live' }, ({ payload }) => { if (payload) { lastLive = { ...payload, hist: payload.hist || lastLive?.hist, rx: Date.now() }; bus.emit('liveRt', lastLive); } }); // Verlauf kommt nur alle 5 s mit
@@ -118,3 +119,6 @@ export async function liveNow() {
 // Bis zu ms warten, bis Konto oder Cloud-Speicher bereit sind (nach dem Öffnen läuft die Anmeldung oft noch)
 export async function whenReady(ms = 8000) { const S = await import('./sync.js'), O = await import('./online/client.js'); const t0 = Date.now(); while (Date.now() - t0 < ms) { if (S.syncReady() || O.loggedIn()) return true; await new Promise(r => setTimeout(r, 300)); } return S.syncReady() || O.loggedIn(); }
 bus.on('online', ev => { if (ev === 'SIGNED_OUT' || ev === 'out') { rch = null; remote.ok = false; } else setTimeout(() => listenRemote(), 1500); }); // angemeldet: Kanal des Kontos offen halten
+
+// Beliebige Nachricht an die anderen Geräte des Kontos
+export async function broadcast(event, payload) { const ch = await channel().catch(() => null); ch?.send({ type: 'broadcast', event, payload }); }

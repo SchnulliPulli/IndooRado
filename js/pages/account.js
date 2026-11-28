@@ -293,7 +293,7 @@ async function renderAccount(el) {
       <p class="small muted">Solange du angemeldet bist, gleicht die App automatisch über dein Konto ab${S.nasPaused() ? ' und der Abgleich mit ' + esc(S.providerName(S.sync.cfg.mode)) + ' pausiert (bis auf die Fotos)' : ''}. Einstellungen: die neuere Änderung gewinnt. Fahrten: werden nur ergänzt. Gelöschtes verschwindet überall.</p>
       <p class="small">📷 Fotos der Fahrten: ${S.photoTarget() ? `werden nur in <b>${esc(S.photoTarget())}</b> gespeichert und zu den Fahrten aus dem Konto nachgeladen${S.sync.extError ? ` · <span style="color:var(--hr)">${esc(S.sync.extError)}</span>` : S.sync.extNeedLogin ? ' · <span style="color:var(--hr)">Anmeldung dort nötig (Einstellungen › App &amp; Daten)</span>' : ''}` : 'bleiben nur auf diesem Gerät. Sie werden nie im Konto gespeichert. Verbinde unter Einstellungen › App &amp; Daten ein NAS, OneDrive, Google Drive oder Dropbox, damit sie auf deinen anderen Geräten erscheinen.'}</p>
       <p class="small">Zuletzt: <b>${S.sync.last ? new Date(S.sync.last).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : 'noch nie'}</b>${S.sync.error ? ` · <span style="color:var(--hr)">${esc(S.sync.error)}</span>` : ''}</p>
-      ${devs.length ? `<div class="small devlist">${devs.map(([id, d]) => `<div class="row between"><span>${id === S.sync.device?.id ? '📍 ' : '💻 '}${esc(d.name)}${id === S.sync.device?.id ? ' <span class="muted">(dieses Gerät)</span>' : ''}</span><span class="muted">${d.last ? new Date(d.last).toLocaleDateString('de-DE') : ''}</span></div>`).join('')}</div>` : ''}
+      ${devs.length ? `<div class="small devlist">${devs.map(([id, d]) => `<div class="row between"><span>${id === S.sync.device?.id ? '📍 ' : '💻 '}${esc(d.name)}${id === S.sync.device?.id ? ' <span class="muted">(dieses Gerät)</span>' : ''}</span><span class="row" style="gap:8px"><span class="muted">${d.last ? new Date(d.last).toLocaleDateString('de-DE') : ''}</span>${id === S.sync.device?.id ? '' : `<button class="btn xs ghost danger" data-devrm="${esc(id)}" data-devname="${esc(d.name)}" title="Gerät entfernen und dort abmelden">✕</button>`}</span></div>`).join('')}</div>` : ''}
       <div class="row"><button class="btn sm pri" id="sNow">↻ Jetzt abgleichen</button><button class="btn sm ghost" id="sPull" title="Bei Abweichungen gewinnt der Stand im Konto">Alles aus dem Konto übernehmen</button></div>
     </div>
   </section>
@@ -379,6 +379,11 @@ async function renderAccount(el) {
     $('#mLater', el).onclick = () => { localStorage.removeItem('vvWant2fa'); w.innerHTML = ''; $('#mBox', el).innerHTML = ''; toast('Du findest die 2FA jederzeit hier unter Konto › Sicherheit', 4000); };
     $('#mOn', el).click(); w.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, 300);
+  el.querySelectorAll('[data-devrm]').forEach(b => b.onclick = async () => {
+    const ok = await dialog({ title: `„${b.dataset.devname}“ entfernen?`, html: '<p class="muted">Das Gerät verschwindet aus der Liste und wird dort von deinem Konto abgemeldet: sofort, wenn es gerade online ist, sonst beim nächsten Öffnen der App. Die Daten auf dem Gerät selbst bleiben erhalten.</p><p class="small muted">Sofort überall abmelden (auch ohne App-Start): unten „Überall abmelden“.</p>', buttons: [{ label: 'Abbrechen', value: false }, { label: 'Entfernen und abmelden', value: true, cls: 'danger' }] });
+    if (!ok) return;
+    try { await (await import('../online/devices.js')).revokeDevice(b.dataset.devrm); toast('Gerät entfernt und abgemeldet'); render(el); } catch (e) { toast(e.message, 5000); }
+  });
   $('#mOn', el).onclick = async () => {
     try {
       for (const f of stale) await O.mfaRemove(f.id).catch(() => { }); // halb eingerichtete Versuche aufräumen

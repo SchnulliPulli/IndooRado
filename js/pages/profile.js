@@ -69,6 +69,9 @@ async function oauthBlock(box, mode, c, connected) {
 }
 const isConfiguredCfg = c => !!c && (isOAuth(c.mode) ? !!(c.refresh || c.access) : c.mode === 'dsm' ? !!c.host : !!c.url);
 async function nasCard(box) {
+  if (!box.__devrm) { box.__devrm = true; box.addEventListener('click', async e => { const b = e.target.closest('[data-devrm]'); if (!b) return;
+    if (!(await dialog({ title: `„${b.dataset.devname}“ entfernen?`, html: '<p class="muted">Das Gerät verschwindet aus der Liste. Ist es mit deinem IndooRado-Konto angemeldet, wird es dort auch abgemeldet. Gleicht es weiter mit diesem Speicher ab, taucht es wieder auf – dann dort die Verbindung trennen.</p>', buttons: [{ label: 'Abbrechen', value: false }, { label: 'Entfernen', value: true, cls: 'danger' }] }))) return;
+    await (await import('../online/devices.js')).revokeDevice(b.dataset.devrm); toast('Gerät entfernt'); nasCard(box); }); }
   const c = sync.cfg || { mode: box.dataset.mode || 'dsm', auto: true };
   const mode = box.dataset.mode || c.mode || (c.url ? 'webdav' : 'dsm');
   const oauthOn = isOAuth(mode) && c.mode === mode && !!(c.refresh || c.access);
@@ -93,7 +96,7 @@ async function nasCard(box) {
       <div class="row"><button class="btn sm" id="nSave">Speichern und testen</button><button class="btn sm" id="nPush">Jetzt abgleichen</button><button class="btn sm" id="nPull">Alles vom NAS übernehmen</button>${c.url ? '<button class="btn sm ghost danger" id="nOff">Trennen</button>' : ''}</div>`}
     <div class="small" id="nStat">${status()}</div>
     ${on && sync.device ? `<div class="devlist small"><label class="f">Name dieses Geräts<input class="inp" id="nDev" value="${esc(sync.device.name)}" maxlength="40"></label>
-      ${Object.keys(sync.devices || {}).length ? `<div class="muted">Mit diesem NAS-Ordner verbunden:</div><ul class="tips">${Object.entries(sync.devices).sort((a, b) => b[1].last.localeCompare(a[1].last)).map(([id, d]) => `<li><b>${esc(d.name)}</b>${id === sync.device.id ? ' (dieses Gerät)' : ''} · zuletzt ${fmtDate(d.last)}</li>`).join('')}</ul><div class="muted">Stand Nr. ${sync.rev ?? '–'}</div>` : ''}</div>` : ''}
+      ${Object.keys(sync.devices || {}).length ? `<div class="muted">Mit diesem NAS-Ordner verbunden:</div><ul class="tips">${Object.entries(sync.devices).sort((a, b) => b[1].last.localeCompare(a[1].last)).map(([id, d]) => `<li><b>${esc(d.name)}</b>${id === sync.device.id ? ' (dieses Gerät)' : ''} · zuletzt ${fmtDate(d.last)}${id === sync.device.id ? '' : ` <button class="btn xs ghost danger" data-devrm="${esc(id)}" data-devname="${esc(d.name)}" title="Aus der Liste entfernen">✕</button>`}</li>`).join('')}</ul><div class="muted">Stand Nr. ${sync.rev ?? '–'}</div>` : ''}</div>` : ''}
     ${isOAuth(mode) ? '' : `<details class="small muted"><summary>Einrichtung auf der Synology</summary>
       <p>Der Browser darf das NAS von <b>${esc(location.origin)}</b> aus nur ansprechen, wenn das NAS das erlaubt. Die DSM-Anmeldeseite selbst lässt sich aus Sicherheitsgründen nicht in fremde Seiten einbetten, darum meldet sich die App direkt über die DSM-Schnittstelle an, mit denselben Zugangsdaten und 2FA.</p>
       <ol class="tips">

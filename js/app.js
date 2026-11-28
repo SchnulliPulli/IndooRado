@@ -342,6 +342,8 @@ let bound = false;
 function onlineHooks(O) {
   bindOnline(O);
   if (bound) return; bound = true;
+  // Wurde dieses Gerät von einem anderen abgemeldet? (beim Anmelden und Start prüfen)
+  bus.on('online', ev => { if (['SIGNED_IN', 'init', 'code', 'MFA_CHALLENGE_VERIFIED', 'mfa'].includes(ev)) setTimeout(() => import('./online/devices.js').then(m => m.checkRevoked()).catch(() => { }), 2500); });
   // Admins: Hinweis, wenn die Datenbank älter ist als die App (neue Funktionen fehlen dann)
   bus.on('online', async ev => { if (!['SIGNED_IN', 'MFA_CHALLENGE_VERIFIED', 'mfa'].includes(ev) || window.__schemaChecked) return; const O = await import('./online/client.js'); await new Promise(r => setTimeout(r, 4000)); if (!O.isAdmin?.() || window.__schemaChecked) return; window.__schemaChecked = true; if (!(await O.schemaOk())) toast('🛠️ Die Datenbank ist älter als die App: supabase/schema.sql aus dem privaten Repo im Supabase-SQL-Editor neu ausführen.', 9000); });
   bus.on('online', ev => { if (['SIGNED_IN', 'SIGNED_OUT', 'MFA_CHALLENGE_VERIFIED', 'mfa', 'out'].includes(ev)) bindOnline(O); });

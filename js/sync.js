@@ -255,6 +255,7 @@ export async function testConnection() {
 
 async function stateObj(rev) {
   const now = new Date().toISOString();
+  const gone = new Set(await kv.get('removedDevices', [])); for (const id of gone) if (id !== sync.device.id) delete sync.devices[id];
   const out = { app: 'trittwerk', format: 'indoorado-data', schema: SCHEMA, savedAt: now, rev, by: { ...sync.device }, devices: { ...sync.devices, [sync.device.id]: { name: sync.device.name, last: now } }, kvT: {}, kv: {}, routes: (await db.all('routes')).map(r => ({ ...r, dem: undefined, osm: undefined })), workouts: await db.all('workouts') };
   for (const k of await db.keys('kv')) if (!LOCAL_ONLY.has(k)) { out.kv[k] = await db.get('kv', k); out.kvT[k] = kvT[k] || 0; }
   return out;
