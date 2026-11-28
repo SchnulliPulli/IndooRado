@@ -29,7 +29,7 @@ export async function overviewImage(ride, ftp) {
   const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#141a20'); g.addColorStop(1, '#1d2731'); x.fillStyle = g; x.fillRect(0, 0, W, H);
   x.fillStyle = '#ff6a3d'; x.font = '700 30px Barlow, Arial'; x.fillText('INDOORADO', 56, 70);
   x.fillStyle = '#fff'; x.font = '700 54px "Barlow Condensed", Barlow, Arial'; x.fillText(trim(x, ride.title, W - 112), 56, 132);
-  x.fillStyle = '#9aa7b3'; x.font = '500 24px Barlow, Arial'; x.fillText(new Date(ride.date).toLocaleString('de-DE', { dateStyle: 'full', timeStyle: 'short' }), 56, 170);
+  x.fillStyle = '#9aa7b3'; x.font = '500 24px Barlow, Arial'; x.fillText(new Date(ride.date).toLocaleString(document.documentElement.lang, { dateStyle: 'full', timeStyle: 'short' }), 56, 170);
   // Karte aus den aufgezeichneten Koordinaten; Sprünge (Beamen) werden nicht verbunden
   const S = ride.samples.filter(s => s.la != null), mx = { x: 56, y: 210, w: 900, h: 560 };
   x.fillStyle = 'rgba(255,255,255,.04)'; rr(x, mx.x, mx.y, mx.w, mx.h, 20); x.fill();
@@ -70,7 +70,7 @@ export async function factsImage(ride, ftp, bgBlob, opt = {}) {
   // Kopf
   x.fillStyle = '#ff6a3d'; x.font = '700 26px Barlow, Arial'; x.fillText('INDOORADO', 64, 72);
   x.fillStyle = '#fff'; x.font = '700 58px "Barlow Condensed", Barlow, Arial'; x.fillText(trim(x, ride.title, W - 128), 64, 136);
-  x.fillStyle = '#b8c3cc'; x.font = '500 24px Barlow, Arial'; x.fillText(new Date(ride.date).toLocaleString('de-DE', { dateStyle: 'full', timeStyle: 'short' }) + (ride.workoutDone ? '  ·  ✅ Workout geschafft' : ''), 64, 176);
+  x.fillStyle = '#b8c3cc'; x.font = '500 24px Barlow, Arial'; x.fillText(new Date(ride.date).toLocaleString(document.documentElement.lang, { dateStyle: 'full', timeStyle: 'short' }) + (ride.workoutDone ? '  ·  ✅ Workout geschafft' : ''), 64, 176);
   // Große Werte
   const big = [[fmtKm(s.dist), 'km'], [fmtDur(s.dur), 'Fahrzeit'], [s.avgP + ' W', 'Ø Leistung'], [s.asc + ' m', 'Höhenmeter']];
   big.forEach(([v, l], i) => { const cx = 64 + i * 230; x.fillStyle = '#fff'; x.font = '700 76px "Barlow Condensed", Barlow, Arial'; x.fillText(v, cx, 300); x.fillStyle = '#9fb0bd'; x.font = '600 22px Barlow, Arial'; x.fillText(l.toUpperCase(), cx, 334); });
@@ -127,7 +127,7 @@ export async function socialImage(ride, ftp, bgBlob, fmt = 'story') {
   const M = 72;
   // Kopf
   x.fillStyle = '#ff6a3d'; x.font = '800 34px Barlow, Arial'; x.fillText('INDOORADO', M, M + 30);
-  x.fillStyle = 'rgba(255,255,255,.8)'; x.font = '500 28px Barlow, Arial'; x.textAlign = 'right'; x.fillText(new Date(ride.date).toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' }), W - M, M + 30); x.textAlign = 'left';
+  x.fillStyle = 'rgba(255,255,255,.8)'; x.font = '500 28px Barlow, Arial'; x.textAlign = 'right'; x.fillText(new Date(ride.date).toLocaleDateString(document.documentElement.lang, { day: 'numeric', month: 'long', year: 'numeric' }), W - M, M + 30); x.textAlign = 'left';
   // Titel (bis zwei Zeilen)
   const ty = story ? 700 : 420; x.fillStyle = '#fff'; x.font = `700 ${story ? 84 : 66}px "Barlow Condensed", Barlow, Arial`;
   const lines = wrap(x, ride.routeName || ride.title, W - 2 * M).slice(0, 2); lines.forEach((l, i) => x.fillText(l, M, ty + i * (story ? 88 : 70)));

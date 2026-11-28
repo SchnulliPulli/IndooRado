@@ -10,6 +10,7 @@ const b = await chromium.launch();
 for (const vp of [{ width: 1280, height: 800, n: 'Desktop' }, { width: 390, height: 844, n: 'Handy' }]) {
   const p = await b.newPage({ viewport: vp }), errs = [];
   p.on('pageerror', e => errs.push(e.message));
+  await p.addInitScript(() => { try { if (!localStorage.getItem('vvLang')) localStorage.setItem('vvLang', 'de'); } catch (e) { } }); // Sprachauswahl beim ersten Öffnen überspringen
   await p.route(/supabase\.co|strava\.com/, r => r.abort()); // keine echten Online-Dienste im Test
   await p.goto(BASE + '#/'); await p.waitForTimeout(1500);
   await p.evaluate(() => document.querySelectorAll('.modal').forEach(m => m.remove()));
@@ -45,7 +46,7 @@ for (const vp of [{ width: 1280, height: 800, n: 'Desktop' }, { width: 390, heig
   check(r.got >= 3, `${vp.n}: Saison vergibt Stufen`);
   check(r.ghost, `${vp.n}: Geist übersteht Code-Export und -Import`);
   // Alle Module tatsächlich laden (findet Fehler, die erst beim Ausführen auffallen, z. B. in nachgeladenen Modulen)
-  const bad = await p.evaluate(async () => { const out = []; for (const m of ['tv', 'league', 'family', 'watch', 'video', 'streetimg', 'call', 'inbox', 'fileio', 'export', 'workouts', 'sync', 'pages/live', 'pages/companion', 'pages/watch', 'tvstream', 'livemap', 'stagetour', 'comfort', 'planbuilder', 'intervals', 'online/devices', 'pages/friends', 'pages/account']) { try { await import('./js/' + m + '.js'); } catch (e) { out.push(m + ': ' + e.message); } } return out; });
+  const bad = await p.evaluate(async () => { const out = []; for (const m of ['tv', 'league', 'family', 'watch', 'video', 'streetimg', 'call', 'inbox', 'fileio', 'export', 'workouts', 'sync', 'pages/live', 'pages/companion', 'pages/watch', 'tvstream', 'livemap', 'stagetour', 'comfort', 'planbuilder', 'intervals', 'online/devices', 'i18n', 'pages/friends', 'pages/account']) { try { await import('./js/' + m + '.js'); } catch (e) { out.push(m + ': ' + e.message); } } return out; });
   check(!bad.length, `${vp.n}: alle Module laden${bad.length ? ': ' + bad.join(' | ') : ''}`);
   check(!errs.length, `${vp.n}: keine JavaScript-Fehler${errs.length ? ': ' + errs.slice(0, 3).join(' | ') : ''}`);
   await p.close();

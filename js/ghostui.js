@@ -32,7 +32,7 @@ export async function ghostManager() {
     <div id="ghList" class="ghlist"></div>`);
   const draw = async () => {
     const l = await listGhosts();
-    w.querySelector('#ghList').innerHTML = l.length ? l.map(g => `<div class="ghrow"><label class="switch"><input type="checkbox" data-on="${esc(g.id)}" ${g.on !== false ? 'checked' : ''}><span></span></label><div><b>${esc(g.name)}</b> · ${esc(g.routeName || g.route)}<div class="small muted">${fmtKm(g.dist)} km in ${fmtT(g.dur)}${g.day ? ' · ' + new Date(g.day).toLocaleDateString('de-DE') : ''}</div></div><button class="btn sm ghost danger" data-del="${esc(g.id)}" aria-label="Geist löschen">🗑</button></div>`).join('') : '<p class="muted small">Noch keine Geister.</p>';
+    w.querySelector('#ghList').innerHTML = l.length ? l.map(g => `<div class="ghrow"><label class="switch"><input type="checkbox" data-on="${esc(g.id)}" ${g.on !== false ? 'checked' : ''}><span></span></label><div><b>${esc(g.name)}</b> · ${esc(g.routeName || g.route)}<div class="small muted">${fmtKm(g.dist)} km in ${fmtT(g.dur)}${g.day ? ' · ' + new Date(g.day).toLocaleDateString(document.documentElement.lang) : ''}</div></div><button class="btn sm ghost danger" data-del="${esc(g.id)}" aria-label="Geist löschen">🗑</button></div>`).join('') : '<p class="muted small">Noch keine Geister.</p>';
   };
   const add = async obj => { try { const g = await addGhost(obj); toast(`👻 ${g.name} auf ${g.routeName || g.route} hinzugefügt`); draw(); } catch (e) { toast(e.message); } };
   w.querySelector('#ghFile').onchange = async e => { for (const f of e.target.files) { try { await add(JSON.parse(await f.text())); } catch (er) { toast('Datei nicht lesbar: ' + f.name); } } e.target.value = ''; };

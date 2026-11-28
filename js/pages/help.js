@@ -103,6 +103,7 @@ const T = [
 export async function render(el) {
   el.innerHTML = `
   <section class="pagehead"><h1>Anleitung</h1><span class="small muted">Tippe auf ein Thema oder suche nach einem Stichwort</span></section>
+  ${document.documentElement.lang !== 'de' ? '<p class="small muted">ℹ️ Die ausführliche Anleitung gibt es derzeit nur auf Deutsch. Einzelne Teile sind übersetzt.</p>' : ''}
   <div class="helpsearch"><input class="inp" id="hQ" type="search" placeholder="🔍 z. B. Geist, Tresor, Schalten, Musik …" aria-label="Anleitung durchsuchen"></div>
   <nav class="helptiles">${T.map(([id, i, t]) => `<a href="#" data-go="${id}"><span>${i}</span>${t}</a>`).join('')}</nav>
   <div class="helpbody">${T.map(([id, i, t, b], n) => `<details class="card help" id="h-${id}" ${n === 0 ? 'open' : ''}><summary><span>${i}</span> ${t}</summary><div class="helpin">${b}</div></details>`).join('')}</div>

@@ -37,7 +37,7 @@ export async function tourCard(box) {
   const tab = box.dataset.tab || 'gc';
   const list = rows.filter(r => tab === 'gc' || r[tab === 'kom' ? 'climb' : 'sprint']).sort((a, b) => b.stages - a.stages || (tab === 'gc' ? a.time - b.time : tab === 'kom' ? a.climb - b.climb : a.sprint - b.sprint)).slice(0, 15);
   const val = r => fmtT(tab === 'gc' ? r.time : tab === 'kom' ? r.climb : r.sprint);
-  box.innerHTML = `<div class="row between"><h2>🏆 Tour de IndooRado</h2><span class="small muted">bis ${new Date(ends - 864e5).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' })}</span></div>
+  box.innerHTML = `<div class="row between"><h2>🏆 Tour de IndooRado</h2><span class="small muted">bis ${new Date(ends - 864e5).toLocaleDateString(document.documentElement.lang, { weekday: 'short', day: 'numeric', month: 'short' })}</span></div>
     <p class="small muted">Fünf Etappen in dieser Woche. Fahr jede Strecke einmal komplett (bzw. eine volle Runde) – die schnellste Zeit je Etappe zählt.</p>
     <div class="tourst">${S.map(s => `<button class="tstage ${done[s.n] ? 'done' : ''}" data-stage="${s.n}"><b>Etappe ${s.n}</b><span>${esc(s.name)}</span><small class="muted">${fmtKm(s.dist)} km · ${Math.round(s.asc)} hm${s.loop ? ' · 1 Runde' : ''}</small>${done[s.n] ? `<small class="ok">✓ ${fmtT(done[s.n])}</small>` : '<small>▶ Fahren</small>'}</button>`).join('')}</div>
     <div class="seg sm tourtabs">${[['gc', '🟡 Gesamt'], ['kom', '🔴 Berg'], ['spr', '🟢 Sprint']].map(([k, l]) => `<button data-ttab="${k}" aria-pressed="${tab === k}">${l}</button>`).join('')}</div>

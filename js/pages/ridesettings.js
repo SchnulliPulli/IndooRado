@@ -57,7 +57,7 @@ export async function render(el, params = []) {
     <div class="grid2">
       ${SEL('p', 'voiceKm', 'Zwischenstand ansagen', [['0', 'nie'], ['1', 'jeden Kilometer'], ['5', 'alle 5 km'], ['10', 'alle 10 km']], '5')}
       ${RNG('p', 'voiceRate', 'Sprechtempo', .7, 1.5, .05, profile.voiceRate ?? 1.05, FMT.voiceRate)}
-      <label class="f">Stimme<select class="inp" id="rsVoice"><option value="">Standard (Deutsch)</option></select></label>
+      <label class="f">Stimme<select class="inp" id="rsVoice"><option value="">Standard</option></select></label>
     </div>
     <div class="vtopics">${Object.entries(VOICE_TOPICS).map(([k, l]) => `<label class="chk"><input type="checkbox" data-vt="${k}" ${(profile.voiceWhat?.[k] ?? true) ? 'checked' : ''}> ${l}</label>`).join('')}</div>
     <div class="row"><button class="btn sm" id="rsVoiceTest">Probe anhören</button></div>` : '<p class="muted">Dieser Browser hat keine Sprachausgabe.</p>'}
@@ -170,7 +170,7 @@ export async function render(el, params = []) {
   Q('#rsFit').onchange = e => { e.stopPropagation(); profile.hudLayout ||= {}; for (const k of ['small', 'large']) { const L = profile.hudLayout[k] ||= { w: {}, extras: [] }; L.fit = e.target.checked; } saveProfile(); toast('Gespeichert', 900); };
   Q('#rsReset').onclick = () => { profile.hudLayout = {}; saveProfile(); toast('Anordnung zurückgesetzt'); };
   // Sprachansagen: Stimme wählen, Themen an/aus, Probe
-  const vs = Q('#rsVoice'), fillV = () => { if (!vs.options) return; const cur = profile.voiceName || ''; vs.innerHTML = '<option value="">Standard (Deutsch)</option>' + voices().map(v => `<option value="${esc(v.name)}" ${v.name === cur ? 'selected' : ''}>${esc(v.name)} (${esc(v.lang)})</option>`).join(''); };
+  const vs = Q('#rsVoice'), fillV = () => { if (!vs.options) return; const cur = profile.voiceName || ''; vs.innerHTML = '<option value="">Standard</option>' + voices().map(v => `<option value="${esc(v.name)}" ${v.name === cur ? 'selected' : ''}>${esc(v.name)} (${esc(v.lang)})</option>`).join(''); };
   fillV(); if (voiceAvailable) speechSynthesis.addEventListener?.('voiceschanged', fillV);
   if (vs.options) vs.onchange = e => { e.stopPropagation(); profile.voiceName = vs.value; saveProfile(); toast('Gespeichert', 900); };
   for (const c of el.querySelectorAll('[data-vt]')) c.onchange = e => { e.stopPropagation(); profile.voiceWhat = { ...(profile.voiceWhat || {}), [c.dataset.vt]: c.checked }; saveProfile(); toast('Gespeichert', 900); };

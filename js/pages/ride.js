@@ -1005,6 +1005,10 @@ function step(dt, first) {
   if (S.wo) S.wT += dt;
   if (S.dist >= R.total) {
     if (R.loop) { S.dist -= R.total; S.lap++; flash('Runde ' + (S.lap + 1) + ' · letzte Runde ' + fmtT(S.t - S.lapT0), 2500); say(`Runde ${S.lap + 1}. Letzte Runde in ${fmtT(S.t - S.lapT0)}`, 'lap'); S.lapT0 = S.t; lapReset(S); S.climbs.forEach(c => c.state = 'pending'); S.sprints.forEach(c => c.state = 'pending'); }
+    else if (S.wo && !S.woDone && !S.race && !S.tt) { // Workout läuft noch: Strecke von vorn, Zielzeit zählt trotzdem
+      if (S.routeDoneT == null) { S.routeDoneT = S.t; sound.fanfare(); }
+      S.dist -= R.total; S.lap++; S.lastE = null; S.lapT0 = S.t; lapReset(S); S.climbs.forEach(c => c.state = 'pending'); S.sprints.forEach(c => c.state = 'pending'); flash(`🏁 Ziel in ${fmtT(S.routeDoneT)} – dein Workout läuft weiter, Strecke von vorn`, 3500);
+    }
     else { S.dist = R.total; if (!S.finished) { S.finished = true; S.state = 'paused'; flash('Ziel erreicht!', 3000); say(`Ziel erreicht! ${fmtKm(S.odo)} km in ${fmtT(S.t)}`, 'lap', { urgent: true }); sound.fanfare(); shot('Ziel'); setTimeout(() => endRide(true), 2500); } }
   }
   const e = R.eleAt(S.dist); if (S.lastE != null && e > S.lastE) S.asc += e - S.lastE; S.lastE = e;
@@ -1126,7 +1130,7 @@ function hud() {
       p3: [Math.round(p3) + ' W', zoneColor(p3 / ftp)], wkg: [f(p3 / profile.kg)], hr: [hrv ?? '–'], cad: [live.cadence != null ? Math.round(live.cadence) : '–'],
       spd: [f(S.v * 3.6) + ' km/h'], dist: [f(S.odo / 1000, 2) + ' km'], time: [fmtT(S.t)], asc: [Math.round(S.asc) + ' m'], avg: [Math.round(avg) + ' W'], np: [Math.round(np) + ' W'],
       kj: [Math.round(S.kj)], kcal: [Math.round(S.kj / .24 / 4.184)], grade: [f(g) + ' %'], target: [tgt != null && S.wo ? Math.round(tgt) + ' W' : '–', tgt ? zoneColor(tgt / ftp) : ''],
-      left: [wi && !wi.done ? fmtT(wi.left) : '–'], woLeft: [S.wo ? fmtT(Math.max(0, tot - S.wT)) : '–'], xp: ['+' + xp], clock: [new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })],
+      left: [wi && !wi.done ? fmtT(wi.left) : '–'], woLeft: [S.wo ? fmtT(Math.max(0, tot - S.wT)) : '–'], xp: ['+' + xp], clock: [new Date().toLocaleTimeString(document.documentElement.lang, { hour: '2-digit', minute: '2-digit' })],
       ...(() => { const X = live.extra || {}, fresh = o => o && performance.now() - o.t < 5000, cu = Object.values(X).find(o => o.label && Object.keys(X).find(k => k.startsWith('x:') && X[k] === o));
         return { xspeed: [fresh(X.speed) ? f(X.speed.v) + ' km/h' : '–'], xtemp: [fresh(X.temp) ? f(X.temp.v) + ' °C' : '–'], xcustom: [fresh(cu) ? (Math.abs(cu.v) < 100 ? f(cu.v) : Math.round(cu.v)) + ' ' + cu.label : '–'] }; })(),
       lap: [fmtT(S.t - S.lapT0)], place: [S.npcOn ? (S.field.filter(n => gapOf(R, n.d, S.dist) > 0).length + 1) + ' / ' + (S.field.length + 1) : '–'],
@@ -1268,7 +1272,7 @@ function shot(caption) {
   // Datenleiste wie ein Foto-Overlay
   const g = x.createLinearGradient(0, h - 150, 0, h); g.addColorStop(0, 'rgba(10,12,16,0)'); g.addColorStop(1, 'rgba(10,12,16,.85)'); x.fillStyle = g; x.fillRect(0, h - 150, w, 150);
   x.fillStyle = '#fff'; x.font = '700 30px Barlow, Arial'; x.fillText(S.route.name, 28, h - 74);
-  x.font = '500 18px Barlow, Arial'; x.fillStyle = '#c9d2da'; x.fillText(caption + ' · ' + new Date().toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' }), 28, h - 46);
+  x.font = '500 18px Barlow, Arial'; x.fillStyle = '#c9d2da'; x.fillText(caption + ' · ' + new Date().toLocaleString(document.documentElement.lang, { dateStyle: 'medium', timeStyle: 'short' }), 28, h - 46);
   const p3 = S.p3.length ? Math.round(S.p3.reduce((a, b) => a + b, 0) / S.p3.length) : 0;
   const items = [[p3 + ' W', 'Leistung'], [(live.heart ?? '–') + '', 'Puls'], [(S.v * 3.6).toFixed(1).replace('.', ',') + ' km/h', 'Tempo'], [fmtKm(S.odo) + ' km', 'Distanz'], [Math.round(S.asc) + ' m', 'Höhe'], [fmtT(S.t), 'Zeit']];
   let xx = w - 28; x.textAlign = 'right';

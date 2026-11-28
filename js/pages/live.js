@@ -12,6 +12,7 @@ export async function render(el) {
   el.innerHTML = `<section class="pagehead"><h1>Live-Fahrt</h1><span class="small muted" id="lvUpd"></span></section>
     <div id="lvBody"><div class="pageload"><div class="spinner"></div><div class="small muted">Laufende Fahrt wird gesucht …</div></div></div>`;
   const T = await import('../tv.js'); await T.whenReady();
+  if (!$('#lvBody', el)) return; // Seite inzwischen verlassen
   if (!syncReady() && !(await import('../online/client.js')).loggedIn()) { $('#lvBody', el).innerHTML = '<section class="card"><p class="muted">Die Live-Ansicht braucht ein IndooRado-Konto oder einen verbundenen Cloud-Speicher, damit die Fahrt vom anderen Gerät hier ankommt.</p><a class="btn" href="#/account">Zum Konto</a></section>'; return; }
   const tick = async () => {
     if (!document.body.contains(el) || !$('#lvBody', el)) return leave();

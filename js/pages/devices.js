@@ -60,7 +60,7 @@ export async function render(el) {
   off.push(bus.on('sensorvalue', ({ id, key }) => {
     const c = SN.sensors.conn.get(id), v = c?.values[key], h = snCard.querySelector(`[data-hex="${CSS.escape(key)}"]`); if (h) h.textContent = SN.hexOf(v);
     const mp = (c?.entry.maps || []).find(m => m.key === key), d = snCard.querySelector(`[data-dec="${CSS.escape(key)}"]`);
-    if (mp && d) { const r = SN.decode(v, mp.fmt, +mp.off || 0); d.textContent = r == null ? '–' : (+(r * (+mp.scale || 1) + (+mp.add || 0)).toFixed(2)).toLocaleString('de-DE'); }
+    if (mp && d) { const r = SN.decode(v, mp.fmt, +mp.off || 0); d.textContent = r == null ? '–' : (+(r * (+mp.scale || 1) + (+mp.add || 0)).toFixed(2)).toLocaleString(document.documentElement.lang); }
   }));
   snCard.onchange = async e => {
     if (e.target.id === 'snSrc') { profile.powerSource = e.target.value; saveProfile(); toast('Gespeichert', 900); return; }
@@ -82,7 +82,7 @@ export async function render(el) {
         <div class="grid2 tight"><label class="f">Faktor<input class="inp" id="mSc" type="number" step="any" value="1"></label><label class="f">plus<input class="inp" id="mAdd" type="number" step="any" value="0"></label></div>
         <p class="small">Ergebnis jetzt: <b id="mPrev">–</b></p></div>`, buttons: [{ label: 'Abbrechen', value: null }, { label: 'Zuordnen', value: 'ok', cls: 'pri' }] });
       const m = { key, metric: 'power', label: '', fmt: 'u8', off: 0, scale: 1, add: 0 }, g = id => document.getElementById(id);
-      const upd = () => { Object.assign(m, { metric: g('mMet').value, label: g('mLab').value.trim(), fmt: g('mFmt').value, off: +g('mOff').value || 0, scale: +g('mSc').value || 1, add: +g('mAdd').value || 0 }); const r = SN.decode(SN.sensors.conn.get(en.id)?.values[key], m.fmt, m.off); g('mPrev').textContent = r == null ? '– (Byte außerhalb der Daten)' : (+(r * m.scale + m.add).toFixed(3)).toLocaleString('de-DE'); };
+      const upd = () => { Object.assign(m, { metric: g('mMet').value, label: g('mLab').value.trim(), fmt: g('mFmt').value, off: +g('mOff').value || 0, scale: +g('mSc').value || 1, add: +g('mAdd').value || 0 }); const r = SN.decode(SN.sensors.conn.get(en.id)?.values[key], m.fmt, m.off); g('mPrev').textContent = r == null ? '– (Byte außerhalb der Daten)' : (+(r * m.scale + m.add).toFixed(3)).toLocaleString(document.documentElement.lang); };
       for (const id of ['mMet', 'mLab', 'mFmt', 'mOff', 'mSc', 'mAdd']) g(id).oninput = g(id).onchange = upd;
       upd(); const live = bus.on('sensorvalue', x => x.key === key && g('mPrev') && upd());
       const res = await pr; live();

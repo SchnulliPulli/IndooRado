@@ -51,7 +51,7 @@ export class StreetImages {
       if (!u) { const r = await fetch(im.url, { referrerPolicy: 'no-referrer' }); if (!r.ok) return; u = URL.createObjectURL(await r.blob()); this.blobs.set(im.id, u); if (this.blobs.size > 12) { const [k, v] = this.blobs.entries().next().value; URL.revokeObjectURL(v); this.blobs.delete(k); } }
       if (this.cur !== im.id) return;
       const img = this.box.querySelector('img'); img.classList.remove('on'); img.onload = () => img.classList.add('on'); img.src = u;
-      this.box.hidden = false; this.box.querySelector('.siat').textContent = im.at ? new Date(im.at).toLocaleDateString('de-DE', { month: 'short', year: 'numeric' }) : '';
+      this.box.hidden = false; this.box.querySelector('.siat').textContent = im.at ? new Date(im.at).toLocaleDateString(document.documentElement.lang, { month: 'short', year: 'numeric' }) : '';
     } catch (e) { }
   }
   destroy() { for (const u of this.blobs.values()) URL.revokeObjectURL(u); this.blobs.clear(); this.box?.remove(); }

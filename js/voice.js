@@ -4,10 +4,13 @@ import { profile } from './state.js';
 const SS = typeof speechSynthesis !== 'undefined' ? speechSynthesis : null;
 export const voiceAvailable = !!SS;
 export const VOICE_TOPICS = { workout: 'Intervalle im Workout', climb: 'Anstiege, Sprints und Gipfelzeiten', km: 'Zwischenstand (Kilometer)', record: 'Neue Bestleistungen', lap: 'Runden und Ziel', mp: 'Mitspieler (Beitritt, Ride On)' };
-export const voices = () => (SS?.getVoices() || []).filter(v => /^de/i.test(v.lang)).concat((SS?.getVoices() || []).filter(v => !/^de/i.test(v.lang)));
+import { tr, lang, locale } from './i18n.js';
+const mine = v => v.lang.slice(0, 2).toLowerCase() === lang();
+export const voices = () => (SS?.getVoices() || []).filter(mine).concat((SS?.getVoices() || []).filter(v => !mine(v)));
 let last = '', lastT = 0;
 // Text vorlesbar machen: Emojis weg, Einheiten ausschreiben, Zeiten als Minuten/Sekunden
 export function speakable(t) {
+  if (lang() !== 'de') return String(tr(t)).replace(/[\p{Extended_Pictographic}️‍]/gu, '').replace(/[·|]/g, ',').replace(/\s+/g, ' ').replace(/\s+([,.!?:])/g, '$1').trim();
   return String(t)
     .replace(/(\d+):(\d\d):(\d\d)/g, (_, h, m, s) => `${+h} Stunden ${+m} Minuten`)
     .replace(/(\d+):(\d\d)/g, (_, m, s) => (+m ? `${+m} Minute${+m === 1 ? '' : 'n'}` : '') + (+s ? ` ${+s} Sekunden` : ''))
@@ -20,8 +23,8 @@ export function say(text, topic = 'workout', { urgent = false } = {}) {
   const t = speakable(text); if (!t || (t === last && performance.now() - lastT < 8000)) return false;
   last = t; lastT = performance.now();
   if (urgent) SS.cancel();
-  const u = new SpeechSynthesisUtterance(t); u.lang = 'de-DE'; u.rate = +profile.voiceRate || 1.05; u.volume = Math.min(1, (profile.volMaster ?? 1) * 1.2);
-  const v = voices().find(v => v.name === profile.voiceName) || voices().find(v => /^de/i.test(v.lang)); if (v) { u.voice = v; u.lang = v.lang; }
+  const u = new SpeechSynthesisUtterance(t); u.lang = document.documentElement.lang; u.rate = +profile.voiceRate || 1.05; u.volume = Math.min(1, (profile.volMaster ?? 1) * 1.2);
+  const v = voices().find(v => v.name === profile.voiceName && mine(v)) || voices().find(mine); if (v) { u.voice = v; u.lang = v.lang; }
   SS.speak(u); return true;
 }
 export const hush = () => SS?.cancel();

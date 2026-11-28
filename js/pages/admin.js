@@ -45,7 +45,7 @@ export async function render(el) {
   let users = [];
   const kpis = async () => {
     const { data, error } = await sb.rpc('admin_stats'); if (error) return toast(error.message, 5000);
-    $('#adKpi', el).innerHTML = [['Nutzer', data.users], ['warten auf Freischaltung', data.pending ?? '–'], ['aktiv (7 Tage)', data.active7], ['Fahrten', data.rides], ['Fahrten (7 Tage)', data.rides7], ['Kilometer', Math.round(data.km).toLocaleString('de-DE')], ['gesperrt', data.banned]].map(([l, v]) => `<div class="card kpi"><b class="num">${v}</b><span class="small muted">${l}</span></div>`).join('');
+    $('#adKpi', el).innerHTML = [['Nutzer', data.users], ['warten auf Freischaltung', data.pending ?? '–'], ['aktiv (7 Tage)', data.active7], ['Fahrten', data.rides], ['Fahrten (7 Tage)', data.rides7], ['Kilometer', Math.round(data.km).toLocaleString(document.documentElement.lang)], ['gesperrt', data.banned]].map(([l, v]) => `<div class="card kpi"><b class="num">${v}</b><span class="small muted">${l}</span></div>`).join('');
   };
   // Status je Nutzer: Admin, freigeschaltet, Testphase (Resttage) oder abgelaufen
   const stat = u => u.role === 'banned' ? ['Gesperrt', 'bad'] : u.role === 'admin' ? ['Admin', 'ok'] : u.approved || u.approved === undefined ? ['Freigeschaltet', 'ok'] : new Date(u.trial_until) > new Date() ? [`Test, noch ${Math.ceil((new Date(u.trial_until) - Date.now()) / 864e5)} T.`, 'trial'] : ['Test abgelaufen', 'bad'];
@@ -142,13 +142,13 @@ export async function render(el) {
     const cv = $('#adChart', el), dpr = Math.min(2, devicePixelRatio || 1); cv.width = cv.clientWidth * dpr; cv.height = cv.clientHeight * dpr;
     const c = cv.getContext('2d'), W = cv.width, H = cv.height, mx = Math.max(1, ...data.map(d => d.rides)), bw = W / data.length;
     c.font = `${11 * dpr}px system-ui`; c.fillStyle = getComputedStyle(el).color;
-    data.forEach((d, i) => { const h = d.rides / mx * (H - 30 * dpr); c.fillStyle = '#ff6a3d'; c.fillRect(i * bw + 2 * dpr, H - 16 * dpr - h, bw - 4 * dpr, h); if (d.new_users) { c.fillStyle = '#3ecf8e'; c.beginPath(); c.arc(i * bw + bw / 2, H - 22 * dpr - h, 4 * dpr, 0, 7); c.fill(); } if (i % 5 === 0) { c.fillStyle = '#8894a0'; c.fillText(new Date(d.day).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }), i * bw, H - 3 * dpr); } });
+    data.forEach((d, i) => { const h = d.rides / mx * (H - 30 * dpr); c.fillStyle = '#ff6a3d'; c.fillRect(i * bw + 2 * dpr, H - 16 * dpr - h, bw - 4 * dpr, h); if (d.new_users) { c.fillStyle = '#3ecf8e'; c.beginPath(); c.arc(i * bw + bw / 2, H - 22 * dpr - h, 4 * dpr, 0, 7); c.fill(); } if (i % 5 === 0) { c.fillStyle = '#8894a0'; c.fillText(new Date(d.day).toLocaleDateString(document.documentElement.lang, { day: '2-digit', month: '2-digit' }), i * bw, H - 3 * dpr); } });
     const x = s2.data || {}; $('#adTop', el).innerHTML = `🟧 Fahrten je Tag · 🟢 neue Nutzer · ${x.hours7 ?? 0} h gefahren (7 Tage) · ${x.events ?? 0} Events geplant (${x.signups ?? 0} Anmeldungen) · ${x.clubs ?? 0} Teams mit ${x.members ?? 0} Mitgliedern${x.topRoutes?.length ? '<br>Beliebteste Strecken (30 Tage): ' + x.topRoutes.map(t => `${esc(t.name)} (${t.n})`).join(', ') : ''}`;
     try { const PR = await import('../online/presence.js'); await PR.joinPresence(); const ps = [...PR.P.peers.values()]; $('#adOnline', el).textContent = `🟢 ${ps.length} gerade online${ps.length ? ': ' + ps.slice(0, 6).map(p => p.name + (p.where === 'ride' ? ' 🚴' : '')).join(', ') : ''}`; } catch (e) { }
   };
   const evAdm = async () => {
     const { data, error } = await sb.from('events').select('*').order('starts_at', { ascending: true }).limit(50); if (error) { $('#evAdm', el).textContent = miss(error); return; }
-    $('#evAdm', el).innerHTML = data.length ? data.map(e => `<div class="row between anrow"><span><b>${esc(e.title)}</b> <span class="muted">${new Date(e.starts_at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })} · ${esc(routes.find(r => r.id === e.route_id)?.name || e.route_id)}</span></span><button class="btn xs ghost danger" data-evdel="${e.id}">Löschen</button></div>`).join('') : '<p class="muted">Keine Events.</p>';
+    $('#evAdm', el).innerHTML = data.length ? data.map(e => `<div class="row between anrow"><span><b>${esc(e.title)}</b> <span class="muted">${new Date(e.starts_at).toLocaleString(document.documentElement.lang, { dateStyle: 'short', timeStyle: 'short' })} · ${esc(routes.find(r => r.id === e.route_id)?.name || e.route_id)}</span></span><button class="btn xs ghost danger" data-evdel="${e.id}">Löschen</button></div>`).join('') : '<p class="muted">Keine Events.</p>';
   };
   const clAdm = async () => {
     const { data, error } = await sb.rpc('club_overview'); if (error) { $('#clAdm', el).textContent = miss(error); return; }

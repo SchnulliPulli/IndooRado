@@ -20,7 +20,7 @@ export async function render(el) {
   const climbRows = Object.entries(progress.climbBest).map(([k, v]) => { const [rid, cid] = k.split(':'); const r = BUILTIN.find(x => x.id === rid); return { route: r?.name || 'Eigene Strecke', name: r?.climbNames?.[+cid] || 'Anstieg ' + (+cid + 1), ...v }; });
   el.innerHTML = `
   <section class="pagehead"><h1>Fortschritt</h1></section>
-  <section class="card">${levelBar()}<div style="margin-top:12px">${statTiles([[t.rides, 'Fahrten'], [fmtKm(t.dist), 'km gesamt'], [fmtDur(t.dur), 'Fahrzeit'], [Math.round(t.asc).toLocaleString('de-DE'), 'Höhenmeter'], [Math.round(t.kj).toLocaleString('de-DE'), 'kJ'], [t.streak, 'Tage am Stück']])}</div></section>
+  <section class="card">${levelBar()}<div style="margin-top:12px">${statTiles([[t.rides, 'Fahrten'], [fmtKm(t.dist), 'km gesamt'], [fmtDur(t.dur), 'Fahrzeit'], [Math.round(t.asc).toLocaleString(document.documentElement.lang), 'Höhenmeter'], [Math.round(t.kj).toLocaleString(document.documentElement.lang), 'kJ'], [t.streak, 'Tage am Stück']])}</div></section>
   <section class="grid2">
     <div class="card" id="lgCard"><h2>🏆 Wochenliga</h2><div class="spinner"></div></div>
     <div class="card">${riderType(b90, profile.ftp)}</div>
@@ -46,7 +46,7 @@ export async function render(el) {
   drawWk('h');
   $('#wkSeg', el).onclick = e => { const b = e.target.closest('[data-k]'); if (!b) return; for (const x of $('#wkSeg', el).children) x.setAttribute('aria-pressed', String(x === b)); drawWk(b.dataset.k); };
   { const lb = $('#lgCard', el); if (lb) LG.leagueCard(lb).catch(() => lb.remove()); }
-  multiChart($('#fit', el), { x: fit.map((_, i) => i), xFmt: v => { const d = fit[Math.round(v)]; return d ? new Date(d.day).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' }) : ''; }, tracks: [{ label: 'CTL / ATL', y: fit.map(f => f.ctl), color: '#3fa7f5', min: 0, max: Math.max(10, ...fit.map(f => Math.max(f.ctl, f.atl))) }, { label: 'TSB', y: fit.map(f => f.tsb), color: '#4fd18b' }] });
+  multiChart($('#fit', el), { x: fit.map((_, i) => i), xFmt: v => { const d = fit[Math.round(v)]; return d ? new Date(d.day).toLocaleDateString(document.documentElement.lang, { day: 'numeric', month: 'short' }) : ''; }, tracks: [{ label: 'CTL / ATL', y: fit.map(f => f.ctl), color: '#3fa7f5', min: 0, max: Math.max(10, ...fit.map(f => Math.max(f.ctl, f.atl))) }, { label: 'TSB', y: fit.map(f => f.tsb), color: '#4fd18b' }] });
   const a = {}, r = {}; for (const k in all) a[k] = all[k].w; for (const k in recent) r[k] = recent[k].w;
   curveChart($('#curve', el), [{ data: a, color: '#94a1ad', dash: true }, { data: r, color: '#ff6a3d' }], curveLabel);
   $('#ftpEst', el)?.addEventListener('click', async () => { await applyFtp(est, 'Schätzung 20 min'); toast('FTP auf ' + est + ' W gesetzt'); render(el); });

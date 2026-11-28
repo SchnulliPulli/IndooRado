@@ -73,7 +73,7 @@ function nav() {
     cc.hidden = !nas && !st;
     const state = !nas ? 'strava' : sync.busy ? 'busy' : sync.needLogin ? 'login' : sync.error ? 'error' : sync.last ? 'on' : 'off';
     cc.dataset.st = state;
-    const when = sync.last ? new Date(sync.last).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : 'noch nie';
+    const when = sync.last ? new Date(sync.last).toLocaleString(document.documentElement.lang, { dateStyle: 'short', timeStyle: 'short' }) : 'noch nie';
     cc.title = [nas ? `Cloud-Speicher (${providerName()}): ${{ busy: 'Abgleich läuft', login: 'Anmeldung abgelaufen', error: 'Fehler: ' + sync.error, on: 'zuletzt abgeglichen ' + when, off: 'noch nicht abgeglichen' }[state]}` : '', st ? `Strava verbunden${strava.cfg?.auto ? ', Fahrten werden automatisch hochgeladen' : ''}` : ''].filter(Boolean).join(' · ');
   };
   bus.on('sync', cloudUpd); bus.on('strava', cloudUpd); setInterval(cloudUpd, 30000); cloudUpd(); window.__cloudUpd = cloudUpd;
@@ -357,6 +357,7 @@ function netIndicator() {
   bus.on('netbusy', n => { clearTimeout(t); if (n > 0) t = setTimeout(() => { pill.hidden = currentKey === 'ride'; }, 400); else pill.hidden = true; });
 }
 async function init() {
+  { const I = await import('./i18n.js'); await I.initI18n(); if (!I.langChosen() && !/^#\/(watch\/|tv\b)/.test(location.hash) && await I.pickLanguage()) return; } // Sprache wählen (erstes Öffnen)
   netIndicator();
   await loadState(); await loadClickMap(); await loadPlan();
   import('./tv.js').then(m => m.applyTv()); // Fernseher-Modus, Gamepad, Handy-Fernbedienung

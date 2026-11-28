@@ -10,7 +10,7 @@ export async function buildInfo() {
 }
 // Kurzer Text, z. B. „2026.11 · Build 87 · a1b2c3d · 26.11.2026“
 export function buildText(i) {
-  const d = i.date ? new Date(i.date).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : '';
+  const d = i.date ? new Date(i.date).toLocaleString(document.documentElement.lang, { dateStyle: 'short', timeStyle: 'short' }) : '';
   return [i.version, i.build ? 'Build ' + i.build : null, i.short || null, d || null].filter(Boolean).join(' · ') + (i.commit ? '' : ' · lokaler Stand');
 }
 export const commitUrl = i => i.commit && i.repo ? `https://github.com/${i.repo}/commit/${i.commit}` : null;

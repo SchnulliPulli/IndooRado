@@ -7,7 +7,7 @@ import * as O from '../online/client.js';
 import { gate } from './online.js';
 
 const KIND = { group: ['👥', 'Gruppenfahrt'], race: ['🏁', 'Rennen'], workout: ['🏋️', 'Gemeinsames Workout'], fun: ['🎉', 'Spaßfahrt'] };
-const when = d => { const t = new Date(d), ms = t - Date.now(), day = t.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' }), hm = t.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+const when = d => { const t = new Date(d), ms = t - Date.now(), day = t.toLocaleDateString(document.documentElement.lang, { weekday: 'short', day: '2-digit', month: '2-digit' }), hm = t.toLocaleTimeString(document.documentElement.lang, { hour: '2-digit', minute: '2-digit' });
   return `${day} ${hm} Uhr${ms > 0 && ms < 864e5 ? ` · in ${ms < 3600e3 ? Math.ceil(ms / 60e3) + ' min' : Math.floor(ms / 3600e3) + ' h ' + Math.round(ms % 3600e3 / 60e3) + ' min'}` : ''}`; };
 const missing = e => /function|relation|does not exist|schema cache/i.test(e?.message || '') ? 'Events und Teams fehlen in der Datenbank: Datenbankschema im SQL-Editor erneut ausführen.' : e?.message;
 let timer = null;

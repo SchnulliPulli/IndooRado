@@ -18,7 +18,7 @@ export const devs = { trainer: null, hr: null, cad: null, click: null };
 export const status = { trainer: 'off', hr: 'off', cad: 'off', click: 'off' };
 export const logLines = [];
 export function log(m) {
-  logLines.unshift(new Date().toLocaleTimeString('de-DE') + '  ' + m);
+  logLines.unshift(new Date().toLocaleTimeString(document.documentElement.lang) + '  ' + m);
   if (logLines.length > 200) logLines.pop();
   bus.emit('log');
 }

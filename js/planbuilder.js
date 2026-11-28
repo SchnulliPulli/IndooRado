@@ -52,5 +52,5 @@ export function buildPlan({ goal, date, hours, perWeek, focus }) {
     wos.push(...list); layout.push(list.length);
   });
   const d = new Date(date);
-  return { name: `🎯 ${goal || 'Mein Ziel'} (${d.toLocaleDateString('de-DE', { day: '2-digit', month: 'short' })})`, perWeek, wos, layout, weeks: W, phases: { base, build, peak }, goalDate: date };
+  return { name: `🎯 ${goal || 'Mein Ziel'} (${d.toLocaleDateString(document.documentElement.lang, { day: '2-digit', month: 'short' })})`, perWeek, wos, layout, weeks: W, phases: { base, build, peak }, goalDate: date };
 }

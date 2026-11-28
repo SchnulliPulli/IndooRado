@@ -3,7 +3,7 @@ import { esc, toast, bus } from './util.js';
 import { avatarSvg } from './components.js';
 import * as O from './online/client.js';
 
-const ago = t => { const s = (Date.now() - new Date(t)) / 1000; return s < 60 ? 'gerade eben' : s < 3600 ? `vor ${Math.floor(s / 60)} min` : s < 86400 ? `vor ${Math.floor(s / 3600)} h` : new Date(t).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }); };
+const ago = t => { const s = (Date.now() - new Date(t)) / 1000; return s < 60 ? 'gerade eben' : s < 3600 ? `vor ${Math.floor(s / 60)} min` : s < 86400 ? `vor ${Math.floor(s / 3600)} h` : new Date(t).toLocaleDateString(document.documentElement.lang, { day: '2-digit', month: '2-digit' }); };
 // Anzahl Neues (ungelesene Nachrichten + offene Freundschaftsanfragen); null = nicht angemeldet
 export async function newCount() {
   if (!O.configured() || !O.online.ready || !O.loggedIn() || !O.access().ok) return null;

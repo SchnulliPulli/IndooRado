@@ -18,7 +18,7 @@ export async function render(el) {
   <div class="histsearch"><input class="inp" id="q" type="search" placeholder="🔍 Suchen nach Strecke, Workout oder Datum"></div>
   ${rides.length ? [...months].map(([m, list]) => {
     const d = list.reduce((a, r) => a + r.sum.dist, 0), t = list.reduce((a, r) => a + r.sum.dur, 0), tss = list.reduce((a, r) => a + r.sum.tss, 0);
-    return `<section class="card month"><div class="row between"><h2>${new Date(m + '-15').toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}</h2><span class="small muted num">${list.length} Fahrten · ${fmtKm(d)} km · ${fmtDur(t)} · ${tss} TSS</span></div>${list.map(rideRow).join('')}</section>`;
+    return `<section class="card month"><div class="row between"><h2>${new Date(m + '-15').toLocaleDateString(document.documentElement.lang, { month: 'long', year: 'numeric' })}</h2><span class="small muted num">${list.length} Fahrten · ${fmtKm(d)} km · ${fmtDur(t)} · ${tss} TSS</span></div>${list.map(rideRow).join('')}</section>`;
   }).join('') : '<div class="card"><p class="muted">Noch keine Fahrten. Starte auf der Startseite deine erste Fahrt.</p><a class="btn pri" href="#/">Zur Startseite</a></div>'}`;
   // Import-Menü
   const im = $('#impMenu', el), ib = $('#impBtn', el);

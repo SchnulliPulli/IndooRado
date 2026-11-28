@@ -1,4 +1,5 @@
 // Einstellungen: Profil (Fahrer, Trainer, Avatar), App (Thema, Grafik, Daten), Verbindungen (NAS/Cloud, Strava)
+import * as I18N from '../i18n.js';
 import { $, esc, toast, dialog, download, fmtDate, bus } from '../util.js';
 import { profile, saveProfile, progress, levelOf } from '../state.js';
 import { UNLOCKS } from '../game.js';
@@ -228,6 +229,7 @@ export async function render(el, params = []) {
   <section class="pagehead"><h1>App</h1></section>
   <section class="grid2">
     <div class="card form"><h2>Erscheinungsbild</h2>
+      <label class="f">🌍 Sprache · Language<select class="inp" id="appLang" data-noi18n>${I18N.LANGS.map(([k, n, f]) => `<option value="${k}" ${I18N.lang() === k ? 'selected' : ''}>${f} ${n}</option>`).join('')}</select></label>
       <label class="f">Thema<select class="inp" id="appTheme">${[['dark', 'Dunkel'], ['light', 'Hell'], ['system', 'Wie das Gerät']].map(([v, l]) => `<option value="${v}" ${theme === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <div class="f">Akzentfarbe<div class="swatches" id="appAcc">${['#ff6a3d', '#3fa7f5', '#4fd18b', '#f5c542', '#b06cf0', '#ef4458', '#00c2c7'].map(c => `<button style="background:${c}" data-c="${c}" aria-pressed="${acc === c}" aria-label="Farbe ${c}"></button>`).join('')}</div></div>
       <p class="small muted">Gilt für Menüs und Seiten. Die Anzeige während der Fahrt hat einen eigenen Stil unter <a href="#/ridesettings">Fahransicht</a>.</p>
@@ -293,6 +295,7 @@ export async function render(el, params = []) {
   on('#remOn', 'onchange', async e => { const C = await import('../comfort.js'); if (!(await C.enableReminders(e.target.checked))) e.target.checked = false; else toast(e.target.checked ? '🔔 Erinnerungen an' : 'Erinnerungen aus'); });
   on('#remAt', 'onchange', async e => { profile.remindAt = e.target.value || '18:00'; saveProfile(); (await import('../comfort.js')).scheduleReminders(); });
   import('../comfort.js').then(C => { const r = $('#instRow', el); if (r && C.canInstall()) { r.hidden = false; $('#instBtn', el).onclick = () => C.install(); } });
+  on('#appLang', 'onchange', e => I18N.setLang(e.target.value));
   on('#tvMode', 'onchange', async e => { (await import('../tv.js')).setTv(e.target.checked); if (profile.tvMode) { delete profile.tvMode; saveProfile(); } });
   on('#fontScale', 'onchange', e => { profile.fontScale = +e.target.value; saveProfile(); applyAppTheme(); });
   on('#highContrast', 'onchange', e => { profile.highContrast = e.target.checked; saveProfile(); applyAppTheme(); });

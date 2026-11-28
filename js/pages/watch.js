@@ -98,7 +98,7 @@ async function renderTv(el, token) {
   const tick = async () => {
     if (busy) return; busy = true;
     try {
-      $('#tClock', el).textContent = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+      $('#tClock', el).textContent = new Date().toLocaleTimeString(document.documentElement.lang, { hour: '2-digit', minute: '2-digit' });
       const { data, error } = await sb.rpc('watch_get', { p_token: token }); if (error) throw error;
       if (!data) { $('#tSt', el).textContent = 'beendet'; $('#tSt', el).className = 'tvlive off'; $('#tBig', el).innerHTML = '<div class="tvend">Die Fahrt ist beendet. Danke fürs Zuschauen! 👋</div>'; leave(); document.body.classList.add('watching', 'watchtv'); return; }
       const s = data.state || {}, age = (Date.now() - new Date(data.updated)) / 1000;

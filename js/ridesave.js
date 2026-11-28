@@ -31,7 +31,8 @@ export async function saveRide(S) {
   progress.sprintBest = progress.sprintBest || {};
   for (const c of S.sprintLog || []) { const k = S.route.id + ':' + c.id; if (c.pr) progress.sprintBest[k] = { time: c.time, date: start, rideId: id }; }
   let routePr = null;
-  if (!S.route.loop && S.finished && !S.beamed) { const k = S.route.id, b = progress.routeBest[k]; routePr = { time: S.t, best: b?.time ?? null, pr: !b || S.t < b.time }; if (routePr.pr) progress.routeBest[k] = { time: S.t, date: start, rideId: id }; }
+  const doneT = S.routeDoneT ?? (S.finished ? S.t : null); // im Workout: erste Zielankunft, danach ging es weiter
+  if (!S.route.loop && doneT != null && !S.beamed) { const k = S.route.id, b = progress.routeBest[k]; routePr = { time: doneT, best: b?.time ?? null, pr: !b || doneT < b.time }; if (routePr.pr) progress.routeBest[k] = { time: doneT, date: start, rideId: id }; }
 
   // Trainingsplan: Einheit gilt ab 90 % der Dauer als erledigt
   let planInfo = null;

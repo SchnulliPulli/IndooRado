@@ -91,7 +91,7 @@ export async function render(el) {
 
 // Kalenderdaten: Woche 1 beginnt am Montag der Startwoche des Plans
 const startMon = () => { const d = new Date(plan.active?.start || Date.now()); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d; };
-const fmtD = d => d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+const fmtD = d => d.toLocaleDateString(document.documentElement.lang, { day: '2-digit', month: '2-digit' });
 function wkDates(i) { const a = new Date(+startMon() + i * 7 * 864e5), b = new Date(+a + 6 * 864e5); return fmtD(a) + '–' + fmtD(b); }
 function isNow(i) { const a = +startMon() + i * 7 * 864e5; return Date.now() >= a && Date.now() < a + 7 * 864e5; }
 function active(pr) {

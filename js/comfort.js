@@ -62,6 +62,14 @@ bus.on('presence', async () => {
    Spracherkennung des Browsers (Chrome/Edge/Safari). Achtung: Chrome schickt den Ton dafür an Google. */
 const CMDS = [[/\b(pause|stopp|anhalten)\b/, 'pause'], [/\b(weiter|los)\b(?!.*intervall)/, 'pause'], [/schwerer|hoch(schalten)?|mehr/, 'up'], [/leichter|runter(schalten)?|weniger/, 'down'],
   [/n(ä|ae)chste[sr]? intervall|intervall weiter|überspringen/, 'next'], [/intervall zurück|vorherige[sr]? intervall/, 'prev'], [/foto|bild/, 'photo'], [/kamera|ansicht/, 'cam'], [/ride ?on|daumen/, 'rideon'], [/musik|n(ä|ae)chstes lied|lied/, 'music'], [/links/, 'left'], [/rechts/, 'right']];
+// Befehle in den anderen Sprachen der App
+const CMDS_L = {
+  en: [[/\b(pause|stop|halt)\b/, 'pause'], [/\b(resume|go|continue)\b/, 'pause'], [/harder|shift up|more/, 'up'], [/easier|shift down|less/, 'down'], [/next interval|skip/, 'next'], [/previous interval|back interval/, 'prev'], [/photo|picture/, 'photo'], [/camera|view/, 'cam'], [/ride ?on|thumbs/, 'rideon'], [/music|next song|song/, 'music'], [/left/, 'left'], [/right/, 'right']],
+  es: [[/\b(pausa|para|alto)\b/, 'pause'], [/\b(sigue|seguir|vamos)\b/, 'pause'], [/m(á|a)s duro|subir|m(á|a)s/, 'up'], [/m(á|a)s f(á|a)cil|bajar|menos/, 'down'], [/siguiente intervalo|saltar/, 'next'], [/intervalo anterior/, 'prev'], [/foto/, 'photo'], [/c(á|a)mara|vista/, 'cam'], [/ride ?on|pulgar/, 'rideon'], [/m(ú|u)sica|canci(ó|o)n/, 'music'], [/izquierda/, 'left'], [/derecha/, 'right']],
+  fr: [[/\b(pause|stop|arr(ê|e)te)\b/, 'pause'], [/\b(reprendre|continue|go)\b/, 'pause'], [/plus dur|monter|plus/, 'up'], [/plus facile|descendre|moins/, 'down'], [/intervalle suivant|passer/, 'next'], [/intervalle pr(é|e)c(é|e)dent/, 'prev'], [/photo/, 'photo'], [/cam(é|e)ra|vue/, 'cam'], [/ride ?on|pouce/, 'rideon'], [/musique|chanson/, 'music'], [/gauche/, 'left'], [/droite/, 'right']],
+  it: [[/\b(pausa|stop|ferma)\b/, 'pause'], [/\b(riprendi|vai|continua)\b/, 'pause'], [/pi(ù|u) duro|su|pi(ù|u)/, 'up'], [/pi(ù|u) facile|gi(ù|u)|meno/, 'down'], [/prossimo intervallo|salta/, 'next'], [/intervallo precedente/, 'prev'], [/foto/, 'photo'], [/telecamera|camera|vista/, 'cam'], [/ride ?on|pollice/, 'rideon'], [/musica|canzone/, 'music'], [/sinistra/, 'left'], [/destra/, 'right']],
+  nl: [[/\b(pauze|stop)\b/, 'pause'], [/\b(verder|doorgaan|go)\b/, 'pause'], [/zwaarder|opschakelen|meer/, 'up'], [/lichter|terugschakelen|minder/, 'down'], [/volgend interval|overslaan/, 'next'], [/vorig interval/, 'prev'], [/foto/, 'photo'], [/camera|weergave/, 'cam'], [/ride ?on|duim/, 'rideon'], [/muziek|liedje/, 'music'], [/links/, 'left'], [/rechts/, 'right']],
+};
 let rec = null, listening = false;
 export const voiceSupported = () => !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 export async function toggleVoice(onCmd, flash) {
@@ -69,8 +77,8 @@ export async function toggleVoice(onCmd, flash) {
   if (!voiceSupported()) { toast('Dieser Browser kann keine Sprachsteuerung (Chrome, Edge oder Safari nehmen)', 5000); return false; }
   const { consent } = await import('./consent.js');
   if (!(await consent('voice', 1, { title: '🎙️ Sprachsteuerung', html: '<p>Sag während der Fahrt z. B. <b>„Pause“</b>, <b>„schwerer“</b>, <b>„leichter“</b>, <b>„nächstes Intervall“</b>, <b>„Foto“</b>, <b>„Kamera“</b>, <b>„Ride On“</b>, <b>„Musik“</b>.</p><p class="small muted">Die Erkennung macht dein Browser. <b>Chrome und Edge schicken den Ton dafür an Google bzw. Microsoft</b>, Safari je nach Gerät an Apple. IndooRado speichert nichts. Abschalten mit demselben Knopf.</p>' }))) return false;
-  const R = window.SpeechRecognition || window.webkitSpeechRecognition; rec = new R(); rec.lang = 'de-DE'; rec.continuous = true; rec.interimResults = false;
-  rec.onresult = e => { const t = e.results[e.results.length - 1][0].transcript.toLowerCase().trim(); const c = CMDS.find(([re]) => re.test(t)); if (c) { onCmd(c[1]); flash('🎙️ „' + t + '“', 1000); } };
+  const R = window.SpeechRecognition || window.webkitSpeechRecognition; rec = new R(); rec.lang = document.documentElement.lang; rec.continuous = true; rec.interimResults = false;
+  rec.onresult = e => { const t = e.results[e.results.length - 1][0].transcript.toLowerCase().trim(); const c = cmds.find(([re]) => re.test(t)); if (c) { onCmd(c[1]); flash('🎙️ „' + t + '“', 1000); } };
   rec.onend = () => { if (listening && !document.hidden) { try { rec.start(); } catch (e) { } } };
   rec.onerror = e => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { listening = false; toast('Mikrofon nicht erlaubt', 4000); } };
   try { rec.start(); listening = true; flash('🎙️ Sprachsteuerung an – sag z. B. „schwerer“', 2200); } catch (e) { toast(e.message, 4000); }

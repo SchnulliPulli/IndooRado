@@ -13,7 +13,7 @@ export function fmtT(s, alwaysH = false) {
 }
 export const fmtKm = m => (m / 1000).toFixed(m < 100000 ? 1 : 0).replace('.', ',');
 export const fmtNum = (v, d = 0) => (v == null || isNaN(v)) ? '–' : Number(v).toFixed(d).replace('.', ',');
-export const fmtDate = (iso, opt = { dateStyle: 'medium', timeStyle: 'short' }) => new Date(iso).toLocaleString('de-DE', opt);
+export const fmtDate = (iso, opt = { dateStyle: 'medium', timeStyle: 'short' }) => new Date(iso).toLocaleString(document.documentElement.lang, opt);
 export const fmtDur = s => { s = Math.round(s); const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60); return h ? `${h} h ${String(m).padStart(2, '0')} min` : `${m} min`; };
 
 // Ereignisse quer durch die App
