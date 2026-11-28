@@ -1460,3 +1460,4 @@ body.watchtv .tvprof { height: 15vh; }
 .ibico { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 18px; background: color-mix(in srgb, currentColor 7%, transparent); }
 .ibnote:not([data-note]) { cursor: default; }
 .invsub { margin: 10px 4px 4px; }
+.callwin.flash { box-shadow: 0 0 0 3px var(--acc); transition: box-shadow .2s; }

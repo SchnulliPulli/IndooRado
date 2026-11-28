@@ -2,7 +2,7 @@
 // Schnellstart: Dateien kommen sofort aus dem Cache und werden im Hintergrund aktualisiert (stale-while-revalidate).
 // Eine neue App-Version bekommt einen neuen Cache-Namen; beim Wechsel lädt die Seite einmal neu (siehe app.js),
 // damit nie Dateien aus zwei Versionen gemischt werden.
-const CACHE = 'indoorado-v145';
+const CACHE = 'indoorado-v146';
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE && k !== 'indoorado-acct').map(k => caches.delete(k)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', e => {
@@ -47,6 +47,15 @@ self.addEventListener('push', e => {
     no: call ? `./#/?pdecline=${encodeURIComponent(safe(d.room))}&from=${from}${ac}` : null,
   };
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async list => {
+    // Anruf wurde auf einem anderen Gerät dieses Kontos angenommen: Klingel-Meldung hier still durch einen kurzen Hinweis ersetzen
+    if (k === 'callstop') {
+      let had = false; for (const n of await self.registration.getNotifications()) if (String(n.tag).startsWith('call-' + safe(d.room))) { n.close(); had = true; }
+      if (!had || await appActive(list)) return;
+      await self.registration.showNotification('📱 Anruf angenommen', { body: safe(d.body) || 'auf einem anderen Gerät', tag: 'callstop-' + safe(d.room), silent: true, renotify: false, icon: 'icons/icon-192.png', badge: 'icons/badge-96.png' });
+      await new Promise(r => setTimeout(r, 5000));
+      for (const n of await self.registration.getNotifications({ tag: 'callstop-' + safe(d.room) })) n.close();
+      return;
+    }
     if (k === 'test') await new Promise(r => setTimeout(r, 6000)); // Zeit, zum Startbildschirm zu wechseln (Samsung zeigt für die App im Vordergrund kein Pop-up)
     let A = null; try { A = await (await (await caches.open('indoorado-acct')).match('/__acct.json'))?.json(); } catch (x) { }
     const other = d.acct && A?.cur && d.acct !== A.cur, who = other ? (A.list || []).find(x => x.uid === d.acct)?.name || 'anderes Konto' : '';

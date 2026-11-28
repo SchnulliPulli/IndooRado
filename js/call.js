@@ -22,10 +22,12 @@ const JITSI = 'meet.ffmuc.net'; // Ausweichlösung im eigenen Fenster
 const MARK = /^\[\[call:(IndooRado-[A-Za-z0-9]{24})\]\]$/;
 export const callRoom = body => (MARK.exec(body || '') || [])[1] || null;
 // Anrufverlauf (Tabelle calls): laufend = noch nicht beendet und in der letzten Minute aktiv bzw. frisch angerufen
-export const callState = (room, ev) => O.client().then(sb => sb.rpc('call_state', { p_room: room, p_ev: ev })).catch(() => { });
+// Dieses Gerät (ein Konto kann auf mehreren Geräten angemeldet sein: angenommen wird nur auf einem)
+export const myDev = (() => { try { let d = localStorage.getItem('vvDev'); if (!d) { d = Math.random().toString(36).slice(2, 12); localStorage.setItem('vvDev', d); } return d; } catch (e) { return 'x' + Math.random().toString(36).slice(2, 10); } })();
+export const callState = (room, ev) => O.client().then(async sb => { const r = await sb.rpc('call_state', { p_room: room, p_ev: ev, p_dev: myDev }); if (r.error && /function|schema cache/i.test(r.error.message)) return sb.rpc('call_state', { p_room: room, p_ev: ev }); return r; }).catch(() => { });
 export async function callStates(rooms) {
   const m = new Map(); rooms = [...new Set(rooms.filter(Boolean))].slice(0, 100); if (!rooms.length) return m;
-  try { const { data } = await (await O.client()).from('calls').select('room,a,created_at,answered_at,alive_at,ended_at,declined').in('room', rooms); for (const c of data || []) m.set(c.room, c); } catch (e) { }
+  try { const { data } = await (await O.client()).from('calls').select('*').in('room', rooms); for (const c of data || []) m.set(c.room, c); } catch (e) { }
   return m;
 }
 export function callInfo(c, msg, me) {
@@ -100,12 +102,22 @@ export async function startCall(friend) {
   toast(n ? `📞 Es klingelt bei ${friend.display_name || friend.name} …` : `${friend.display_name || friend.name} ist gerade nicht online – die Einladung liegt im Chat`, 4000);
 }
 // Beitreten (aus dem Chat oder beim Klingeln)
-export async function joinCall(room, peer) { if (!/^IndooRado-[A-Za-z0-9]{24}$/.test(room) || !(await allowed())) return; const mode = await pickMode(`Anruf von ${peer?.name || 'Freund'} annehmen`, peer); if (mode) openWindow(room, peer, mode); }
-export async function hangUp(notify = true) {
+export async function joinCall(room, peer) {
+  if (!/^IndooRado-[A-Za-z0-9]{24}$/.test(room) || !(await allowed())) return;
+  if (call.room === room) { call.win?.classList.add('flash'); setTimeout(() => call.win?.classList.remove('flash'), 800); return; } // läuft schon auf diesem Gerät
+  // Schon auf einem anderen Gerät dieses Kontos angenommen? Dann fragen, ob der Anruf hierher geholt werden soll
+  const st = (await callStates([room])).get(room), me = O.online.user?.id;
+  if (st && (st.ended_at || st.declined)) return toast('Dieser Anruf ist schon vorbei', 3000);
+  const other = st?.answered_at && st.answered_dev && st.answered_dev !== myDev && st.a !== me && Date.now() - +new Date(st.alive_at || st.answered_at) < 75e3;
+  if (other) { if (!(await dialog({ title: '📱 Anruf läuft auf einem anderen Gerät', html: `<p class="muted">Du hast den Anruf mit ${esc(peer?.name || 'deinem Freund')} schon auf einem anderen Gerät angenommen. Soll er auf dieses Gerät wechseln? Das andere Gerät legt dann auf, das Gespräch läuft hier weiter.</p>`, buttons: [{ label: 'Abbrechen', value: 0 }, { label: 'Hierher holen', value: 1, cls: 'pri' }] }))) return; }
+  const mode = await pickMode(`Anruf von ${peer?.name || 'Freund'} annehmen`, peer); if (mode) openWindow(room, peer, mode, other); }
+export async function hangUp(notify = true, local = false) {
   const notifyIds = [...new Set([call.peer?.id, ...call.peers.keys()].filter(Boolean))];
-  if (call.room && call.isCaller && call.peer?.id) { const room = call.room, to = call.peer.id; callStates([room]).then(m => { const st = m.get(room); if (st && !st.answered_at && !st.declined) import('./push.js').then(P => P.pushTo(to, 'missed', room)); }).catch(() => { }); }
-  if (call.room) { clearInterval(call.aliveT); const others = [...call.peers.values()].some(P => P.pc?.connectionState === 'connected'); if (!others || call.peers.size <= 1) callState(call.room, 'end'); } // letzter im Anruf (bzw. Zweiergespräch): Anruf ist vorbei
-  try { call.ch?.send({ type: 'broadcast', event: 'sig', payload: { t: 'bye', from: O.online.user?.id } }); } catch (e) { }
+  if (local) notify = false;
+  if (call.room && !local && call.isCaller && call.peer?.id) { const room = call.room, to = call.peer.id; callStates([room]).then(m => { const st = m.get(room); if (st && !st.answered_at && !st.declined) import('./push.js').then(P => P.pushTo(to, 'missed', room)); }).catch(() => { }); }
+  clearInterval(call.devT); if (call.room && !local) { clearInterval(call.aliveT); const others = [...call.peers.values()].some(P => P.pc?.connectionState === 'connected'); if (!others || call.peers.size <= 1) callState(call.room, 'end'); } // letzter im Anruf (bzw. Zweiergespräch): Anruf ist vorbei
+  if (!local) try { call.ch?.send({ type: 'broadcast', event: 'sig', payload: { t: 'bye', from: O.online.user?.id, dev: myDev } }); } catch (e) { }
+  else clearInterval(call.aliveT);
   for (const P of call.peers.values()) { try { P.pc.close(); } catch (e) { } }
   call.local?.getTracks().forEach(t => t.stop());
   try { if (call.ch) (await O.client()).removeChannel(call.ch); } catch (e) { }
@@ -117,9 +129,13 @@ export async function hangUp(notify = true) {
 /* ---------- Anruffenster und Verbindungen (bis zu 4 Personen: jeder mit jedem, „Mesh“) ----------
    Signale laufen über den privaten Kanal call:<Raum> (nur Teilnehmer, siehe call_member). Jede Nachricht trägt
    from/to; jedes Paar handelt seine eigene WebRTC-Verbindung mit „perfekter Aushandlung“ aus. */
-async function openWindow(room, peer, mode = 'av') {
+async function openWindow(room, peer, mode = 'av', take = false) {
   await hangUp(false); call.room = room; call.peer = peer; call.mode = mode;
-  import('./push.js').then(P => P.closeNotes('call-')).catch(() => { }); callState(room, 'join'); clearInterval(call.aliveT); call.aliveT = setInterval(() => call.room === room ? callState(room, 'alive') : clearInterval(call.aliveT), 30e3);
+  // Wurde der Anruf auf ein anderes Gerät dieses Kontos geholt? Dann hier still auflegen (Gespräch läuft dort weiter)
+  const moved = () => { if (call.room !== room) return; hangUp(false, true); toast('📱 Anruf läuft jetzt auf deinem anderen Gerät', 4000); };
+  call.devT = setInterval(async () => { if (call.room !== room) return clearInterval(call.devT); const st = (await callStates([room])).get(room); if (st?.answered_dev && st.answered_dev !== myDev && st.a !== O.online.user?.id && st.b === O.online.user?.id) moved(); }, 6000);
+  call.moved = moved;
+  import('./push.js').then(P => P.closeNotes('call-')).catch(() => { }); callState(room, take ? 'take' : 'join'); clearInterval(call.aliveT); call.aliveT = setInterval(() => call.room === room ? callState(room, 'alive') : clearInterval(call.aliveT), 30e3);
   let g = {}; try { g = JSON.parse(localStorage.getItem('vvCallWin') || '{}'); } catch (e) { }
   const w = document.createElement('div'); w.className = 'callwin'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-label', 'Videoanruf');
   Object.assign(w.style, { width: (g.w || 340) + 'px', height: (g.h || 260) + 'px', left: (g.x ?? Math.max(8, innerWidth - (g.w || 340) - 16)) + 'px', top: (g.y ?? 80) + 'px' });
@@ -156,7 +172,7 @@ async function openWindow(room, peer, mode = 'av') {
   const me = O.online.user.id, myName = O.online.profile?.display_name || profile.name || 'Fahrer';
   const sb = await O.client(); await O.realtimeAuth().catch(() => { });
   const ch = call.ch = sb.channel('call:' + room, { config: { private: true, broadcast: { self: false } } });
-  const send = (to, payload) => ch.send({ type: 'broadcast', event: 'sig', payload: { ...payload, from: me, to } });
+  const send = (to, payload) => ch.send({ type: 'broadcast', event: 'sig', payload: { ...payload, from: me, to, dev: myDev } });
   const grid = w.querySelector('.cwgrid');
   const names = () => { const n = [...call.peers.values()].map(P => P.name); w.querySelector('.cwnames').textContent = n.length ? n.join(', ') : (peer?.name || 'Anruf'); w.classList.toggle('group', call.peers.size > 1); grid.dataset.n = call.peers.size; };
   const bitrate = () => { const k = call.peers.size > 1 ? 400000 : 600000; for (const P of call.peers.values()) if (!P.relay) capVideo(P.pc, k); }; // mehr Teilnehmer = je Verbindung weniger
@@ -207,14 +223,17 @@ async function openWindow(room, peer, mode = 'av') {
   call.dropPeer = drop; call.sendAll = payload => send(null, payload);
   call.resume = () => { for (const P of call.peers.values()) if (!P.polite && P.pc.connectionState !== 'connected') { try { P.pc.restartIce(); } catch (e) { } } };
   ch.on('broadcast', { event: 'sig' }, async ({ payload: m }) => {
+    if (m?.t === 'take' && m.from === me && m.dev !== myDev && call.room === room) return moved(); // eigenes anderes Gerät übernimmt
     if (!m?.from || m.from === me || call.room !== room) return;
     if (m.to && m.to !== me) return; // gilt einem anderen Teilnehmer
+    // Gegenüber hat den Anruf auf ein anderes Gerät geholt: alte Verbindung ersetzen, Signale des alten Geräts nicht mehr beachten
+    { const P0 = call.peers.get(m.from); if (P0 && m.dev && P0.dev && m.dev !== P0.dev) { if (m.t === 'hello' && !m.reply) { try { P0.pc.close(); } catch (e) { } P0.tile.remove(); call.peers.delete(m.from); } else return; } }
     try {
-      if (m.t === 'hello') { const P = mk(m.from, m.name); if (!P) { send(m.from, { t: 'full' }); return; } if (!m.reply) send(m.from, { t: 'hello', reply: true, name: myName }); if (!P.polite) P.start(); return; } // nur eine Seite je Paar beginnt, die andere antwortet (keine Kollision)
+      if (m.t === 'hello') { const P = mk(m.from, m.name); if (!P) { send(m.from, { t: 'full' }); return; } if (m.dev) P.dev = m.dev; if (!m.reply) send(m.from, { t: 'hello', reply: true, name: myName }); if (!P.polite) P.start(); return; } // nur eine Seite je Paar beginnt, die andere antwortet (keine Kollision)
       if (m.t === 'bye') return drop(m.from, `📴 ${call.peers.get(m.from)?.name || 'Jemand'} hat aufgelegt`);
       if (m.t === 'full') { toast('Der Anruf ist voll (höchstens 4 Personen)'); return; }
       if (m.t === 'away' || m.t === 'back') { const P = call.peers.get(m.from); P?.tile.classList.toggle('away', m.t === 'away'); return; }
-      const P = call.peers.get(m.from) || mk(m.from, m.name); if (!P) return;
+      const P = call.peers.get(m.from) || mk(m.from, m.name); if (!P) return; if (m.dev && !P.dev) P.dev = m.dev;
       // Signale je Gegenüber streng nacheinander verarbeiten (sonst kann ein Kandidat vor seiner Beschreibung ankommen)
       P.q = (P.q || Promise.resolve()).then(async () => {
         if (m.desc) {
@@ -226,7 +245,7 @@ async function openWindow(room, peer, mode = 'av') {
       }).catch(e => console.warn('Anruf-Signal', e));
     } catch (e) { console.warn('Anruf-Signal', e); }
   });
-  ch.subscribe(stt => { if (stt === 'SUBSCRIBED') send(null, { t: 'hello', name: myName }); else if (stt === 'CHANNEL_ERROR' || stt === 'TIMED_OUT') st('Signal gestört – Datenbankschema aktuell?'); });
+  ch.subscribe(stt => { if (stt === 'SUBSCRIBED') { if (take) send(null, { t: 'take' }); send(null, { t: 'hello', name: myName }); } else if (stt === 'CHANNEL_ERROR' || stt === 'TIMED_OUT') st('Signal gestört – Datenbankschema aktuell?'); });
 }
 // Freund dazuholen: Teilnehmer in der Datenbank eintragen, Einladung in seinen Chat, Klingeln
 async function addToCall() {
@@ -299,6 +318,9 @@ bus.on('callsignal', async s => {
   const c = document.createElement('div'); c.className = 'invcard callring'; c.dataset.uid = s.uid; c.setAttribute('role', 'alertdialog');
   c.innerHTML = `<div class="row">${avatarSvg(s.look || {}, 40)}<div><b>📹 ${esc(s.name)} ruft an</b><div class="small muted">Videoanruf</div></div></div><div class="row end"><button class="btn sm ghost" data-no>📵 Ablehnen</button><button class="btn sm pri" data-ok>📞 Annehmen</button></div>`;
   document.body.appendChild(c); const t = setTimeout(() => c.remove(), 60e3);
+  // Auf einem anderen Gerät dieses Kontos angenommen oder abgelehnt: hier nicht weiterklingeln
+  const pollT = setInterval(async () => { if (!c.isConnected) return clearInterval(pollT); const st = (await callStates([room])).get(room); if (!st || !c.isConnected) return;
+    if (st.answered_at || st.ended_at || st.declined) { clearInterval(pollT); c.remove(); import('./push.js').then(P => P.closeNotes('call-' + room)).catch(() => { }); if (st.answered_at && !st.ended_at) toast(`📱 Anruf mit ${s.name} auf einem anderen Gerät angenommen`, 4000); } }, 2000);
   const stopRing = ringTone(); const obs = new MutationObserver(() => { if (!c.isConnected) { stopRing(); obs.disconnect(); } }); obs.observe(document.body, { childList: true });
   c.onclick = async e => {
     if (e.target.closest('[data-no]')) { clearTimeout(t); c.remove(); callState(room, 'decline'); import('./push.js').then(P => P.closeNotes('call-' + room)).catch(() => { }); (await import('./online/presence.js')).callSignal(s.uid, 'callend'); return; }
