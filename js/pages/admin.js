@@ -27,6 +27,8 @@ export async function render(el) {
     <p class="small muted">Gilt für alle außer Admins: Diese Wörter werden im Chat durch Sternchen ersetzt (ganze Wörter, Groß- und Kleinschreibung egal). Links, E-Mail-Adressen und Telefonnummern werden immer abgelehnt. Ein Wort pro Zeile.</p>
     <textarea class="inp" id="cfWords" rows="8" spellcheck="false" placeholder="Wird geladen …"></textarea>
     <div class="row"><button class="btn" id="cfSave">Wortliste speichern</button><span class="small muted" id="cfInfo"></span></div>
+    <label class="f">Filter testen <span class="muted small">(Ergebnis wie bei einem normalen Konto – Admins selbst schreiben ungefiltert)</span><span class="row"><input class="inp" id="cfTry" placeholder="z. B. Du Idiot, schau auf www.example.de" style="flex:1"><button class="btn" id="cfTest">Testen</button></span></label>
+    <p class="small" id="cfOut"></p>
   </section>
   <section class="card form"><h2>📲 Push-Benachrichtigungen einrichten</h2>
     <p class="small muted">Push braucht ein Schlüsselpaar (VAPID). Es wird hier im Browser erzeugt und nirgends hingeschickt. Status: ${(await import('../push.js')).vapid() ? '✅ öffentlicher Schlüssel in online.json vorhanden' : '⚠️ noch kein öffentlicher Schlüssel in online.json'}</p>
@@ -184,6 +186,9 @@ export async function render(el) {
   const vg = el.querySelector('#vapGen'); if (vg) vg.onclick = async () => { const k = await (await import('../push.js')).makeVapid(); el.querySelector('#vapPub').value = k.publicKey; el.querySelector('#vapPriv').value = k.privateKey; el.querySelector('#vapOut').hidden = false; };
   { const ta = el.querySelector('#cfWords'), info = el.querySelector('#cfInfo');
     sb.rpc('chat_words_get').then(({ data, error }) => { ta.placeholder = ''; if (error) { info.textContent = /function|schema cache/i.test(error.message) ? 'Fehlt in der Datenbank: schema.sql ausführen' : error.message; return; } ta.value = data || ''; info.textContent = (data ? data.split('\n').length : 0) + ' Wörter'; });
+    el.querySelector('#cfTest').onclick = async () => { const out = el.querySelector('#cfOut'); const { data, error } = await sb.rpc('chat_filter_test', { p_body: el.querySelector('#cfTry').value });
+      if (error) { out.textContent = /function|schema cache/i.test(error.message) ? '⚠️ Fehlt in der Datenbank: schema.sql ausführen' : error.message; return; }
+      out.innerHTML = `${data.active ? '✅ Filter ist in der Datenbank aktiv' : '⚠️ Filter ist in der Datenbank nicht aktiv – schema.sql erneut ausführen'} · ${data.words} Wörter<br>` + (data.error ? `❌ Würde abgelehnt: ${esc(String(data.error).replace(/^Chat-Filter: /, ''))}` : `➡️ ${esc(data.result)}`); };
     el.querySelector('#cfSave').onclick = async () => { const { data, error } = await sb.rpc('chat_words_set', { p_words: ta.value }); if (error) return toast(error.message, 5000); info.textContent = data + ' Wörter'; toast('🛡️ Chat-Filter gespeichert'); }; }
   el.addEventListener('click', async e => {
     const ev = e.target.closest('[data-evdel]'); if (ev) { const { error } = await sb.from('events').delete().eq('id', ev.dataset.evdel); if (error) return toast(miss(error)); evAdm(); return; }
