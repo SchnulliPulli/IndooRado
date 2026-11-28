@@ -2,7 +2,7 @@
 // Schnellstart: Dateien kommen sofort aus dem Cache und werden im Hintergrund aktualisiert (stale-while-revalidate).
 // Eine neue App-Version bekommt einen neuen Cache-Namen; beim Wechsel lädt die Seite einmal neu (siehe app.js),
 // damit nie Dateien aus zwei Versionen gemischt werden.
-const CACHE = 'indoorado-v121';
+const CACHE = 'indoorado-v122';
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', e => {
@@ -21,4 +21,25 @@ self.addEventListener('fetch', e => {
     if (hit) { e.waitUntil(net); return hit; }
     return net;
   })));
+});
+
+// ---------- Push-Benachrichtigungen (neue Nachricht, Anruf) auch bei geschlossener App ----------
+self.addEventListener('push', e => {
+  let d = {}; try { d = e.data ? e.data.json() : {}; } catch (x) { }
+  const call = d.kind === 'call', safe = v => String(v || '').slice(0, 80);
+  const url = call ? `./#/?pcall=${encodeURIComponent(safe(d.room))}&from=${encodeURIComponent(safe(d.from))}&name=${encodeURIComponent(safe(d.name))}` : `./#/friends?open=${encodeURIComponent(safe(d.from))}`;
+  e.waitUntil(self.registration.showNotification(safe(d.title) || 'IndooRado', {
+    body: safe(d.body), tag: call ? 'call-' + safe(d.room) : 'msg-' + safe(d.from), renotify: true, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png',
+    requireInteraction: call, vibrate: call ? [400, 200, 400, 200, 400] : [120], data: { url, call },
+    actions: call ? [{ action: 'join', title: 'Annehmen' }, { action: 'no', title: 'Ablehnen' }] : [],
+  }));
+});
+self.addEventListener('notificationclick', e => {
+  e.notification.close(); if (e.action === 'no') return;
+  const url = new URL(e.notification.data?.url || './', self.registration.scope).href;
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    const c = list.find(x => x.url.startsWith(self.registration.scope));
+    if (c) { c.postMessage({ type: 'pushOpen', url }); return c.focus(); }
+    return self.clients.openWindow(url);
+  }));
 });

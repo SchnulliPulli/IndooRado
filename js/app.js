@@ -358,6 +358,14 @@ function netIndicator() {
   let t = null;
   bus.on('netbusy', n => { clearTimeout(t); if (n > 0) t = setTimeout(() => { pill.hidden = currentKey === 'ride'; }, 400); else pill.hidden = true; });
 }
+async function pushOpen(href) {
+  let h = ''; try { h = new URL(href, location.href).hash; } catch (e) { return; }
+  const m = h.match(/[?&]pcall=(IndooRado-[A-Za-z0-9]{24})/);
+  if (!m) { if (/^#\/friends\?open=[0-9a-f-]{36}$/i.test(h)) location.hash = h; return; }
+  const q = new URLSearchParams(h.split('?')[1] || ''); history.replaceState(null, '', location.pathname + '#/'); route();
+  const O = await import('./online/client.js'); for (let i = 0; i < 40 && !O.loggedIn(); i++) await new Promise(r => setTimeout(r, 250));
+  (await import('./call.js')).joinCall(m[1], { id: q.get('from') || '', name: (q.get('name') || 'Freund').slice(0, 40) });
+}
 async function init() {
   { const I = await import('./i18n.js'); await I.initI18n(); if (!I.langChosen() && !/^#\/(watch\/|tv\b)/.test(location.hash) && await I.pickLanguage()) return; } // Sprache wählen (erstes Öffnen)
   netIndicator();
@@ -389,6 +397,10 @@ async function init() {
   if (!/^#\/(watch\/|tv\b)/.test(location.hash)) import('./onboard.js').then(m => m.onboarding()).catch(e => console.error(e)); // Zuschauer sehen keine Einführung
   import('./eggs.js').then(m => m.initEggs()).catch(e => console.error(e));
   setTimeout(() => import('./ridesnap.js').then(m => m.offerResume()).catch(e => console.warn(e)), 1200); // unterbrochene Fahrt?
+  // Aus einer Push-Benachrichtigung geöffnet: Anruf annehmen bzw. Chat öffnen
+  if (/[?&]pcall=/.test(location.hash)) pushOpen(location.href);
+  navigator.serviceWorker?.addEventListener('message', e => { if (e.data?.type === 'pushOpen') pushOpen(e.data.url); });
+  bus.on('online', ev => { if (ev === 'SIGNED_IN' || ev === 'init') import('./push.js').then(m => m.refreshPush()).catch(() => { }); });
   reconnectKnown().catch(() => { });
   // Barrierefreiheit: Sprunglink zum Inhalt (ohne den Hash-Router zu stören), Tastenkürzel-Übersicht mit ?
   const sk = document.getElementById('skipLink'); if (sk) sk.onclick = e => { e.preventDefault(); document.getElementById('view')?.focus(); };

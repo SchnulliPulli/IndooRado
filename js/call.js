@@ -54,6 +54,7 @@ export async function startCall(friend) {
   const cr = await sb.rpc('call_create', { p_friend: friend.id }); if (cr.error) return toast('Anruf nicht möglich: ' + (/function|schema cache/i.test(cr.error.message) ? 'Datenbankschema erneut ausführen' : cr.error.message));
   const room = cr.data;
   const { error } = await sb.from('chat_messages').insert({ recipient: friend.id, body: `[[call:${room}]]` });
+  if (!error) import('./push.js').then(P => P.pushTo(friend.id, 'call', room)).catch(() => { });
   if (error) return toast('Anruf nicht möglich: ' + (/row-level/i.test(error.message) ? 'ihr seid nicht (mehr) befreundet oder zu viele Nachrichten' : error.message));
   const PR = await import('./online/presence.js'); const n = await PR.callSignal(friend.id, 'call');
   openWindow(room, { id: friend.id, name: friend.display_name || friend.name }, mode);
@@ -198,7 +199,7 @@ async function addToCall() {
   const id = window.__addPick; window.__addPick = null; if (v !== 'ok' || !id) return;
   const f = list.find(x => x.id === id); if (!f) return;
   const r = await sb.rpc('call_add', { p_room: call.room, p_friend: f.id }); if (r.error) return toast(/function|schema cache/i.test(r.error.message) ? 'Gruppenanrufe fehlen in der Datenbank: schema.sql neu ausführen' : r.error.message, 6000);
-  const ins = await sb.from('chat_messages').insert({ recipient: f.id, body: `[[call:${call.room}]]` }); if (ins.error) return toast(ins.error.message, 4000);
+  const ins = await sb.from('chat_messages').insert({ recipient: f.id, body: `[[call:${call.room}]]` }); if (ins.error) return toast(ins.error.message, 4000); import('./push.js').then(P => P.pushTo(f.id, 'call', call.room)).catch(() => { });
   const n = await PR.callSignal(f.id, 'call');
   toast(n ? `📞 Es klingelt bei ${f.display_name} …` : `${f.display_name} ist gerade nicht online – die Einladung liegt im Chat`, 4000);
 }

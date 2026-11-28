@@ -94,7 +94,7 @@ async function openFriend(sb, me, f, redraw) {
   };
   w.querySelector('#chForm').onsubmit = async e => {
     e.preventDefault(); const inp = w.querySelector('#chTxt'), body = inp.value.trim(); if (!body) return;
-    inp.disabled = true; const { error } = await sb.from('chat_messages').insert({ recipient: f.id, body }); inp.disabled = false;
+    inp.disabled = true; const { error } = await sb.from('chat_messages').insert({ recipient: f.id, body }); inp.disabled = false; if (!error) import('../push.js').then(P => P.pushTo(f.id, 'msg')).catch(() => { });
     if (error) return toast(/row-level security/i.test(error.message) ? 'Nicht gesendet (zu viele Nachrichten in kurzer Zeit oder keine Freundschaft mehr)' : miss(error));
     inp.value = ''; inp.focus(); loadChat();
   };

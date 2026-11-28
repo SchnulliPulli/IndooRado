@@ -2215,3 +2215,12 @@ wenn dich ein Freund anruft (nur angemeldet)	when a friend calls you (signed in 
 Test-Benachrichtigung	Test notification
 Uhrzeit für das Training des Tages	Time for today's workout
 Bild wird beim Fahrgerät angefragt … (tv3)	Requesting the picture from the riding device … (tv3)
+Auch bei geschlossener App (Push)	Also when the app is closed (push)
+(dieses Gerät)	(this device)
+Nachrichten und Anrufe kommen auch an, wenn IndooRado nicht läuft; tippen öffnet Chat bzw. Anruf. Braucht ein Konto. Die kurze Meldung (ohne Nachrichteninhalt) läuft verschlüsselt über den Push-Dienst deines Geräts (Google, Apple, Mozilla). iPhone/iPad: nur als App vom Home-Bildschirm.	Messages and calls arrive even when IndooRado isn't running; tapping opens the chat or call. Needs an account. The short notice (without message content) goes encrypted via your device's push service (Google, Apple, Mozilla). iPhone/iPad: only as an app from the home screen.
+Push-Benachrichtigungen an	Push notifications on
+Push aus	Push off
+Push braucht ein angemeldetes IndooRado-Konto	Push needs a signed-in IndooRado account
+Push ist noch nicht eingerichtet (öffentlicher Schlüssel fehlt in online.json)	Push isn't set up yet (public key missing in online.json)
+Dieser Browser kann keine Push-Benachrichtigungen	This browser can't do push notifications
+Auf dem iPhone erst IndooRado zum Home-Bildschirm hinzufügen und von dort öffnen	On iPhone, first add IndooRado to the home screen and open it from there

@@ -23,6 +23,15 @@ export async function render(el) {
       <div class="row"><button class="btn pri" id="anGo">Veröffentlichen</button></div></div>
     <div class="card"><h2>Ankündigungen</h2><div id="anList" class="small"></div></div>
   </section>
+  <section class="card form"><h2>📲 Push-Benachrichtigungen einrichten</h2>
+    <p class="small muted">Push braucht ein Schlüsselpaar (VAPID). Es wird hier im Browser erzeugt und nirgends hingeschickt. Status: ${(await import('../push.js')).vapid() ? '✅ öffentlicher Schlüssel in online.json vorhanden' : '⚠️ noch kein öffentlicher Schlüssel in online.json'}</p>
+    <div class="row"><button class="btn" id="vapGen">🔑 Schlüsselpaar erzeugen</button></div>
+    <div id="vapOut" hidden>
+      <label class="f">1. Öffentlicher Schlüssel → in <code>online.json</code> als <code>"vapid": "…"</code><input class="inp" id="vapPub" readonly></label>
+      <label class="f">2. Privater Schlüssel → nur in Supabase › Edge Functions › Secrets als <code>VAPID_PRIVATE_KEY</code><input class="inp" id="vapPriv" readonly></label>
+      <p class="small muted">3. Den öffentlichen Schlüssel zusätzlich als Secret <code>VAPID_PUBLIC_KEY</code> speichern. 4. Edge Function <code>push</code> anlegen (Verify JWT an). Den privaten Schlüssel nirgends sonst speichern oder verschicken; nach dem Schließen dieser Seite ist er weg. Ein neues Paar macht alle bisherigen Push-Anmeldungen ungültig (die Geräte melden sich beim nächsten Öffnen neu an).</p>
+    </div>
+  </section>
   <section class="card"><div class="row between"><h2>Aktivität (30 Tage)</h2><span class="small muted" id="adOnline"></span></div><canvas id="adChart" class="adchart"></canvas><div class="small muted" id="adTop"></div></section>
   <section class="grid2">
     <div class="card form"><h2>📅 Event planen</h2>
@@ -167,6 +176,7 @@ export async function render(el) {
     const { error } = await sb.from('events').insert({ route_kit, title: t, kind: $('#evK', el).value, route_id: $('#evR', el).value, workout_id: $('#evW', el).value || null, starts_at: new Date(st).toISOString(), duration_min: +$('#evD', el).value || 60, description: $('#evB', el).value.trim() });
     if (error) return toast(miss(error), 5000); toast('📅 Event angelegt'); $('#evT', el).value = ''; $('#evB', el).value = ''; evAdm();
   };
+  const vg = el.querySelector('#vapGen'); if (vg) vg.onclick = async () => { const k = await (await import('../push.js')).makeVapid(); el.querySelector('#vapPub').value = k.publicKey; el.querySelector('#vapPriv').value = k.privateKey; el.querySelector('#vapOut').hidden = false; };
   el.addEventListener('click', async e => {
     const ev = e.target.closest('[data-evdel]'); if (ev) { const { error } = await sb.from('events').delete().eq('id', ev.dataset.evdel); if (error) return toast(miss(error)); evAdm(); return; }
     const cl = e.target.closest('[data-cldel]'); if (cl) { if (!(await dialog({ title: 'Team auflösen?', html: '<p class="muted">Alle Mitglieder verlieren ihr Team. Fahrten bleiben erhalten.</p>', buttons: [{ label: 'Abbrechen', value: 0 }, { label: 'Auflösen', value: 1, cls: 'pri' }] }))) return; const { error } = await sb.from('clubs').delete().eq('id', cl.dataset.cldel); if (error) return toast(miss(error)); clAdm(); return; }
