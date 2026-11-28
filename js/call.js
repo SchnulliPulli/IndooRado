@@ -94,6 +94,8 @@ export async function startCall(friend) {
   const PR = await import('./online/presence.js'); const n = await PR.callSignal(friend.id, 'call');
   openWindow(room, { id: friend.id, name: friend.display_name || friend.name }, mode); call.isCaller = true;
   // Keine Antwort nach 45 s: auflegen, der Freund bekommt „Verpasster Anruf“
+  // Abgelehnt? (auch wenn das Live-Signal nicht ankommt, z. B. Ablehnen aus der Gerätemeldung)
+  const decT = setInterval(async () => { if (call.room !== room) return clearInterval(decT); const st = (await callStates([room])).get(room); if (st?.answered_at) return clearInterval(decT); if (st?.declined) { clearInterval(decT); toast(`📵 ${friend.display_name || friend.name} hat abgelehnt`, 4000); call.isCaller = false; hangUp(false); } }, 2500);
   setTimeout(async () => { if (call.room !== room) return; const st = (await callStates([room])).get(room); if (st && !st.answered_at && !st.ended_at) { toast(`📵 ${friend.display_name || friend.name} hat nicht abgenommen`, 4000); hangUp(); } }, 45e3);
   toast(n ? `📞 Es klingelt bei ${friend.display_name || friend.name} …` : `${friend.display_name || friend.name} ist gerade nicht online – die Einladung liegt im Chat`, 4000);
 }
@@ -291,7 +293,7 @@ bus.on('callsignal', async s => {
   { const st = (await callStates([room])).get(room); if (st && (st.ended_at || st.declined)) return; } // schon vorbei
   const { avatarSvg } = await import('./components.js');
   { const P = await import('./push.js');
-    if (document.hidden) { if (!(await P.pushActive())) import('./comfort.js').then(C => C.notify(`📹 ${s.name} ruft an`, 'Videoanruf in IndooRado – zum Annehmen die App öffnen.', 'call-' + room, 'call')).catch(() => { }); } // mit Push kommt die Meldung schon vom Server
+    if (!(await P.appActive())) { if (!(await P.pushActive())) import('./comfort.js').then(C => C.notify(`📹 ${s.name} ruft an`, 'Videoanruf in IndooRado – zum Annehmen die App öffnen.', 'call-' + room, 'call')).catch(() => { }); } // mit Push kommt die Meldung schon vom Server
     else setTimeout(() => P.closeNotes('call-' + room), 1500); } // App ist offen: Klingel-Fenster reicht, Meldung in der Leiste schließen
   if (document.querySelector(`.callring[data-uid="${CSS.escape(s.uid)}"]`)) return; // klingelt schon (Live-Signal und Push gleichzeitig)
   const c = document.createElement('div'); c.className = 'invcard callring'; c.dataset.uid = s.uid; c.setAttribute('role', 'alertdialog');

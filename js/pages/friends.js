@@ -45,7 +45,7 @@ export async function render(el, params = [], query = '') {
   const act = async (fn, args, msg) => { const { error } = await sb.rpc(fn, args); if (error) { toast(miss(error)); return false; } if (msg) toast(msg); draw(); $('#frQ', el).dispatchEvent(new Event('input')); return true; };
   el.onclick = async e => {
     const t = e.target.closest('button'); if (!t) return;
-    if (t.dataset.req) return act('friend_request', { p_to: t.dataset.req }, 'Anfrage gesendet');
+    if (t.dataset.req) { const to = t.dataset.req; await act('friend_request', { p_to: to }, 'Anfrage gesendet'); import('../push.js').then(P => P.pushTo(to, 'friendreq')).catch(() => { }); return; }
     if (t.dataset.acc) return act('friend_respond', { p_other: t.dataset.acc, p_accept: true }, '🎉 Ihr seid jetzt Freunde');
     if (t.dataset.dec) return act('friend_respond', { p_other: t.dataset.dec, p_accept: false }, 'Abgelehnt');
     if (t.dataset.del) return act('friend_remove', { p_other: t.dataset.del }, 'Erledigt');

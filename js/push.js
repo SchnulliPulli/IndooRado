@@ -11,7 +11,7 @@ const enc = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+
 export const vapid = () => String(O.config?.()?.vapid || '').trim();
 export const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && typeof Notification !== 'undefined' && (location.protocol === 'https:' || location.hostname === 'localhost');
 export const pushWanted = () => { try { return localStorage.getItem('vvPush') !== '0'; } catch (e) { return true; } }; // Standard: an (abschaltbar je Gerät)
-const prefs = () => ({ msg: profile.notif?.msg !== false, call: profile.notif?.call !== false });
+const prefs = () => ({ msg: profile.notif?.msg !== false, call: profile.notif?.call !== false, friendreq: profile.notif?.friendreq !== false, invite: profile.notif?.invite !== false });
 const rpc = async (n, a) => { const { data, error } = await (await O.client()).rpc(n, a); if (error) throw error; return data; };
 
 async function reg() { const r = await navigator.serviceWorker.getRegistration(); if (r) return r; return navigator.serviceWorker.ready; }
@@ -39,8 +39,8 @@ export async function disablePush() {
 // Nach der Anmeldung bzw. bei geänderten Einstellungen erneut melden (Push-Adressen können sich ändern)
 export async function refreshPush() { if (pushWanted() && pushSupported() && O.loggedIn() && vapid() && Notification.permission === 'granted') try { await enablePush(); } catch (e) { } }
 // Absender: nach dem Senden einer Nachricht bzw. beim Anrufen den Empfänger benachrichtigen (Fehler sind egal)
-export async function pushTo(to, kind, room) {
-  try { if (!O.loggedIn()) return; await (await O.client()).functions.invoke('push', { body: { to, kind, room } }); } catch (e) { }
+export async function pushTo(to, kind, room, info) {
+  try { if (!O.loggedIn()) return; await (await O.client()).functions.invoke('push', { body: { to, kind, room, info } }); } catch (e) { }
 }
 
 // Admin: VAPID-Schlüsselpaar im Browser erzeugen (verlässt das Gerät nicht)
@@ -72,4 +72,10 @@ export async function pushActive() {
 // Meldungen in der Leiste schließen (z. B. wenn das Klingeln in der App erscheint oder der Anruf vorbei ist)
 export async function closeNotes(prefix) {
   try { const r = await navigator.serviceWorker?.getRegistration(); for (const n of await r?.getNotifications() || []) if (!prefix || String(n.tag).startsWith(prefix)) n.close(); } catch (e) { }
+}
+
+// Ist die App wirklich aktiv (sichtbar, im Fokus, Display an)? Bei gesperrtem Handy zeichnet die Seite keine Bilder mehr.
+export function appActive(ms = 700) {
+  if (document.visibilityState !== 'visible' || !document.hasFocus()) return Promise.resolve(false);
+  return new Promise(res => { const t = setTimeout(() => res(false), ms); requestAnimationFrame(() => { clearTimeout(t); res(document.visibilityState === 'visible'); }); });
 }

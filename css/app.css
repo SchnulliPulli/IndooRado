@@ -1443,3 +1443,20 @@ body.watchtv .tvprof { height: 15vh; }
 @media (max-width: 520px) { .ibhead { grid-template-columns: 1fr auto; } .ibhead .ibbtns { grid-column: 1 / -1; grid-row: 2; } .ibhead .ibx { grid-column: 2; grid-row: 1; } }
 .msgpop .row.end { justify-content: flex-end; gap: 8px; }
 .invcard.msgpop .row.end { align-self: stretch; justify-content: flex-end; }
+/* Chat: Eingabe samt Fokusrahmen nicht abschneiden */
+.frdlg > [data-pane="chat"] { overflow: visible; min-height: 0; }
+.frdlg .chatin { flex: none; padding: 3px; margin: 6px -3px -3px; }
+.frdlg .chatin .inp:focus { outline-offset: 0; }
+/* Nachrichtencenter: schmale Knöpfe, auf dem Handy in einer Zeile mit dem Titel */
+.ibhead { grid-template-columns: 1fr auto auto; }
+.ibbtns .btn, .ibhead .ibx { height: 30px; min-height: 30px; font-size: 13px; padding: 0 10px; border-radius: 9px; }
+.ibhead .ibx { width: 30px; padding: 0; }
+.ibhead h2 { font-size: 1.15rem; line-height: 30px; }
+@media (max-width: 520px) {
+  .ibhead { grid-template-columns: 1fr auto auto; } .ibhead .ibbtns { grid-column: auto; grid-row: auto; } .ibhead .ibx { grid-column: auto; grid-row: auto; }
+  .ibbtns .ibl2 { display: none; } .ibbtns .btn { padding: 0 8px; }
+}
+.ibsec { font-size: 12px; font-weight: 700; opacity: .7; margin: 10px 4px 2px; text-transform: uppercase; letter-spacing: .04em; }
+.ibico { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 18px; background: color-mix(in srgb, currentColor 7%, transparent); }
+.ibnote:not([data-note]) { cursor: default; }
+.invsub { margin: 10px 4px 4px; }

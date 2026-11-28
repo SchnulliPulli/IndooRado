@@ -101,12 +101,15 @@ async function sendInvite(sidTo, name) {
 // Auswahl, wen man in die Lobby einlädt: alle Online-Spieler, die noch nicht dabei sind
 async function pickInvite(lobbyId) {
   const cand = [...PR.P.peers.entries()].filter(([, m]) => m.joined !== lobbyId && m.host?.id !== lobbyId);
-  if (!cand.length) return toast('Gerade ist niemand anderes online, den du einladen könntest');
+  // Freunde, die gerade nicht online sind: Einladung per Push aufs Handy
+  let off = []; try { const on = new Set([...PR.P.peers.values()].map(m => m.uid)); const { data } = await (await O.client()).rpc('friend_list'); off = (data || []).filter(f => f.status === 'accepted' && !on.has(f.id)); } catch (e) { }
+  if (!cand.length && !off.length) return toast('Gerade ist niemand online, den du einladen könntest – und du hast noch keine Freunde für eine Einladung per Push');
   const w = document.createElement('div'); w.className = 'modal on';
-  w.innerHTML = `<div class="card dlg"><h2>Wen einladen?</h2><div class="invlist">${cand.map(([k, m]) => `<button class="srow" data-sid="${esc(k)}" data-name="${esc(m.name)}">${who(m, `<small class="muted">${m.where === 'ride' ? '🚴 fährt gerade' : '☕ im Menü'}</small>`)}<span class="btn xs pri">Einladen</span></button>`).join('')}</div><div class="row end"><button class="btn" data-x>Fertig</button></div></div>`;
+  w.innerHTML = `<div class="card dlg"><h2>Wen einladen?</h2><div class="invlist">${cand.map(([k, m]) => `<button class="srow" data-sid="${esc(k)}" data-name="${esc(m.name)}">${who(m, `<small class="muted">${m.where === 'ride' ? '🚴 fährt gerade' : '☕ im Menü'}</small>`)}<span class="btn xs pri">Einladen</span></button>`).join('')}${off.length ? `<div class="small muted invsub">📲 Freunde, die gerade nicht online sind – Einladung aufs Handy</div>` + off.map(f => `<button class="srow" data-uid="${esc(f.id)}" data-name="${esc(f.display_name)}"><span class="row">${esc(f.display_name)}</span><span class="btn xs">📲 Einladen</span></button>`).join('') : ''}</div><div class="row end"><button class="btn" data-x>Fertig</button></div></div>`;
   document.body.appendChild(w);
   w.onclick = async e => {
     if (e.target === w || e.target.closest('[data-x]')) return w.remove();
+    const u = e.target.closest('[data-uid]'); if (u && !u.disabled) { u.disabled = true; try { await PR.invitePush(u.dataset.uid); toast(`📲 ${u.dataset.name} per Push eingeladen`); u.querySelector('.btn').textContent = 'Eingeladen ✓'; } catch (x) { u.disabled = false; toast(x.message, 4000); } return; }
     const b = e.target.closest('[data-sid]'); if (!b || b.disabled) return;
     b.disabled = true; await sendInvite(b.dataset.sid, b.dataset.name); b.querySelector('.btn').textContent = 'Eingeladen ✓';
   };
@@ -133,7 +136,7 @@ async function players(el) {
     const fa = e.target.closest('[data-facc]');
     if (fa) { const { error } = await (await O.client()).rpc('friend_respond', { p_other: fa.dataset.facc, p_accept: true }); if (error) return toast(error.message); toast('🎉 Ihr seid jetzt Freunde'); loadRel(); return; }
     const fr = e.target.closest('[data-fr]');
-    if (fr) { fr.disabled = true; const { data, error } = await (await O.client()).rpc('friend_request', { p_to: fr.dataset.fr }); if (error) { fr.disabled = false; return toast(/function|schema cache/i.test(error.message) ? 'Freunde fehlen in der Datenbank: Datenbankschema erneut ausführen' : error.message); } fr.textContent = data === 'friend' ? '✓ Freunde' : '✓ Angefragt'; toast(data === 'friend' ? 'Ihr seid jetzt Freunde' : 'Freundschaftsanfrage gesendet'); loadRel(); return; }
+    if (fr) { fr.disabled = true; const { data, error } = await (await O.client()).rpc('friend_request', { p_to: fr.dataset.fr }); if (error) { fr.disabled = false; return toast(/function|schema cache/i.test(error.message) ? 'Freunde fehlen in der Datenbank: Datenbankschema erneut ausführen' : error.message); } if (data !== 'friend') import('../push.js').then(P => P.pushTo(fr.dataset.fr, 'friendreq')).catch(() => { }); fr.textContent = data === 'friend' ? '✓ Freunde' : '✓ Angefragt'; toast(data === 'friend' ? 'Ihr seid jetzt Freunde' : 'Freundschaftsanfrage gesendet'); loadRel(); return; }
     const iv = e.target.closest('[data-inv]'); if (iv) { sendInvite(iv.dataset.inv, iv.dataset.name); return; } const b = e.target.closest('[data-ride]'); if (!b) return;
     if (!(await (await import('../online/sharedroute.js')).prepareJoin(b.dataset.sid, b.dataset.ride, toast))) return;
     sel.routeId = b.dataset.ride; saveSel(); if (b.dataset.sid) sessionStorage.setItem('joinRider', JSON.stringify({ sid: b.dataset.sid, name: b.dataset.name })); location.hash = '#/ride'; };

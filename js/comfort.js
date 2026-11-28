@@ -27,12 +27,15 @@ export const NOTIF = [
   ['friend', '👥 Freund fährt gerade', 'wenn ein Freund eine Fahrt startet (nur angemeldet)'],
   ['msg', '💬 Nachrichten und Freundschaftsanfragen', 'neue Nachricht oder Anfrage (nur angemeldet)'],
   ['call', '📹 Eingehender Anruf', 'wenn dich ein Freund anruft (nur angemeldet)'],
+  ['friendreq', '👋 Freundschaftsanfragen', 'wenn dir jemand eine Anfrage schickt (nur angemeldet)'],
+  ['invite', '🚴 Einladungen zu Gruppenfahrten', 'wenn dich ein Freund zu einer Gruppenfahrt oder zum Mitfahren einlädt'],
 ];
 export const notifOn = k => profile.reminders === true && profile.notif?.[k] !== false;
 export function setNotif(k, on) { profile.notif = { ...(profile.notif || {}), [k]: !!on }; saveProfile(); scheduleReminders(); }
 export async function notify(title, body, tag, kind) {
   if ((kind && !notifOn(kind)) || profile.reminders !== true || typeof Notification === 'undefined' || Notification.permission !== 'granted') return false;
-  if (!document.hidden && document.hasFocus() && tag !== 'test') { toast(`${title} – ${body}`, 6000); return true; } // App offen und im Fokus: nur in der App
+  if (tag !== 'test' && await (await import('./push.js')).appActive()) { toast(`${title} – ${body}`, 6000); import('./notilog.js').then(N => N.addNote({ icon: '🔔', title, body })).catch(() => { }); return true; } // App aktiv: nur in der App
+  import('./notilog.js').then(N => N.addNote({ icon: '🔔', title, body })).catch(() => { });
   try { const reg = await navigator.serviceWorker?.getRegistration(); if (reg) await reg.showNotification(title, { body, tag, icon: 'icons/icon-192.png', badge: 'icons/badge-96.png' }); else new Notification(title, { body, tag }); return true; } catch (e) { return false; }
 }
 export const testNotify = () => notify('🔔 IndooRado', 'So sehen Benachrichtigungen aus.', 'test');

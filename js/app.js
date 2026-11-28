@@ -156,7 +156,7 @@ function paint() {
   }
 }
 document.addEventListener('click', e => { const b = e.target.closest('[data-inbox],[data-inbox-open]'); if (b) import('./inbox.js').then(m => m.openInbox()); });
-setInterval(() => document.hidden || msgUpd(true), 30e3);
+setInterval(() => document.hidden || msgUpd(true), 15e3);
 setInterval(() => { if (document.hidden && profile.reminders === true && profile.notif?.msg !== false) msgUpd(true); }, 60e3); // im Hintergrund für Benachrichtigungen
 bus.on('online', () => setTimeout(() => msgUpd(true), 500)); bus.on('inbox', () => msgUpd(true));
 async function route() {
@@ -292,22 +292,30 @@ async function newsBar(el) {
   import('./online/sync.js').then(m => m.announcements()).then(a => { anns = a || []; try { localStorage.setItem('vvAnnCache', JSON.stringify(anns.map(x => ({ id: x.id, level: x.level, title: x.title, body: x.body })))); } catch (e) { } draw(); }).catch(() => { });
 }
 // Einladung eines anderen Spielers: Karte unten rechts auf jeder Seite, mit Beitreten bzw. Mitfahren
+const invSeen = new Map();
+// Einladung annehmen (aus der Karte, dem Nachrichtencenter oder einer Push-Meldung)
+export async function acceptInvite(inv) {
+  const PR = await import('./online/presence.js'), { sel, saveSel } = await import('./state.js');
+  if (inv.kind === 'lobby') { PR.joinLobby(inv.lobby); toast('Beigetreten, die Fahrt startet automatisch'); location.hash = '#/lobby'; return; }
+  let sid = inv.from; if (inv.uid && !PR.P.peers.has(sid)) { for (let i = 0; i < 40 && !PR.sidsOf(inv.uid).length; i++) await new Promise(r => setTimeout(r, 250)); sid = PR.sidsOf(inv.uid)[0]; }
+  if (!sid) return toast(`${inv.name || 'Dein Freund'} fährt gerade nicht mehr`, 5000);
+  if (!(await (await import('./online/sharedroute.js')).prepareJoin(sid, inv.route, toast))) return; sel.routeId = inv.route; saveSel(); sessionStorage.setItem('joinRider', JSON.stringify({ sid, name: inv.name })); location.hash = '#/ride';
+}
 bus.on('invite', async inv => {
+  const ik = (inv.uid || inv.from) + ':' + (inv.lobby || inv.route); if (Date.now() - (invSeen.get(ik) || 0) < 120e3) return; invSeen.set(ik, Date.now()); // Live-Signal und Push nicht doppelt
+  import('./notilog.js').then(N => N.addNote({ icon: '🚴', title: `${inv.name} ${inv.kind === 'lobby' ? 'lädt dich zur Gruppenfahrt ein' : 'möchte, dass du mitfährst'}`, body: inv.kind === 'lobby' ? `„${inv.title || ''}“ · ${inv.routeName || ''}` : inv.routeName || '', act: { t: 'invite', inv: { kind: inv.kind, lobby: inv.lobby, route: inv.route, from: inv.from, uid: inv.uid, name: inv.name, title: inv.title, routeName: inv.routeName } }, ttl: 15 * 60e3 })).catch(() => { });
   const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const box = document.querySelector('.invstack') || document.body.appendChild(Object.assign(document.createElement('div'), { className: 'invstack' }));
   const c = document.createElement('div'); c.className = 'card invcard';
   const min = ms => ms <= 0 ? 'startet jetzt' : ms < 60e3 ? `startet in ${Math.ceil(ms / 1000)} s` : `startet in ${Math.ceil(ms / 60e3)} min`;
-  c.innerHTML = `<div class="nbico">${avatarSvg(inv.look || {}, 40)}</div><div class="nbtxt"><small>📨 Einladung</small><b>${esc(inv.name)} ${inv.kind === 'lobby' ? 'lädt dich zur Gruppenfahrt ein' : 'möchte, dass du mitfährst'}</b><span>${inv.kind === 'lobby' ? `„${esc(inv.title)}“ · ${esc(inv.routeName)} · ${min(inv.startAt - Date.now())}` : esc(inv.routeName)}</span><div class="row"><button class="btn sm pri" data-ok>${inv.kind === 'lobby' ? 'Beitreten' : 'Mitfahren'}</button><button class="btn sm ghost" data-no>Später</button></div></div>`;
+  c.innerHTML = `<div class="nbico">${avatarSvg(inv.look || {}, 40)}</div><div class="nbtxt"><small>📨 Einladung</small><b>${esc(inv.name)} ${inv.kind === 'lobby' ? 'lädt dich zur Gruppenfahrt ein' : 'möchte, dass du mitfährst'}</b><span>${inv.kind === 'lobby' ? `„${esc(inv.title)}“ · ${esc(inv.routeName)}${inv.startAt ? ' · ' + min(inv.startAt - Date.now()) : ''}` : esc(inv.routeName)}</span><div class="row"><button class="btn sm pri" data-ok>${inv.kind === 'lobby' ? 'Beitreten' : 'Mitfahren'}</button><button class="btn sm ghost" data-no>Später</button></div></div>`;
   box.appendChild(c);
   try { (await import('./sound.js')).sound?.pass?.(); } catch (e) { }
   const t = setTimeout(() => c.remove(), 90e3);
   c.onclick = async e => {
     if (e.target.closest('[data-no]')) { clearTimeout(t); c.remove(); return; }
     if (!e.target.closest('[data-ok]')) return;
-    clearTimeout(t); c.remove();
-    const PR = await import('./online/presence.js'), { sel, saveSel } = await import('./state.js');
-    if (inv.kind === 'lobby') { PR.joinLobby(inv.lobby); toast('Beigetreten, die Fahrt startet automatisch'); location.hash = '#/lobby'; }
-    else { if (!(await (await import('./online/sharedroute.js')).prepareJoin(inv.from, inv.route, toast))) return; sel.routeId = inv.route; saveSel(); sessionStorage.setItem('joinRider', JSON.stringify({ sid: inv.from, name: inv.name })); location.hash = '#/ride'; }
+    clearTimeout(t); c.remove(); acceptInvite(inv);
   };
 });
 async function announce(el) {
@@ -361,6 +369,23 @@ function netIndicator() {
 }
 async function pushOpen(href) {
   let h = ''; try { h = new URL(href, location.href).hash; } catch (e) { return; }
+  const qp = new URLSearchParams(h.split('?')[1] || ''), waitOnline = async () => { const O = await import('./online/client.js'); for (let i = 0; i < 160 && !(O.loggedIn() && O.online.ready && O.access().ok); i++) await new Promise(r => setTimeout(r, 250)); return O; };
+  if (qp.has('pdecline')) { // Anruf aus der Meldung abgelehnt
+    history.replaceState(null, '', location.pathname + '#/'); const room = qp.get('pdecline'), from = qp.get('from'); await waitOnline();
+    if (/^IndooRado-[A-Za-z0-9]{24}$/.test(room)) { const C = await import('./call.js'); C.callState(room, 'decline'); import('./online/presence.js').then(PR => PR.callSignal(from, 'callend')).catch(() => { }); toast('📵 Anruf abgelehnt'); }
+    return;
+  }
+  if (qp.has('pfreq')) { // Freundschaftsanfrage aus der Meldung annehmen
+    history.replaceState(null, '', location.pathname + '#/friends'); const O = await waitOnline(); const id = qp.get('pfreq');
+    if (/^[0-9a-f-]{36}$/i.test(id)) { const { error } = await (await O.client()).rpc('friend_respond', { p_other: id, p_accept: true }); toast(error ? error.message : '🎉 Ihr seid jetzt Freunde'); bus.emit('inbox'); }
+    route(); return;
+  }
+  if (qp.has('pinv')) { // Einladung aus der Meldung annehmen
+    history.replaceState(null, '', location.pathname + '#/'); await waitOnline(); await import('./online/presence.js');
+    const inv = { kind: qp.get('k') === 'ride' ? 'ride' : 'lobby', uid: qp.get('from'), from: '', name: qp.get('name') || 'Freund', lobby: qp.get('lobby'), route: qp.get('route') };
+    for (let i = 0; i < 40; i++) { const PR = await import('./online/presence.js'); if (PR.P.ready) break; await new Promise(r => setTimeout(r, 250)); }
+    acceptInvite(inv); return;
+  }
   const m = h.match(/[?&]pcall=(IndooRado-[A-Za-z0-9]{24})/);
   if (!m) { const o = h.match(/^#\/friends\?open=([0-9a-f-]{36})$/i); if (o) { const O = await import('./online/client.js'); for (let i = 0; i < 120 && !(O.loggedIn() && O.online.ready); i++) await new Promise(r => setTimeout(r, 250)); (await import('./pages/friends.js')).openChatWith(o[1]); } return; }
   const q = new URLSearchParams(h.split('?')[1] || ''), peer = { id: q.get('from') || '', name: (q.get('name') || 'Freund').slice(0, 40) };
@@ -419,19 +444,22 @@ async function init() {
   // Aus einer Push-Benachrichtigung geöffnet: Anruf annehmen bzw. Chat öffnen
   if (/[?&]pcall=/.test(location.hash)) pushOpen(location.href);
   navigator.serviceWorker?.addEventListener('message', e => {
+    if (e.data?.type === 'ping' && e.ports?.[0]) { const port = e.ports[0]; requestAnimationFrame(() => port.postMessage({ active: document.visibilityState === 'visible' && document.hasFocus() })); return; } // bei gesperrtem Handy zeichnet die Seite nicht – keine Antwort
     if (e.data?.type === 'pushOpen') pushOpen(e.data.url);
     // Push bei offener App im Fokus: statt Gerätemeldung der Hinweis in der App
     if (e.data?.type === 'pushIn') { const d = e.data.d || {}; if (!/^[0-9a-f-]{36}$/i.test(d.from || '')) return;
       if (d.kind === 'msg') bus.emit('chatsignal', { uid: d.from, name: d.name });
       else if (d.kind === 'call') bus.emit('callsignal', { kind: 'call', uid: d.from, name: d.name, look: {} });
-      else if (d.kind === 'missed') { bus.emit('callsignal', { kind: 'callend', uid: d.from, name: d.name }); toast(`📵 Verpasster Anruf von ${d.name || 'Freund'}`, 6000); bus.emit('inbox'); } }
+      else if (d.kind === 'friendreq') { toast(`👋 ${d.name || 'Jemand'} möchte mit dir befreundet sein – siehe Nachrichten`, 6000); bus.emit('inbox'); }
+      else if (d.kind === 'invite') { const i = d.info || {}; bus.emit('invite', { kind: i.k === 'ride' ? 'ride' : 'lobby', uid: d.from, from: '', name: d.name, lobby: i.lobby, title: i.title, route: i.route, routeName: i.routeName, look: {} }); }
+      else if (d.kind === 'missed') { bus.emit('callsignal', { kind: 'callend', uid: d.from, name: d.name }); toast(`📵 Verpasster Anruf von ${d.name || 'Freund'}`, 6000); import('./notilog.js').then(N => N.addNote({ icon: '📵', title: `Verpasster Anruf von ${d.name || 'Freund'}`, act: { t: 'chat', uid: d.from } })); bus.emit('inbox'); } }
   });
   bus.on('online', ev => { if (ev === 'SIGNED_IN' || ev === 'init') import('./push.js').then(m => m.refreshPush()).catch(() => { }); });
   reconnectKnown().catch(() => { });
   // Barrierefreiheit: Sprunglink zum Inhalt (ohne den Hash-Router zu stören), Tastenkürzel-Übersicht mit ?
   const sk = document.getElementById('skipLink'); if (sk) sk.onclick = e => { e.preventDefault(); document.getElementById('view')?.focus(); };
   import('./shortcuts.js').then(m => m.initShortcuts());
-  import('./online/client.js').then(O => { if (O.configured()) { import('./call.js'); import('./msgpop.js'); } }); // Videoanrufe: nur mit Online-Konto, lädt nichts Externes ohne Anruf
+  onlineP.finally(() => import('./online/client.js').then(O => { if (O.configured()) { import('./call.js'); import('./msgpop.js'); } })); // erst nach dem Laden der Online-Konfiguration // Videoanrufe: nur mit Online-Konto, lädt nichts Externes ohne Anruf
   import('./sensors.js').then(m => m.reconnectSensors()).catch(() => { });
   // NAS-Abgleich: neuerer Stand vom NAS wird übernommen, danach Seite neu aufbauen
   // Erst den Online-Login abwarten: angemeldet läuft der Abgleich über das Konto (bindOnline), sonst wie bisher über NAS/Cloud

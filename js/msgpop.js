@@ -4,9 +4,17 @@ import { esc, bus } from './util.js';
 import * as O from './online/client.js';
 
 const shown = new Set();
+// Ersatzweg: Kommt kein Live-Signal an, aber der Zähler steigt, die neueste ungelesene Nachricht als Hinweis zeigen
+let lastN = null;
+bus.on('msgCount', async n => {
+  const up = n != null && lastN != null && n > lastN; if (n != null) lastN = n; if (!up) return;
+  const me = O.online.user?.id; if (!me) return;
+  try { const { data } = await (await O.client()).from('chat_messages').select('sender').eq('recipient', me).is('read_at', null).order('created_at', { ascending: false }).limit(1); if (data?.[0]) bus.emit('chatsignal', { uid: data[0].sender }); } catch (e) { }
+});
 bus.on('chatsignal', async s => {
   bus.emit('chatnew', { uid: s.uid }); bus.emit('inbox');
   if (document.querySelector(`.frdlg[data-chat="${CSS.escape(s.uid)}"]`)) return; // Chat ist schon offen
+  if (!(await (await import('./push.js')).appActive())) return; // gesperrt oder im Hintergrund: dafür gibt es die Gerätemeldung
   const me = O.online.user?.id; if (!me) return;
   let m = null; try { const { data } = await (await O.client()).from('chat_messages').select('id,body,created_at').eq('sender', s.uid).eq('recipient', me).order('created_at', { ascending: false }).limit(1); m = data?.[0]; } catch (e) { }
   if (!m || /^\[\[call:/.test(m.body) || shown.has(m.id) || Date.now() - new Date(m.created_at) > 120e3) return;

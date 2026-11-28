@@ -148,6 +148,7 @@ export async function invite(toSid) {
   if (Date.now() - (lastInv.get(toSid) || 0) < 20e3) throw new Error('Gerade erst eingeladen, bitte kurz warten');
   lastInv.set(toSid, Date.now());
   const r = await P.ch.send({ type: 'broadcast', event: 'invite', payload: { to: toSid, from: sid, name: online.profile?.display_name || 'Fahrer', ...o } });
+  const tu = P.peers.get(toSid)?.uid; if (tu) import('../push.js').then(Pu => Pu.pushTo(tu, 'invite', null, { k: o.kind, lobby: o.lobby, title: o.title, route: o.route, routeName: o.routeName })).catch(() => { }); // auch bei gesperrtem Handy
   if (r !== 'ok') throw new Error('Einladung konnte nicht gesendet werden');
   return o;
 }
@@ -186,3 +187,11 @@ async function startGroup(l) {
   saveSel(); sessionStorage.setItem('groupRide', JSON.stringify({ id, title: l.title, race: l.race, hostSid: l.hostSid, isHost: !!l.mine, settings: G })); if (l.race) sessionStorage.setItem('raceNext', '1'); setStatus({ joined: null }); if (l.mine) setTimeout(() => { if (P.me.host?.id === id) setStatus({ host: null }); }, 60e3); bus.emit('groupstart', l); location.hash = '#/ride';
 }
 setInterval(checkStart, 1000);
+
+// Freund einladen, der gerade nicht online ist (nur per Push)
+export async function invitePush(uid) {
+  const o = inviteOffer(); if (!o) throw new Error('Leg zuerst eine Gruppenfahrt in der Lobby an oder starte eine Fahrt, dann kannst du einladen.');
+  if (Date.now() - (lastInv.get('u:' + uid) || 0) < 20e3) throw new Error('Gerade erst eingeladen, bitte kurz warten'); lastInv.set('u:' + uid, Date.now());
+  await (await import('../push.js')).pushTo(uid, 'invite', null, { k: o.kind, lobby: o.lobby, title: o.title, route: o.route, routeName: o.routeName });
+  return o;
+}
