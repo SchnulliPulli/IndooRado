@@ -111,7 +111,7 @@ async function openFriend(sb, me, f, redraw) {
   w.querySelector('#chForm').onsubmit = async e => {
     e.preventDefault(); const inp = w.querySelector('#chTxt'), body = inp.value.trim(); if (!body) return;
     inp.disabled = true; const { error } = await sb.from('chat_messages').insert({ recipient: f.id, body }); inp.disabled = false; if (!error) { import('../push.js').then(P => P.pushTo(f.id, 'msg')).catch(() => { }); import('../online/presence.js').then(PR => PR.callSignal(f.id, 'msg')).catch(() => { }); bus.emit('chatnew', { uid: f.id }); }
-    if (error) return toast(/row-level security/i.test(error.message) ? 'Nicht gesendet (zu viele Nachrichten in kurzer Zeit oder keine Freundschaft mehr)' : miss(error));
+    if (error) return toast(/Chat-Filter: /.test(error.message) ? '🛡️ ' + error.message.replace(/^.*Chat-Filter: /, '') + ' – die Nachricht wurde nicht gesendet' : /row-level security/i.test(error.message) ? 'Nicht gesendet (zu viele Nachrichten in kurzer Zeit oder keine Freundschaft mehr)' : miss(error), 6000);
     inp.value = ''; inp.focus(); loadChat();
   };
   const loadProf = async () => {

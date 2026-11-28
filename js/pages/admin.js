@@ -23,6 +23,11 @@ export async function render(el) {
       <div class="row"><button class="btn pri" id="anGo">Veröffentlichen</button></div></div>
     <div class="card"><h2>Ankündigungen</h2><div id="anList" class="small"></div></div>
   </section>
+  <section class="card form"><h2>🛡️ Chat-Filter</h2>
+    <p class="small muted">Gilt für alle außer Admins: Diese Wörter werden im Chat durch Sternchen ersetzt (ganze Wörter, Groß- und Kleinschreibung egal). Links, E-Mail-Adressen und Telefonnummern werden immer abgelehnt. Ein Wort pro Zeile.</p>
+    <textarea class="inp" id="cfWords" rows="8" spellcheck="false" placeholder="Wird geladen …"></textarea>
+    <div class="row"><button class="btn" id="cfSave">Wortliste speichern</button><span class="small muted" id="cfInfo"></span></div>
+  </section>
   <section class="card form"><h2>📲 Push-Benachrichtigungen einrichten</h2>
     <p class="small muted">Push braucht ein Schlüsselpaar (VAPID). Es wird hier im Browser erzeugt und nirgends hingeschickt. Status: ${(await import('../push.js')).vapid() ? '✅ öffentlicher Schlüssel in online.json vorhanden' : '⚠️ noch kein öffentlicher Schlüssel in online.json'}</p>
     <div class="row"><button class="btn" id="vapGen">🔑 Schlüsselpaar erzeugen</button></div>
@@ -177,6 +182,9 @@ export async function render(el) {
     if (error) return toast(miss(error), 5000); toast('📅 Event angelegt'); $('#evT', el).value = ''; $('#evB', el).value = ''; evAdm();
   };
   const vg = el.querySelector('#vapGen'); if (vg) vg.onclick = async () => { const k = await (await import('../push.js')).makeVapid(); el.querySelector('#vapPub').value = k.publicKey; el.querySelector('#vapPriv').value = k.privateKey; el.querySelector('#vapOut').hidden = false; };
+  { const ta = el.querySelector('#cfWords'), info = el.querySelector('#cfInfo');
+    sb.rpc('chat_words_get').then(({ data, error }) => { ta.placeholder = ''; if (error) { info.textContent = /function|schema cache/i.test(error.message) ? 'Fehlt in der Datenbank: schema.sql ausführen' : error.message; return; } ta.value = data || ''; info.textContent = (data ? data.split('\n').length : 0) + ' Wörter'; });
+    el.querySelector('#cfSave').onclick = async () => { const { data, error } = await sb.rpc('chat_words_set', { p_words: ta.value }); if (error) return toast(error.message, 5000); info.textContent = data + ' Wörter'; toast('🛡️ Chat-Filter gespeichert'); }; }
   el.addEventListener('click', async e => {
     const ev = e.target.closest('[data-evdel]'); if (ev) { const { error } = await sb.from('events').delete().eq('id', ev.dataset.evdel); if (error) return toast(miss(error)); evAdm(); return; }
     const cl = e.target.closest('[data-cldel]'); if (cl) { if (!(await dialog({ title: 'Team auflösen?', html: '<p class="muted">Alle Mitglieder verlieren ihr Team. Fahrten bleiben erhalten.</p>', buttons: [{ label: 'Abbrechen', value: 0 }, { label: 'Auflösen', value: 1, cls: 'pri' }] }))) return; const { error } = await sb.from('clubs').delete().eq('id', cl.dataset.cldel); if (error) return toast(miss(error)); clAdm(); return; }
