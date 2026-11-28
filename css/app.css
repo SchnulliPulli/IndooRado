@@ -1384,3 +1384,6 @@ body.watchtv .tvprof { height: 15vh; }
 .frdlg .frrides { max-height: none; overflow: visible; }
 .frride { min-width: 0; } .frride b { min-width: 0; overflow-wrap: anywhere; }
 .frdlg .kpis { flex-wrap: wrap; }
+/* Vergangene Anrufe im Chat: kurze Zeile statt Nachricht */
+.calllog { align-self: center; font-size: 12px; opacity: .7; padding: 3px 10px; border-radius: 99px; background: color-mix(in srgb, currentColor 6%, transparent); text-align: center; }
+.calllog.missed { color: #ff8b97; opacity: .9; }

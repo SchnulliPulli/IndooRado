@@ -21,6 +21,25 @@ async function iceFor(room) {
 const JITSI = 'meet.ffmuc.net'; // Ausweichlösung im eigenen Fenster
 const MARK = /^\[\[call:(IndooRado-[A-Za-z0-9]{24})\]\]$/;
 export const callRoom = body => (MARK.exec(body || '') || [])[1] || null;
+// Anrufverlauf (Tabelle calls): laufend = noch nicht beendet und in der letzten Minute aktiv bzw. frisch angerufen
+export const callState = (room, ev) => O.client().then(sb => sb.rpc('call_state', { p_room: room, p_ev: ev })).catch(() => { });
+export async function callStates(rooms) {
+  const m = new Map(); rooms = [...new Set(rooms.filter(Boolean))].slice(0, 100); if (!rooms.length) return m;
+  try { const { data } = await (await O.client()).from('calls').select('room,a,created_at,answered_at,alive_at,ended_at,declined').in('room', rooms); for (const c of data || []) m.set(c.room, c); } catch (e) { }
+  return m;
+}
+export function callInfo(c, msg, me) {
+  const t = +new Date(msg.created_at), out = msg.sender === me, now = Date.now();
+  if (!c) return { active: now - t < 60e3, text: (out ? 'Ausgehender' : 'Eingehender') + ' Anruf' }; // Verlauf fehlt (ältere Anrufe)
+  const alive = c.alive_at ? +new Date(c.alive_at) : 0;
+  const active = !c.ended_at && !c.declined && (now - alive < 75e3 || (!c.answered_at && now - t < 60e3));
+  const dir = out ? 'Ausgehender Anruf' : 'Eingehender Anruf';
+  if (active) return { active, text: c.answered_at ? '📹 Anruf läuft' : out ? '📹 Es klingelt …' : '📹 Anruf' };
+  if (c.declined) return { active, text: `${dir} · abgelehnt` };
+  if (!c.answered_at) return { active, text: out ? `${dir} · nicht angenommen` : `${dir} · verpasst`, missed: !out };
+  const end = c.ended_at ? +new Date(c.ended_at) : alive, mins = Math.max(0, Math.round((end - +new Date(c.answered_at)) / 60e3));
+  return { active, text: `${dir} · ${mins < 1 ? 'unter 1 min' : mins + ' min'}` };
+}
 export const call = { room: null, peer: null, win: null, pc: null, ch: null, local: null, peers: new Map() };
 const rand = n => { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789', u = crypto.getRandomValues(new Uint8Array(n)); return [...u].map(x => a[x % a.length]).join(''); };
 
@@ -64,6 +83,7 @@ export async function startCall(friend) {
 export async function joinCall(room, peer) { if (!/^IndooRado-[A-Za-z0-9]{24}$/.test(room) || !(await allowed())) return; const mode = await pickMode(`Anruf von ${peer?.name || 'Freund'} annehmen`); if (mode) openWindow(room, peer, mode); }
 export async function hangUp(notify = true) {
   const notifyIds = [...new Set([call.peer?.id, ...call.peers.keys()].filter(Boolean))];
+  if (call.room) { clearInterval(call.aliveT); const others = [...call.peers.values()].some(P => P.pc?.connectionState === 'connected'); if (!others || call.peers.size <= 1) callState(call.room, 'end'); } // letzter im Anruf (bzw. Zweiergespräch): Anruf ist vorbei
   try { call.ch?.send({ type: 'broadcast', event: 'sig', payload: { t: 'bye', from: O.online.user?.id } }); } catch (e) { }
   for (const P of call.peers.values()) { try { P.pc.close(); } catch (e) { } }
   call.local?.getTracks().forEach(t => t.stop());
@@ -78,6 +98,7 @@ export async function hangUp(notify = true) {
    from/to; jedes Paar handelt seine eigene WebRTC-Verbindung mit „perfekter Aushandlung“ aus. */
 async function openWindow(room, peer, mode = 'av') {
   await hangUp(false); call.room = room; call.peer = peer; call.mode = mode;
+  callState(room, 'join'); clearInterval(call.aliveT); call.aliveT = setInterval(() => call.room === room ? callState(room, 'alive') : clearInterval(call.aliveT), 30e3);
   let g = {}; try { g = JSON.parse(localStorage.getItem('vvCallWin') || '{}'); } catch (e) { }
   const w = document.createElement('div'); w.className = 'callwin'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-label', 'Videoanruf');
   Object.assign(w.style, { width: (g.w || 340) + 'px', height: (g.h || 260) + 'px', left: (g.x ?? Math.max(8, innerWidth - (g.w || 340) - 16)) + 'px', top: (g.y ?? 80) + 'px' });
@@ -248,6 +269,7 @@ bus.on('callsignal', async s => {
   const sb = await O.client(), me = O.online.user?.id; if (!me) return;
   const { data } = await sb.from('chat_messages').select('body,created_at').eq('sender', s.uid).eq('recipient', me).like('body', '[[call:%').order('created_at', { ascending: false }).limit(1);
   const room = callRoom(data?.[0]?.body); if (!room || Date.now() - new Date(data[0].created_at) > 180e3) return;
+  { const st = (await callStates([room])).get(room); if (st && (st.ended_at || st.declined)) return; } // schon vorbei
   const { avatarSvg } = await import('./components.js');
   if (document.hidden) import('./comfort.js').then(C => C.notify(`📹 ${s.name} ruft an`, 'Videoanruf in IndooRado – zum Annehmen die App öffnen.', 'call', 'call')).catch(() => { });
   const c = document.createElement('div'); c.className = 'invcard callring'; c.setAttribute('role', 'alertdialog');
@@ -255,7 +277,7 @@ bus.on('callsignal', async s => {
   document.body.appendChild(c); const t = setTimeout(() => c.remove(), 60e3);
   try { (await import('./sound.js')).sound.beep(true); } catch (e) { }
   c.onclick = async e => {
-    if (e.target.closest('[data-no]')) { clearTimeout(t); c.remove(); (await import('./online/presence.js')).callSignal(s.uid, 'callend'); return; }
+    if (e.target.closest('[data-no]')) { clearTimeout(t); c.remove(); callState(room, 'decline'); (await import('./online/presence.js')).callSignal(s.uid, 'callend'); return; }
     if (e.target.closest('[data-ok]')) { clearTimeout(t); c.remove(); joinCall(room, { id: s.uid, name: s.name }); }
   };
 });

@@ -83,12 +83,19 @@ async function openFriend(sb, me, f, redraw) {
   const loadChat = async () => {
     const { data, error } = await sb.from('chat_messages').select('id,sender,body,created_at').or(`and(sender.eq.${me},recipient.eq.${f.id}),and(sender.eq.${f.id},recipient.eq.${me})`).order('created_at', { ascending: false }).limit(100);
     if (!w.isConnected) return; if (error) { log.innerHTML = `<p class="muted small">${esc(miss(error))}</p>`; return; }
-    const key = data.map(m => m.id).join(); if (key === last) return; last = key;
+    const key = data.map(m => m.id).join() + (data.some(m => /^\[\[call:/.test(m.body)) ? '|' + Math.floor(Date.now() / 15e3) : ''); if (key === last) return; last = key; // Anrufstand regelmäßig auffrischen
     const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
     const C = await import('../call.js');
-    // Nur die neueste Anruf-Einladung im Chat ist noch aktiv, ältere gelten als vorbei
-    const active = data.find(m => C.callRoom(m.body))?.id;
-    log.innerHTML = data.length ? data.reverse().map(m => { const room = C.callRoom(m.body), fresh = m.id === active && Date.now() - new Date(m.created_at) < 3600e3; return room ? `<div class="msg call ${m.sender === me ? 'me' : ''}"><span>📹 Videoanruf${fresh ? ` <button class="btn xs ${m.sender === me ? 'ghost' : 'pri'}" data-join="${esc(room)}">Beitreten</button>` : ' (vorbei)'}</span><small>${new Date(m.created_at).toLocaleString(document.documentElement.lang, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</small></div>` : `<div class="msg ${m.sender === me ? 'me' : ''}"><span data-noi18n>${esc(m.body)}</span><small>${new Date(m.created_at).toLocaleString(document.documentElement.lang, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</small></div>`; }).join('') : `<div class="empty"><div class="emi">💬</div><b>Noch keine Nachrichten</b><span>Schreib ${esc(f.display_name)} die erste Nachricht – oder ruf mit 📹 an.</span></div>`;
+    // Anrufe: laufende mit „Beitreten“, vergangene als kurze Zeile (ausgehend/eingehend, Dauer, verpasst, abgelehnt)
+    const states = await C.callStates(data.map(m => C.callRoom(m.body)));
+    const when = d => new Date(d).toLocaleString(document.documentElement.lang, { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    log.innerHTML = data.length ? data.reverse().map(m => {
+      const room = C.callRoom(m.body);
+      if (!room) return `<div class="msg ${m.sender === me ? 'me' : ''}"><span data-noi18n>${esc(m.body)}</span><small>${new Date(m.created_at).toLocaleString(document.documentElement.lang, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</small></div>`;
+      const ci = C.callInfo(states.get(room), m, me);
+      return ci.active ? `<div class="msg call ${m.sender === me ? 'me' : ''}"><span>${esc(ci.text)} <button class="btn xs ${m.sender === me ? 'ghost' : 'pri'}" data-join="${esc(room)}">${m.sender === me ? 'Zurück zum Anruf' : 'Beitreten'}</button></span><small>${when(m.created_at)}</small></div>`
+        : `<div class="calllog ${ci.missed ? 'missed' : ''}">📹 ${esc(ci.text)} · ${when(m.created_at)}</div>`;
+    }).join('') : `<div class="empty"><div class="emi">💬</div><b>Noch keine Nachrichten</b><span>Schreib ${esc(f.display_name)} die erste Nachricht – oder ruf mit 📹 an.</span></div>`;
     if (atBottom || data.length) log.scrollTop = log.scrollHeight;
     sb.rpc('chat_read', { p_other: f.id }).then(() => { });
   };
