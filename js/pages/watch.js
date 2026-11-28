@@ -5,7 +5,8 @@ import * as O from '../online/client.js';
 
 const EMO = ['👏', '🔥', '💪', '🚴', '🎉', '❤️', '⚡', '🏔️'];
 let timer = null;
-export function leave() { clearInterval(timer); timer = null; document.body.classList.remove('watching', 'watchtv'); }
+let stopRx = null;
+export function leave() { clearInterval(timer); timer = null; stopRx?.(); stopRx = null; document.body.classList.remove('watching', 'watchtv'); }
 
 export async function render(el, [token, mode]) {
   leave(); document.body.classList.add('watching');
@@ -81,7 +82,17 @@ async function renderTv(el, token) {
   document.body.classList.add('watchtv');
   if (!/^[A-Za-z0-9]{20}$/.test(token || '') || !O.configured()) { el.innerHTML = '<section class="tvw"><h1>📺 IndooRado</h1><p>Link ungültig.</p></section>'; return; }
   el.innerHTML = `<section class="tvw"><header><div><span class="tvlive" id="tSt">verbinde …</span> <b id="tN">IndooRado</b> <span class="tvr" id="tR"></span></div><div class="tvclock num" id="tClock"></div></header>
-    <div class="tvbig" id="tBig"></div><div class="tviv" id="tIv" hidden></div><canvas id="wProf" class="tvprof"></canvas><div class="tvpos" id="wPos"></div></section>`;
+    <div class="tvmain"><div class="tvvid" id="tVid" hidden><video muted playsinline autoplay></video><span class="tvvidst" id="tVidSt"></span></div>
+    <div class="tvside"><div class="tvbig" id="tBig"></div><div class="tviv" id="tIv" hidden></div></div></div>
+    <canvas id="wProf" class="tvprof"></canvas><div class="tvpos" id="wPos"></div></section>`;
+  // Live-Bild der Fahrt (3D-Welt bzw. Videofahrt) vom Fahrgerät, sobald es sendet
+  const sec = el.querySelector('.tvw'), vbox = $('#tVid', el);
+  stopRx = (await import('../tvstream.js')).startReceiver(token, vbox.querySelector('video'), st => {
+    if (!el.isConnected) return;
+    if (st === 'live') { vbox.hidden = false; sec.classList.add('withvid'); $('#tVidSt', el).textContent = ''; }
+    else if (st === 'lost') { $('#tVidSt', el).textContent = 'Bild wird neu verbunden …'; }
+    else if (st === 'none' && !sec.classList.contains('withvid')) vbox.hidden = true;
+  });
   try { document.documentElement.requestFullscreen?.().catch(() => { }); } catch (e) { }
   const sb = await O.client(); let busy = false;
   const tick = async () => {

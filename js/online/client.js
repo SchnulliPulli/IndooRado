@@ -15,7 +15,7 @@ export async function loadSiteConfig() {
   return site;
 }
 // Mindest-Stand der Datenbank (public.schema_version in schema.sql)
-export const SCHEMA_NEED = 20261130;
+export const SCHEMA_NEED = 20261201;
 export async function schemaOk() { try { const { data, error } = await (await client()).rpc('schema_version'); return !error && data >= SCHEMA_NEED; } catch (e) { return true; } }
 export function config() {
   let o = {}; try { o = JSON.parse(localStorage.getItem(LS) || '{}'); } catch (e) { }

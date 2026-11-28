@@ -1287,3 +1287,17 @@ body.watchtv .tvprof { height: 15vh; }
 .livemap .lmhalo { fill: var(--acc, #ff6a3d); opacity: .25; animation: lmpulse 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
 @keyframes lmpulse { 50% { transform: scale(1.6); opacity: .08; } }
 @media (prefers-reduced-motion: reduce) { .livemap .lmhalo { animation: none; } }
+
+/* Fernseher: Live-Bild links, Werte rechts */
+.tvmain { display: grid; grid-template-columns: 1fr; gap: 2vh 2vw; flex: 1; min-height: 0; }
+.tvw.withvid .tvmain { grid-template-columns: 2.3fr 1fr; }
+.tvvid { position: relative; background: #000; border-radius: 2vh; overflow: hidden; min-height: 40vh; }
+.tvvid video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.tvvidst { position: absolute; left: 1.5vw; bottom: 1.5vh; color: #fff; font-size: clamp(14px, 1.6vw, 26px); text-shadow: 0 1px 4px #000; }
+.tvside { display: flex; flex-direction: column; gap: 2vh; min-width: 0; }
+.tvw.withvid .tvbig { grid-template-columns: 1fr 1fr; gap: 1.5vh 1vw; }
+.tvw.withvid .tvt { padding: 1.2vh 1vw; border-radius: 1.4vh; }
+.tvw.withvid .tvt b { font-size: clamp(28px, 4.2vw, 80px); }
+.tvw.withvid .tvt span { font-size: clamp(12px, 1.2vw, 22px); }
+.tvw.withvid .tviv { flex-direction: column; align-items: flex-start; font-size: clamp(14px, 1.5vw, 26px); }
+.tvw.withvid .tvprof { height: 11vh; }

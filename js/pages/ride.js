@@ -734,7 +734,10 @@ function endHint(on) {
 }
 /* ---------- Zuschauer-Link: Stand senden, Anfeuerungen zeigen ---------- */
 async function watchPush(p3) {
-  const M = window.__watchMod ||= await import('../watch.js'); if (!M.W.token) return;
+  const M = window.__watchMod ||= await import('../watch.js');
+  // Fernseher-Bild: solange der Link aktiv ist, auf Fernseher warten und ihnen das Bild der Fahrt senden
+  if (M.W.token !== S.tvTok) { S.tvTok = M.W.token; const T = await import('../tvstream.js'); if (M.W.token) T.startSender(M.W.token, () => { const v = $('#rideVid', S.el); if (S.videoOn && v?.captureStream) return v.captureStream(); return $('#gl', S.el)?.captureStream?.(24); }); else T.stopSender(); }
+  if (!M.W.token) return;
   const R = S.route; if (!R.prof) { R.prof = []; for (let i = 0; i <= 80; i++) R.prof.push(Math.round(R.eleAt(R.total * i / 80))); }
   const cheers = await M.pushWatch({ state: S.finished ? 'ended' : S.state, route: R.name, total: Math.round(R.total), loop: !!R.loop, d: Math.round(S.dist), odo: Math.round(S.odo), t: Math.round(S.t), p: Math.round(p3), v: +(S.v * 3.6).toFixed(1), asc: Math.round(S.asc), grade: +R.gradeAt(S.dist).toFixed(1), hr: live.heart ?? null, cad: live.cadence != null ? Math.round(live.cadence) : null, prof: R.prof, wo: S.wo ? S.wo.name : null,
     iv: S.wo && S.wi && !S.wi.done ? { i: S.wi.i + 1, n: S.wo.segs.length, left: Math.round(S.wi.left), tg: S.target ? Math.round(S.target) : null, txt: S.wo.segs[S.wi.i]?.text || '' } : null, ftp: profile.ftp });
@@ -1287,6 +1290,7 @@ addEventListener('pageshow', () => { if (document.visibilityState === 'visible')
 export function leave() {
   if (!S) return;
   if (window.__watchMod?.W.token) { const M = window.__watchMod; M.W.lastPush = 0; M.pushWatch({ state: 'ended', route: S.route.name, total: Math.round(S.route.total), d: Math.round(S.dist), odo: Math.round(S.odo), t: Math.round(S.t), asc: Math.round(S.asc), p: 0, v: 0, prof: S.route.prof }); }
+  if (S.tvTok) import('../tvstream.js').then(T => T.stopSender());
   S.alive = false; S.vbox?.remove(); S.si?.destroy(); S.si = null; if (S.vurl) { const v = $('#rideVid', S.el); v?.pause(); URL.revokeObjectURL(S.vurl); } setTimeout(() => bus.emit('rideEnded'), 1500); S.live?.leave(); window.__presence?.setStatus({ where: 'menu', route: null, routeName: null, kit: null }); sound.silence(); music.stop(); hush(); putLive({ state: 'ended', t: Math.round(S.t), odo: Math.round(S.odo), route: S.route.name }); clearInterval(S.timer); cancelAnimationFrame(S.raf); S.ro?.disconnect();
   document.removeEventListener('keydown', S.key); S.offs.forEach(f => f());
   try { S.world.dispose(); } catch (e) { }
