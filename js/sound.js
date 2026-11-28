@@ -296,6 +296,19 @@ export const music = {
 };
 
 const ok = () => ctx && ctx.state === 'running' && !muted();
+// App im Hintergrund / Gerät gesperrt: alles verstummt (Musik, Fahrgeräusche, Sprachansagen); zurück: weiter wie vorher
+let hushed = false;
+export function pauseAll() {
+  if (hushed) return; hushed = true;
+  try { if (ctx && ctx.state === 'running') ctx.suspend(); } catch (e) { }
+  if (M.audio && !M.audio.paused) { M.audio.pause(); M.resumeAudio = true; }
+  try { speechSynthesis?.cancel(); } catch (e) { }
+}
+export function resumeAll() {
+  if (!hushed) return; hushed = false;
+  try { if (ctx && ctx.state === 'suspended') ctx.resume(); } catch (e) { }
+  if (M.resumeAudio && M.audio) { M.audio.play().catch(() => { }); } M.resumeAudio = false;
+}
 export const sound = {
   unlock, apply, update,
   shift(up) { if (!ok() || !V('shift')) return; const t = now(); click(t, .2 * V('shift'), 2200); click(t + .035, .12 * V('shift'), 3200); tone(up ? 880 : 660, t, .05, { type: 'triangle', vol: .035 * V('shift') }); },

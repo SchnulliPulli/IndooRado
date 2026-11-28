@@ -259,16 +259,21 @@ bus.on('callsignal', async s => {
 });
 // App verlassen (Handy gesperrt, andere App): Kamera und Mikrofon pausieren, die anderen sehen „pausiert“.
 // Zurück in der App: alles wie vorher an, abgerissene Verbindungen werden neu ausgehandelt.
-document.addEventListener('visibilitychange', () => {
-  if (!call.room || !call.local) return;
-  if (document.hidden) {
-    if (call.away) return; call.away = call.local.getTracks().map(t => [t, t.enabled]); call.local.getTracks().forEach(t => t.enabled = false);
-    call.win?.classList.add('paused'); try { call.sendAll?.({ t: 'away' }); } catch (e) { }
-  } else if (call.away) {
-    for (const [t, on] of call.away) t.enabled = on; call.away = null;
-    call.win?.classList.remove('paused'); try { call.sendAll?.({ t: 'back' }); } catch (e) { }
-    setTimeout(() => call.resume?.(), 800);
-  }
-});
+function callAway() {
+  if (!call.room || !call.local || call.away) return;
+  call.away = call.local.getTracks().map(t => [t, t.enabled]); call.local.getTracks().forEach(t => t.enabled = false);
+  call.win?.querySelectorAll('.cwtile video').forEach(v => { v.muted = true; v.pause(); }); // auch die anderen nicht mehr hören
+  call.win?.classList.add('paused'); try { call.sendAll?.({ t: 'away' }); } catch (e) { }
+}
+function callBack() {
+  if (!call.room || !call.away) return;
+  for (const [t, on] of call.away) t.enabled = on; call.away = null;
+  call.win?.querySelectorAll('.cwtile video').forEach(v => { v.muted = false; v.play().catch(() => { }); });
+  call.win?.classList.remove('paused'); try { call.sendAll?.({ t: 'back' }); } catch (e) { }
+  setTimeout(() => call.resume?.(), 800);
+}
+document.addEventListener('visibilitychange', () => document.hidden ? callAway() : callBack());
+addEventListener('pagehide', callAway);
+addEventListener('pageshow', () => { if (!document.hidden) callBack(); });
 // Abmelden beendet ein laufendes Gespräch
 bus.on('online', () => { if (call.room && !O.loggedIn()) hangUp(false); });

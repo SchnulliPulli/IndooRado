@@ -1262,17 +1262,27 @@ async function endRide(auto = false, forced = null) {
 
 let wake = null;
 async function lockScreen() { try { if ('wakeLock' in navigator) wake = await navigator.wakeLock.request('screen'); } catch (e) { } }
-document.addEventListener('visibilitychange', () => {
-  if (!S?.alive) return;
-  // Handy/Tablet gesperrt oder App verlassen: Fahrt pausieren (am Computer läuft sie im Hintergrund weiter)
-  const mobile = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad/.test(navigator.userAgent);
-  if (document.visibilityState === 'hidden') {
-    if (mobile && (S.state === 'riding' || S.state === 'auto')) { S.state = 'paused'; S.v = 0; S.hiddenPause = true; S.resumeOnPedal = true; $('#rideVid', S.el)?.pause(); const b = $('#tPause', S.el); if (b) b.innerHTML = ICON.play + '<span>Weiter</span>'; }
-    return;
+// Handy/Tablet gesperrt, Bildschirm aus oder App verlassen: Fahrt pausieren und alles verstummen lassen
+// (am Computer läuft die Fahrt im Hintergrund weiter, nur ein minimiertes Fenster schaltet den Ton nicht ab)
+const isMobile = () => matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod|Mobile/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function goneAway() {
+  if (!S?.alive || !isMobile()) return;
+  if (S.state === 'riding' || S.state === 'auto' || S.state === 'ready') {
+    if (S.state !== 'ready') { S.state = 'paused'; S.v = 0; S.resumeOnPedal = true; const b = $('#tPause', S.el); if (b) b.innerHTML = ICON.play + '<span>Weiter</span>'; }
+    S.hiddenPause = true;
   }
+  $('#rideVid', S.el)?.pause();
+  import('../sound.js').then(m => m.pauseAll());
+}
+function cameBack() {
+  if (!S?.alive) return;
   lockScreen();
-  if (S.hiddenPause) { S.hiddenPause = false; flash('⏸ Pausiert, weil die App im Hintergrund war · treten oder „Weiter“', 3500); endHint(true); }
-});
+  import('../sound.js').then(m => m.resumeAll());
+  if (S.hiddenPause) { S.hiddenPause = false; if (S.state === 'paused') { flash('⏸ Pausiert, weil die App im Hintergrund war · treten oder „Weiter“', 3500); endHint(true); } }
+}
+document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' ? goneAway() : cameBack());
+addEventListener('pagehide', goneAway);
+addEventListener('pageshow', () => { if (document.visibilityState === 'visible') cameBack(); });
 
 export function leave() {
   if (!S) return;
