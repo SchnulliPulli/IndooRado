@@ -1326,3 +1326,4 @@ body.watchtv .tvprof { height: 15vh; }
 .langpick .box{max-width:440px}
 .langgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
 .langgrid .btn{justify-content:flex-start;padding:12px 14px;font-size:1.05em}
+.tvdiag{position:fixed;left:12px;bottom:8px;opacity:.75;font-size:13px;pointer-events:none}

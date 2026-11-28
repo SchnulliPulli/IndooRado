@@ -84,11 +84,12 @@ async function renderTv(el, token) {
   el.innerHTML = `<section class="tvw"><header><div><span class="tvlive" id="tSt">verbinde …</span> <b id="tN">IndooRado</b> <span class="tvr" id="tR"></span></div><div class="tvclock num" id="tClock"></div></header>
     <div class="tvmain"><div class="tvvid" id="tVid" hidden><video muted playsinline autoplay></video><span class="tvvidst" id="tVidSt"></span></div>
     <div class="tvside"><div class="tvbig" id="tBig"></div><div class="tviv" id="tIv" hidden></div></div></div>
-    <canvas id="wProf" class="tvprof"></canvas><div class="tvpos" id="wPos"></div></section>`;
+    <canvas id="wProf" class="tvprof"></canvas><div class="tvpos" id="wPos"></div><div class="tvdiag small muted" id="tVidDiag"></div></section>`;
   // Live-Bild der Fahrt (3D-Welt bzw. Videofahrt) vom Fahrgerät, sobald es sendet
   const sec = el.querySelector('.tvw'), vbox = $('#tVid', el);
-  stopRx = (await import('../tvstream.js')).startReceiver(token, vbox.querySelector('video'), st => {
+  stopRx = (await import('../tvstream.js')).startReceiver(token, vbox.querySelector('video'), (st, txt) => {
     if (!el.isConnected) return;
+    if (st === 'info') { const d = $('#tVidDiag', el); if (d) d.textContent = '📺 ' + txt; return; }
     if (st === 'live') { vbox.hidden = false; sec.classList.add('withvid'); $('#tVidSt', el).textContent = ''; }
     else if (st === 'lost') { $('#tVidSt', el).textContent = 'Bild wird neu verbunden …'; }
     else if (st === 'none' && !sec.classList.contains('withvid')) vbox.hidden = true;
