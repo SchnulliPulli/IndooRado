@@ -1375,3 +1375,12 @@ body.watchtv .tvprof { height: 15vh; }
 .ssbuild{position:absolute;left:-10000px;top:0;width:900px;visibility:hidden;pointer-events:none}
 .sshit{animation:sshit 2.4s ease-out}
 @keyframes sshit{0%,30%{box-shadow:0 0 0 3px var(--acc);border-radius:10px;background:rgba(255,106,61,.12)}100%{box-shadow:0 0 0 0 transparent}}
+/* Freundes-Fenster: auf dem Handy passend zum sichtbaren Bildschirm, Profil mit Fahrtenliste scrollt im Fenster */
+.frdlg { max-height: calc(100dvh - 24px); overflow: hidden; }
+.frdlg > [data-pane] { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.frdlg > [data-pane="chat"] { display: flex; flex-direction: column; overflow: hidden; }
+.frdlg > [data-pane][hidden] { display: none; }
+.frdlg [data-pane="chat"] .chat { flex: 1 1 auto; min-height: 120px; height: auto; max-height: min(52vh, 420px); }
+.frdlg .frrides { max-height: none; overflow: visible; }
+.frride { min-width: 0; } .frride b { min-width: 0; overflow-wrap: anywhere; }
+.frdlg .kpis { flex-wrap: wrap; }
