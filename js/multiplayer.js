@@ -65,11 +65,15 @@ function end(S, H, won, msg) {
 // Nachrichten anderer Mitspieler
 export function mpOnMsg(S, H, m) {
   const M = S.mp; if (!M) return;
+  if (m.t === 'emo' && EMOS.includes(m.e) && S.field.some(n => n.remote && n.id === m.from)) { H.flash(`${m.e} ${String(m.name || 'Fahrer').slice(0, 20)}`, 2000); H.emoFly?.(m.e); return; }
   if (m.t === 'rideon') { M.roGot++; S.rideOnsGot = (S.rideOnsGot || 0) + 1; H.flash('👍 Echter Ride On von ' + m.name + '!', 2600); H.say?.('Ride On von ' + m.name, 'mp'); award(S, H, XP.rideOnGot, 'Ride On'); H.sound?.pass?.(); return; }
   // Herausforderung: die Gegenseite schickt direkt meine Rolle (jagen, verteidigen oder Sprint)
   if (m.t === 'ch' && !M.ch && m.kind && S.field.some(n => n.remote && n.id === m.from)) start(S, H, m.kind, m.from, m.name, m.id);
 }
 // Ride On an einen echten Mitspieler senden
+// Gesten an alle echten Mitfahrer auf der Strecke
+export const EMOS = ['👋', '👍', '🔥', '💪', '😅', '🎉', '🚀', '☕'];
+export function mpEmote(S, H, e) { if (!EMOS.includes(e) || !S.live) return; if (S.t - (S.lastEmo || -99) < 2) return; S.lastEmo = S.t; S.live.emit('emo', '*', { e }); H.emoFly?.(e); }
 export function mpRideOn(S, H, n) { S.live?.emit('rideon', n.id); S.mp.roGiven++; H.flash('👍 Ride On an ' + n.name + ' gesendet', 1600); award(S, H, XP.rideOnGiven, 'Ride On'); }
 
 // Anzeige: laufendes Duell, Gruppenziel, gemeinsame Zeit

@@ -2,7 +2,7 @@
 import { $, esc, fmtT, fmtKm, clamp, bus, toast, dialog, fitCanvas, zoneColor, ZONES, HRZONES } from '../util.js';
 import { profile, sel, live, progress, saveSel, levelOf } from '../state.js';
 import { setPower, setGrade, control, trainer, status, demo, click, setDemo } from '../ble.js';
-import { GEARS, gearPower, integrate, steadySpeed, setSurface, setGears, gearGrade, setUpgrades } from '../physics.js';
+import { GEARS, gearPower, integrate, steadySpeed, setSurface, setGears, gearGrade, setUpgrades, env as physEnv } from '../physics.js';
 import { upgradeEffect } from '../season.js';
 import { getRoute, clearRouteCache } from '../routes.js';
 import { getWorkout, at as woAt, drawWorkout, total as woTotal } from '../workouts.js';
@@ -14,12 +14,12 @@ import { db } from '../db.js';
 import { putLive, getLive, syncReady, sync as syncState } from '../sync.js';
 // Kennung dieses Tabs: pro Konto darf nur ein Tab bzw. Gerät gleichzeitig fahren (Neuladen behält die Kennung)
 const TAB = (() => { try { let t = sessionStorage.getItem('vvTab'); if (!t) { t = Math.random().toString(36).slice(2, 10); sessionStorage.setItem('vvTab', t); } return t; } catch (e) { return 'x'; } })();
-import { makeField, stepField, gapOf, rotateNames } from '../npc.js';
+import { makeField, stepField, gapOf, rotateNames, makePaceGroup } from '../npc.js';
 import { rideEggs } from '../eggs.js';
 import { daily, dailyTick, bellsSetup, bellsTick, ttSetup, ttTick } from '../modes.js';
 import { plusInit, plusStep, plusHud, mods, usePup, steerKey, raceSetup, raceTick, lapReset, trafficSetup, photoMode } from '../rideplus.js';
 import { loggedIn, online } from '../online/client.js';
-import { mpInit, mpTick, mpOnMsg, mpRideOn, mpHtml } from '../multiplayer.js';
+import { mpInit, mpTick, mpOnMsg, mpRideOn, mpHtml, mpEmote, EMOS } from '../multiplayer.js';
 import { makeBuddy, buddyStep, buddyDraft } from '../buddy.js';
 import { sound, music } from '../sound.js';
 import { say, hush } from '../voice.js';
@@ -119,6 +119,8 @@ export async function render(el) {
       <button class="tbtn" id="tFull" title="Vollbild">${ICON.full}<span>Vollbild</span></button>
       <button class="tbtn" id="tCast" title="Fahrt auf dem Fernseher anzeigen (Chromecast, Fernseher mit Browser, AirPlay)"><b class="dots">📡</b><span>Auf Fernseher</span></button>
       <button class="tbtn" id="tWatch" title="Zuschauer-Link: Freunde sehen live zu und feuern an"><b class="dots">📺</b><span id="tWatchL">Zuschauer</span></button>
+      <button class="tbtn" id="tEmo" title="Geste an deine Mitfahrer (online)"><b class="dots">🙋</b><span>Geste</span></button>
+      <button class="tbtn" id="tPace" title="Pace-Partner: Gruppe mit festem Tempo zum Mitfahren"><b class="dots">🐇</b><span id="tPaceL">Pace-Partner</span></button>
       <button class="tbtn" id="tBuddy" title="Trainingsbuddy, der dich pusht"><b class="dots">🤝</b><span id="tBuddyL">Buddy</span></button>
       <button class="tbtn" id="tTour" title="Kurze Einführung in die Anzeigen"><b class="dots">🎓</b><span>Einführung</span></button>
       <button class="tbtn" id="tKeys" title="Tastenkürzel (Taste ?)"><b class="dots">⌨️</b><span>Tastenkürzel</span></button>
@@ -187,6 +189,9 @@ async function start(el) {
     np: { buf: [], bs: 0, s4: 0, n: 0 }, field: [], npcOn: sel.npcs !== false, odo: 0, beamed: false, lastBeep: -1, nextDrink: (profile.drinkEvery || 15) * 60,
   };
   setSurface(route); // Belag und Schwerkraft der Strecke
+  // Wind (Einstellung, nicht bei Workouts ohne Spiel-Extras, nicht im Weltall): Richtung und Stärke je Fahrt, mit Böen
+  S.windOn = profile.windPhys === true && !S.gameOff && !route.theme?.gravity && !S.group;
+  if (S.windOn) { S.windDir = Math.random() * Math.PI * 2; S.windSpd = 2 + Math.random() * 4; }
   // Bei Workouts standardmäßig ohne Spiel-Extras, die Tempo und Strecke verfälschen (Power-ups, Werkstatt-Teile)
   S.gameOff = !!wo && !profile.gameInWorkouts;
   setUpgrades(profile.upgradesOn !== false && !S.gameOff ? upgradeEffect() : null); // Werkstatt-Teile (bei echten Mitfahrern wieder neutral, siehe unten)
@@ -211,6 +216,9 @@ async function start(el) {
   S.planLabel = plan ? `${plan.name} · Woche ${wo.week} · Einheit ${wo.n}` : null;
   if (S.wo && !S.group && !sessionStorage.getItem('quickStart') && profile.askForm !== false) await dayForm(S);
   if (route.video) videoSetup(S, el);
+  { let st = null; try { st = JSON.parse(sessionStorage.getItem('tourStage') || 'null'); } catch (e) { } sessionStorage.removeItem('tourStage');
+    if (st && st.id === route.id) { S.tour = st; $('#startCard', el).innerHTML = `<b>🏆 Tour de IndooRado · Etappe ${st.n}</b><span>${esc(st.name)}${st.loop ? ' – eine volle Runde' : ' bis ins Ziel'}. Die Zeit läuft ab dem ersten Tritt.</span>`; } }
+  if (loggedIn() && route.builtin && route.climbs.length) import('../stagetour.js').then(async T => { S.kom = await T.komTop(route.id); });
   if (loggedIn()) import('../tv.js').then(m => m.listenRemote()); // Handy als Fernbedienung
   // Echte Straßenbilder (Mapillary) bei GPX-Strecken: nur mit Konto, Schlüssel und Einwilligung
   import('../streetimg.js').then(async M => {
@@ -343,6 +351,14 @@ function bindUi() {
   $('#tWatch', el).onclick = async () => { const M = await import('../watch.js'); await M.startWatch(online?.profile?.display_name || profile.name); $('#tWatchL', el).textContent = M.W.token ? 'Zuschauer an' : 'Zuschauer'; };
   $('#tMode', el).onclick = cycleMode;
   $('#tNpc', el).onclick = toggleNpcs;
+  $('#tPace', el).onclick = choosePace;
+  $('#tEmo', el).onclick = () => {
+    if (!S.mp || !S.field.some(n => n.remote)) { flash('Gesten gehen an echte Mitfahrer – gerade ist niemand online auf dieser Strecke', 2200); return; }
+    let p = $('#emoPick', el); if (p) { p.remove(); return; }
+    p = document.createElement('div'); p.id = 'emoPick'; p.className = 'emopick'; p.innerHTML = EMOS.map(e => `<button data-emo="${e}">${e}</button>`).join('');
+    p.onclick = ev => { const b = ev.target.closest('[data-emo]'); if (!b) return; mpEmote(S, MPH, b.dataset.emo); p.remove(); };
+    $('#rw', el).appendChild(p); setTimeout(() => p.isConnected && p.remove(), 6000);
+  };
   $('#tFull', el).onclick = toggleFullscreen;
   $('#tEnd', el).onclick = endRide;
   $('#woM', el).onclick = () => { S.wOff = clamp(S.wOff - 2, -40, 40); };
@@ -546,6 +562,26 @@ function updGear() {
 const MODES = { gear: 'Gänge', sim: 'Steigung', erg: 'ERG', hr: 'Puls' };
 function cycleMode() { const k = Object.keys(MODES); S.mode = k[(k.indexOf(S.mode) + 1) % k.length]; sel.mode = S.mode; saveSel(); updMode(); trainer.last = ''; flash('Widerstand: ' + { gear: 'virtuelle Gänge', sim: 'Steigung an Trainer', erg: 'feste Wattzahl', hr: 'Zielpuls, der Trainer regelt die Watt' }[S.mode]); }
 function updMode() { $('#tModeL', S.el).textContent = MODES[S.mode]; updGear(); }
+function emoFly(e) { const f = document.createElement('div'); f.className = 'cheerfly'; f.textContent = e; f.style.left = (30 + Math.random() * 40) + '%'; S?.el.querySelector('.ridewrap')?.appendChild(f); setTimeout(() => f.remove(), 2600); }
+/* ---------- Pace-Partner ---------- */
+async function choosePace() {
+  if (S.group) { flash('👥 In der Gruppenfahrt nicht verfügbar', 1800); return; }
+  const base = profile.ftp / profile.kg, opts = [2, 2.5, 3, 3.5, 4].filter(x => x <= Math.max(2.5, base * 1.15));
+  const v = await dialog({ title: '🐇 Pace-Partner', html: `<p class="small muted">Eine Gruppe, die gleichmäßig mit festen Watt pro Kilogramm fährt. Häng dich in den Windschatten und lass dich ziehen. Deine FTP: ${base.toFixed(1).replace('.', ',')} W/kg – Grundlage liegt bei etwa ${(base * .65).toFixed(1).replace('.', ',')} W/kg.</p>`,
+    buttons: [{ label: S.pace ? 'Gruppe auflösen' : 'Abbrechen', value: S.pace ? 'off' : null }, ...opts.map(x => ({ label: String(x.toFixed(1)).replace('.', ',') + ' W/kg', value: String(x), cls: Math.abs(x - base * .65) < .3 ? 'pri' : '' }))] });
+  if (!v) return;
+  S.field = S.field.filter(n => !n.pace);
+  if (v === 'off') { S.pace = null; $('#tPaceL', S.el).textContent = 'Pace-Partner'; }
+  else { S.pace = +v; if (!S.npcOn) { S.npcOn = true; updNpcBtn(); } S.field.push(...makePaceGroup(S.route, profile, S.pace, S.dist)); $('#tPaceL', S.el).textContent = 'Pace ' + v.replace('.', ','); flash(`🐇 Pace-Gruppe ${v.replace('.', ',')} W/kg vor dir – häng dich ran!`, 2600); }
+  for (const n of S.field) n.gap = gapOf(S.route, n.d, S.dist);
+  S.world.setRiders(S.field.map(n => n.look));
+}
+// Hinweis, wenn man in der Gruppe ist oder sie verliert
+function paceTick() {
+  if (!S.pace) return; const L = S.field.find(n => n.leader); if (!L) return;
+  const gap = gapOf(S.route, L.d, S.dist), inG = gap > -8 && gap < 18;
+  if (inG !== S.paceIn) { S.paceIn = inG; flash(inG ? `🐇 In der Pace-Gruppe – Windschatten nutzen!` : `🐇 Pace-Gruppe ${gap > 0 ? Math.round(gap) + ' m vor dir' : 'hinter dir'}`, 1800); }
+}
 function toggleNpcs() {
   if (S.group) { flash('👥 In der Gruppenfahrt gilt die Einstellung der Lobby (Mitfahrer ' + (S.group.settings?.npcs !== false ? 'an' : 'aus') + ')', 2200); return; }
   S.npcOn = !S.npcOn; sel.npcs = S.npcOn; saveSel();
@@ -582,7 +618,7 @@ const TIMES = ['morning', 'day', 'evening', 'night'];
 // Aussehen des Trainingsbuddys
 const BUDDY_LOOK = { jersey: '#7b4fd6', bikeColor: '#f2f4f6', helmet: '#ffffff', skin: '#e3b18c', av: { pattern: 'stripes', jersey2: '#ffd23f', helmetStyle: 'aero', glasses: 'sport', bike: 'road' } };
 // Hilfen für das Multiplayer-Modul
-const MPH = { flash: (t, ms) => flash(t, ms), say: (t, k) => say(t, k), xpPop: t => xpPop(t), sound: { pass: () => sound.pass(), fanfare: () => sound.fanfare() } };
+const MPH = { emoFly: e => emoFly(e), flash: (t, ms) => flash(t, ms), say: (t, k) => say(t, k), xpPop: t => xpPop(t), sound: { pass: () => sound.pass(), fanfare: () => sound.fanfare() } };
 // Live-Status auf der Startkarte beim Mitfahren (zeigt, ob Verbindung steht und Daten fließen)
 function liveStatus() {
   if (performance.now() - (S.lsT || 0) < 1000) return; S.lsT = performance.now();
@@ -958,6 +994,9 @@ function step(dt, first) {
     else if (S.ghostLead && S.ghostGap > 5) S.ghostLead = false;
   }
   if (first && !S.demoUsed && (S.eggT = (S.eggT || 0) + 1) % 10 === 0) rideEggs(S, flash);
+  if (S.pace && (S.paceT = (S.paceT || 0) + 1) % 20 === 0) paceTick();
+  if (S.windOn) { const gust = 1 + .25 * Math.sin(S.t / 7) + .1 * Math.sin(S.t / 2.3), w = S.windSpd * gust * Math.cos(S.route.headAt(S.dist) - S.windDir); physEnv.wind = w; S.windHead = w; }
+  if (S.tour && !S.tourSent && !S.beamed && (S.finished || S.lap >= 1) && (S.tourSent = true)) import('../stagetour.js').then(async T => { const t = S.t; if (await T.submitStage(S)) flash(`🏆 Etappe ${S.tour.n} geschafft: ${fmtT(t)} – Wertung unter Online › Events`, 4500); });
   if (profile.drinkTips !== false && S.t > S.nextDrink) { S.nextDrink += (profile.drinkEvery || 15) * 60; flash('💧 Kurz trinken', 2000); }
   // Ernährung: ab 45 min alle 25 min an Kohlenhydrate erinnern (bei harten Fahrten mehr)
   if (profile.fuelTips !== false && S.t > (S.nextFuel ??= 45 * 60)) { S.nextFuel += 25 * 60; const IF = S.np.n ? Math.pow(S.np.s4 / S.np.n, .25) / profile.ftp : .6; flash(`🍌 Zeit für Kohlenhydrate: ${IF > .75 ? '20–30 g (Gel, Riegel)' : '15–20 g (Banane, Riegel, Saftschorle)'}`, 3000); }
@@ -1017,7 +1056,7 @@ function gateTick(wi, dt) {
 }
 function segTick(list, log, prev, kind) {
   for (const c of list) {
-    if (c.state === 'pending' && prev < c.from + 1 && S.dist >= c.from) { c.state = 'active'; c.t0 = S.t; flash((kind === 'climb' ? 'Anstieg: ' : '') + c.name, 2200); say(kind === 'climb' ? `Anstieg ${c.name}: ${(c.len / 1000).toFixed(1).replace('.', ',')} km mit ${Math.round(c.avg * 10) / 10} %` : c.name.replace(/^Sprint/, 'Sprint') + ', los!', 'climb'); if (kind === 'sprint' && profile.sprintCam !== false) S.world.cinematic(3, 5); }
+    if (c.state === 'pending' && prev < c.from + 1 && S.dist >= c.from) { c.state = 'active'; c.t0 = S.t; const K = kind === 'climb' && S.kom?.[c.id]; flash((kind === 'climb' ? 'Anstieg: ' : '') + c.name + (K ? ` · 👑 ${K.me ? 'Du bist Bergkönig' : K.name} ${fmtT(K.time)}` : ''), 2600); say(kind === 'climb' ? `Anstieg ${c.name}: ${(c.len / 1000).toFixed(1).replace('.', ',')} km mit ${Math.round(c.avg * 10) / 10} %` : c.name.replace(/^Sprint/, 'Sprint') + ', los!', 'climb'); if (kind === 'sprint' && profile.sprintCam !== false) S.world.cinematic(3, 5); }
     if (c.state === 'active' && S.dist >= c.to) {
       c.state = 'done'; const time = S.t - c.t0, key = S.route.id + ':' + c.id, bestMap = kind === 'climb' ? progress.climbBest : (progress.sprintBest || {}), best = bestMap[key];
       const pr = !best || time < best.time;
@@ -1029,6 +1068,7 @@ function segTick(list, log, prev, kind) {
       xpPop(kind === 'climb' ? '+25 XP Gipfel' : '+20 XP Sprint'); sound.fanfare();
       say(`${kind === 'climb' ? 'Gipfel erreicht' : 'Sprint geschafft'} in ${fmtT(time)}${place ? ', Platz ' + (ahead + 1) : ''}${pr ? '. Neue Bestzeit!' : ''}`, 'climb');
       setTimeout(() => shot((kind === 'climb' ? 'Gipfel ' : '') + c.name), 400);
+      if (kind === 'climb' && S.route.builtin && !S.beamed && !S.pupUsed && !S.demoUsed && loggedIn()) import('../stagetour.js').then(async T => { const won = await T.submitKom(S.route.id, [{ id: c.id, time }]); if (won.includes(String(c.id)) && S?.alive) { flash(`👑 Neuer Bergkönig am ${c.name}!`, 4000); S.kom = { ...S.kom, [c.id]: { name: 'Du', time, me: true } }; } });
     }
   }
 }
@@ -1050,7 +1090,7 @@ function hud() {
   const xp = Math.round(S.odo / 1000 * 20 + S.t / 60 * 2 + S.asc * .5 + S.overtakes + S.climbLog.length * 25 + S.sprintLog.length * 20 + S.gates * 5);
   const L = levelOf(progress.xp + xp);
   $('#hSub', el).hidden = profile.hudSub === false;
-  $('#hSub', el).innerHTML = `<span>Ø ${Math.round(avg)} W</span><span>NP ${Math.round(np)} W</span><span>${Math.round(S.kj)} kJ</span><span>${Math.round(S.kj / .24 / 4.184)} kcal</span>${S.overtakes ? `<span>${S.overtakes} überholt</span>` : ''}<span class="xp">+${xp} XP · Lv ${L.lv}<i style="width:${(L.frac * 100).toFixed(0)}%"></i></span>`;
+  $('#hSub', el).innerHTML = `${S.windOn ? `<span>${S.windHead > .8 ? '💨 Gegenwind' : S.windHead < -.8 ? '🍃 Rückenwind' : '〰️ Seitenwind'} ${Math.round(Math.abs(S.windHead) * 3.6)} km/h</span>` : ''}<span>Ø ${Math.round(avg)} W</span><span>NP ${Math.round(np)} W</span><span>${Math.round(S.kj)} kJ</span><span>${Math.round(S.kj / .24 / 4.184)} kcal</span>${S.overtakes ? `<span>${S.overtakes} überholt</span>` : ''}<span class="xp">+${xp} XP · Lv ${L.lv}<i style="width:${(L.frac * 100).toFixed(0)}%"></i></span>`;
   const g = R.gradeAt(S.dist); $('#hGrade', el).textContent = f(g); $('.gradebox', el).dataset.g = g > 8 ? 4 : g > 5 ? 3 : g > 2.5 ? 2 : g < -2 ? 0 : 1;
   $('#gIcon', el).style.transform = `rotate(${-clamp(g * 2.2, -35, 35)}deg)`;
   if (S.mode !== 'gear') updGear();
@@ -1295,7 +1335,7 @@ export function leave() {
   if (!S) return;
   if (window.__watchMod?.W.token) { const M = window.__watchMod; M.W.lastPush = 0; M.pushWatch({ state: 'ended', route: S.route.name, total: Math.round(S.route.total), d: Math.round(S.dist), odo: Math.round(S.odo), t: Math.round(S.t), asc: Math.round(S.asc), p: 0, v: 0, prof: S.route.prof }); }
   if (S.tvTok) import('../tvstream.js').then(T => T.stopSender());
-  S.alive = false; S.vbox?.remove(); S.si?.destroy(); S.si = null; if (S.vurl) { const v = $('#rideVid', S.el); v?.pause(); URL.revokeObjectURL(S.vurl); } setTimeout(() => bus.emit('rideEnded'), 1500); S.live?.leave(); window.__presence?.setStatus({ where: 'menu', route: null, routeName: null, kit: null }); sound.silence(); music.stop(); hush(); putLive({ state: 'ended', t: Math.round(S.t), odo: Math.round(S.odo), route: S.route.name }); clearInterval(S.timer); cancelAnimationFrame(S.raf); S.ro?.disconnect();
+  physEnv.wind = 0; S.alive = false; S.vbox?.remove(); S.si?.destroy(); S.si = null; if (S.vurl) { const v = $('#rideVid', S.el); v?.pause(); URL.revokeObjectURL(S.vurl); } setTimeout(() => bus.emit('rideEnded'), 1500); S.live?.leave(); window.__presence?.setStatus({ where: 'menu', route: null, routeName: null, kit: null }); sound.silence(); music.stop(); hush(); putLive({ state: 'ended', t: Math.round(S.t), odo: Math.round(S.odo), route: S.route.name }); clearInterval(S.timer); cancelAnimationFrame(S.raf); S.ro?.disconnect();
   document.removeEventListener('keydown', S.key); S.offs.forEach(f => f());
   try { S.world.dispose(); } catch (e) { }
   // Speicher freigeben: Streckendaten, Caches der Karte, Testverweis

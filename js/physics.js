@@ -24,12 +24,13 @@ export const upg = { cda: 1, crr: 1, kg: 0 };
 export const setUpgrades = e => Object.assign(upg, e || { cda: 1, crr: 1, kg: 0 });
 
 // Je Strecke: Belag (Rollwiderstand) und Schwerkraft (Mond!). Wird beim Fahrtstart gesetzt.
-export const env = { g: G, crr: CRR };
+export const env = { g: G, crr: CRR, wind: 0 }; // wind: Gegenwind-Anteil in m/s (negativ = Rückenwind)
 const CRR_OF = { asphalt: .004, gravel: .0075, dirt: .009, trail: .013, moon: .012, cosmic: .004, sand: .011, candy: .006, rainbow: .0045 };
-export function setSurface(R) { env.crr = CRR_OF[R?.surface] ?? CRR; env.g = R?.theme?.gravity ?? G; }
+export function setSurface(R) { env.crr = CRR_OF[R?.surface] ?? CRR; env.g = R?.theme?.gravity ?? G; env.wind = 0; }
 export function resist(v, gradePct, draft = 0, u = null) {
   const th = Math.atan(gradePct / 100), m = mass(u);
-  return m * env.g * (env.crr * (u?.crr || 1) * Math.cos(th) + Math.sin(th)) + 0.5 * RHO * profile.cda * (u?.cda || 1) * (1 - draft) * v * v;
+  const va = v + (env.wind || 0); // Fahrtwind plus Gegenwind
+  return m * env.g * (env.crr * (u?.crr || 1) * Math.cos(th) + Math.sin(th)) + 0.5 * RHO * profile.cda * (u?.cda || 1) * (1 - draft) * va * Math.abs(va);
 }
 // Leistung, die bei gegebener Trittfrequenz, Gang und Steigung auf der Straße nötig wäre
 export function gearPower(cad, gear, gradePct) {

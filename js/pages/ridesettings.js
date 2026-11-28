@@ -129,6 +129,7 @@ export async function render(el, params = []) {
       ${RNG('p', 'gearDiff', 'Steigungsgefühl bei virtuellen Gängen', 25, 100, 5, profile.gearDiff, FMT.gearDiff)}
       ${RNG('p', 'simDiff', 'Steigungsgefühl im Steigungsmodus', 10, 100, 5, profile.simDiff, FMT.simDiff)}
       ${SW('p', 'autoPause', 'Automatische Pause, wenn du aufhörst zu treten')}
+      ${SW('p', 'windPhys', 'Wind auf der Strecke', 'Gegen- und Rückenwind mit Böen, je Fahrt neu. Windschatten wird wichtiger. Nicht bei Workouts (außer Spiel-Extras an) und nicht in Gruppenfahrten.', false)}
       ${SW('p', 'gameInWorkouts', 'Spiel-Extras auch bei Workouts', 'Aus (Standard): Bei Workouts gibt es keine Power-ups und Werkstatt-Teile, damit Tempo, Strecke und Strava-Daten echt bleiben. An: alles wie bei freien Fahrten.', false)}
       ${SW('p', 'askForm', 'Vor Workouts nach der Tagesform fragen', 'Müde, Beine schwer oder wenig Zeit: das Workout passt sich an')}
       ${SW('p', 'streetImgs', 'Echte Straßenbilder bei GPX-Strecken', 'Fotos der echten Straße (Mapillary) neben der Fahrt. Nur mit Konto und Einwilligung; Schlüssel unter App &amp; Daten')}

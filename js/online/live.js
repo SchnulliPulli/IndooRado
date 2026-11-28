@@ -48,7 +48,7 @@ export function joinRoute(routeId, me) {
     });
     ch.on('presence', { event: 'leave' }, ({ key }) => { if (peers.delete(key)) api.onChange?.(); });
     ch.on('broadcast', { event: 'mp' }, ({ payload: m }) => {
-      if (!m || m.to !== sid || typeof m.from !== 'string' || m.from.length > 40 || !['rideon', 'ch'].includes(m.t)) return;
+      if (!m || (m.to !== sid && !(m.t === 'emo' && m.to === '*')) || typeof m.from !== 'string' || m.from.length > 40 || !['rideon', 'ch', 'emo'].includes(m.t)) return; // emo: Geste an alle auf der Strecke
       const kind = ['chase', 'defend', 'sprint'].includes(m.kind) ? m.kind : null;
       api.onMp?.({ t: m.t, from: m.from, name: txt(m.name, 30) || 'Fahrer', kind, id: txt(m.id, 16) });
     });

@@ -21,7 +21,8 @@ export async function render(el, params = []) {
 async function events(el) {
   const sb = await O.client(), [routes, wos] = await Promise.all([listRoutes(), listWorkouts()]);
   const rn = (id, kit) => routes.find(r => r.id === id)?.name || kit?.n || id;
-  el.innerHTML = `<section class="pagehead"><h1>📅 Events</h1><span class="small muted">Geplante Gruppenfahrten: anmelden, zur Startzeit beitreten, zusammen fahren</span></section><div id="evList"><div class="pageload"><div class="spinner"></div></div></div>`;
+  el.innerHTML = `<section class="pagehead"><h1>📅 Events</h1><span class="small muted">Geplante Gruppenfahrten: anmelden, zur Startzeit beitreten, zusammen fahren</span></section><div id="evList"><div class="pageload"><div class="spinner"></div></div></div><section class="card" id="tourCard"><h2>🏆 Tour de IndooRado</h2><div class="spinner"></div></section>`;
+  import('../stagetour.js').then(T => { const b = $('#tourCard', el); if (b) T.tourCard(b); });
   const draw = async () => {
     const { data, error } = await sb.rpc('event_list'); if (!el.isConnected) return;
     if (error) { $('#evList', el).innerHTML = `<section class="card"><p class="muted">${esc(missing(error))}</p></section>`; return; }

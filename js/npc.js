@@ -54,8 +54,9 @@ export function stepField(R, field, me, dt, running) {
     if (n.race && n.fin != null) { n.v = Math.max(0, n.v - dt * .8); n.d += n.v * dt; if (R.loop) n.d = ((n.d % R.total) + R.total) % R.total; else n.d = Math.min(n.d, R.total); n.crank += n.v > 1 ? n.cadence / 60 * Math.PI * 2 * dt * .5 : 0; n.gap = gapOf(R, n.d, me.d); continue; }
     const g = R.gradeAt(n.d);
     // Am Berg etwas mehr, bergab weniger treten, dazu langsames Schwanken
-    const surge = 1 + .07 * Math.sin((performance.now() / 1000 + n.ph) / 9) + .04 * Math.sin((performance.now() / 1000 + n.ph) / 2.3);
-    const wkg = n.wkg * clamp(1 + g * .025, .55, 1.25) * surge;
+    const surge = n.pace ? 1 : 1 + .07 * Math.sin((performance.now() / 1000 + n.ph) / 9) + .04 * Math.sin((performance.now() / 1000 + n.ph) / 2.3);
+    // Pace-Partner: gleichmäßig wie ein Uhrwerk, am Berg nur wenig mehr
+    const wkg = n.pace ? n.wkg * clamp(1 + g * .008, .92, 1.08) : n.wkg * clamp(1 + g * .025, .55, 1.25) * surge;
     // Windschatten: jemand 0,5 bis 6 m vor mir in ähnlicher Spur
     let draft = 0;
     for (const o of all) { if (o === n) continue; const gp = gapOf(R, o.d, n.d); if (gp > .5 && gp < 6 && Math.abs(o.lat - n.lat) < 1.1) draft = Math.max(draft, .33 * (1 - (gp - .5) / 6)); }
@@ -86,4 +87,17 @@ export function stepField(R, field, me, dt, running) {
   let draft = 0, wheel = null;
   for (const n of field) { const gp = gapOf(R, n.d, me.d); if (gp > .5 && gp < 6 && Math.abs(n.lat - me.lat) < 1.3) { const dr = .33 * (1 - (gp - .5) / 6); if (dr > draft) { draft = dr; wheel = n; } } }
   return { draft, wheel, overtook };
+}
+
+/* ---------- Pace-Partner (wie bei Zwift): feste Gruppe mit konstantem W/kg ----------
+   Ein Anführer mit Schild plus vier Mitfahrer im selben Trikot. Startet knapp vor dem Spieler. */
+export function makePaceGroup(R, profile, wkg, meD) {
+  const col = wkg < 2.3 ? '#4fd18b' : wkg < 2.8 ? '#3fa7f5' : wkg < 3.3 ? '#f5c542' : wkg < 3.8 ? '#ff8a3d' : '#ef4458';
+  const label = String(wkg.toFixed(1)).replace('.', ',');
+  return Array.from({ length: 5 }, (_, i) => {
+    let d = meD + 40 + i * 2.2 + (i % 2) * .6; if (R.loop) d = ((d % R.total) + R.total) % R.total; else d = Math.min(d, R.total - 20);
+    const name = i === 0 ? `🐇 Pace ${label} W/kg` : freshName(new Set());
+    return { i: 900 + i, name, wkg, kg: 70, d, v: 8, lat: [1.4, 1.0, 1.8, 1.2, 1.6][i], latT: [1.4, 1.0, 1.8, 1.2, 1.6][i], crank: i, cadence: 88, ph: i * 7, passed: false, gap: 0, pace: true, leader: i === 0,
+      look: { av: { bike: 'road', head: 'human' }, jersey: col, bikeColor: '#222', helmet: col, skin: ['#f1c27d', '#e0ac69', '#8d5524', '#c68642', '#ffdbac'][i], name } };
+  });
 }
