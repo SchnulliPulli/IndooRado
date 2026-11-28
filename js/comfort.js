@@ -1,0 +1,95 @@
+// Bedienkomfort: App installieren, Erinnerungen (Benachrichtigungen), Sprachsteuerung, Plan in den Kalender.
+import { profile, saveProfile, progress } from './state.js';
+import { bus, toast, dialog, esc, download } from './util.js';
+
+/* ---------- App installieren (Startbildschirm) ---------- */
+let deferred = null;
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; bus.emit('installable'); });
+addEventListener('appinstalled', () => { deferred = null; toast('📲 IndooRado ist installiert'); });
+export const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+export const isIos = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+export const canInstall = () => !isStandalone() && (!!deferred || isIos());
+export async function install() {
+  if (deferred) { deferred.prompt(); const r = await deferred.userChoice.catch(() => null); deferred = null; return r?.outcome === 'accepted'; }
+  if (isIos()) { await dialog({ title: '📲 Zum Home-Bildschirm', html: '<p>In Safari unten auf <b>Teilen</b> (Quadrat mit Pfeil) tippen, dann <b>„Zum Home-Bildschirm“</b>. IndooRado startet danach wie eine App – im Vollbild, ohne Adressleiste.</p>', buttons: [{ label: 'OK', value: true, cls: 'pri' }] }); return false; }
+  toast('Im Browser-Menü „App installieren“ bzw. „Zum Startbildschirm hinzufügen“ wählen'); return false;
+}
+
+/* ---------- Erinnerungen ----------
+   Benachrichtigungen des Geräts, solange IndooRado geöffnet ist (auch im Hintergrund). Echte Push-Nachrichten bei
+   geschlossener App bräuchten einen eigenen Server-Dienst und sind hier bewusst nicht eingebaut. */
+const today = () => new Date().toISOString().slice(0, 10);
+async function notify(title, body, tag) {
+  if (profile.reminders !== true || typeof Notification === 'undefined' || Notification.permission !== 'granted') return false;
+  try { const reg = await navigator.serviceWorker?.getRegistration(); if (reg) await reg.showNotification(title, { body, tag, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png' }); else new Notification(title, { body, tag }); return true; } catch (e) { return false; }
+}
+export async function enableReminders(on) {
+  if (on) {
+    if (typeof Notification === 'undefined') { toast('Dieser Browser kann keine Benachrichtigungen'); return false; }
+    const p = await Notification.requestPermission(); if (p !== 'granted') { toast('Benachrichtigungen wurden nicht erlaubt (Browser-Einstellungen)', 5000); return false; }
+  }
+  profile.reminders = !!on; saveProfile(); scheduleReminders(); return true;
+}
+let tm = [];
+export function scheduleReminders() {
+  tm.forEach(clearTimeout); tm = []; if (profile.reminders !== true) return;
+  const at = (hhmm, fn) => { const [h, m] = String(hhmm).split(':').map(Number), d = new Date(); d.setHours(h || 18, m || 0, 0, 0); const ms = d - Date.now(); if (ms > 0 && ms < 864e5) tm.push(setTimeout(fn, ms)); };
+  const rodeToday = async () => { const { db } = await import('./db.js'); return (await db.all('rides')).some(r => r.date.slice(0, 10) === today()); };
+  // Training des Tages (aktiver Plan) zur gewählten Uhrzeit
+  at(profile.remindAt || '18:00', async () => {
+    if (await rodeToday() || progress.lastRemind === today()) return; progress.lastRemind = today();
+    const P = await import('./plans.js'), n = P.nextWorkout?.();
+    notify('🚴 Zeit fürs Training', n ? `Heute steht „${n.name}“ an.` : 'Eine kurze Runde hält die Form – und deine Serie.', 'plan');
+  });
+  // Serie in Gefahr (20:30)
+  at('20:30', async () => {
+    const A = await import('./analysis.js'), { db } = await import('./db.js'), t = A.totals(await db.all('rides'));
+    if (t.streak >= 2 && !(await rodeToday())) notify('🔥 Deine Serie endet heute', `${t.streak} Tage am Stück – schon 15 Minuten reichen, um sie zu halten.`, 'streak');
+  });
+}
+// Freund startet eine Fahrt (nur angemeldet, nur wenn die App gerade im Hintergrund ist)
+let friends = null, riding = new Set();
+bus.on('presence', async () => {
+  if (profile.reminders !== true || !document.hidden) return;
+  try {
+    const PR = await import('./online/presence.js'), O = await import('./online/client.js'); if (!O.loggedIn()) return;
+    if (!friends) { const { data } = await (await O.client()).rpc('friend_list'); friends = new Map((data || []).filter(f => f.status === 'accepted').map(f => [f.id, f.display_name])); }
+    for (const p of PR.P.peers.values()) { const uid = p.uid, where = p.where; if (!uid || !friends.has(uid)) continue; if (where === 'ride' && !riding.has(uid)) { riding.add(uid); notify(`🚴 ${friends.get(uid)} fährt gerade`, `${p.routeName ? 'Auf ' + p.routeName + ' – ' : ''}fahr mit!`, 'friend-' + uid); } if (where !== 'ride') riding.delete(uid); }
+  } catch (e) { }
+});
+
+/* ---------- Sprachsteuerung in der Fahrt ----------
+   Spracherkennung des Browsers (Chrome/Edge/Safari). Achtung: Chrome schickt den Ton dafür an Google. */
+const CMDS = [[/\b(pause|stopp|anhalten)\b/, 'pause'], [/\b(weiter|los)\b(?!.*intervall)/, 'pause'], [/schwerer|hoch(schalten)?|mehr/, 'up'], [/leichter|runter(schalten)?|weniger/, 'down'],
+  [/n(ä|ae)chste[sr]? intervall|intervall weiter|überspringen/, 'next'], [/intervall zurück|vorherige[sr]? intervall/, 'prev'], [/foto|bild/, 'photo'], [/kamera|ansicht/, 'cam'], [/ride ?on|daumen/, 'rideon'], [/musik|n(ä|ae)chstes lied|lied/, 'music'], [/links/, 'left'], [/rechts/, 'right']];
+let rec = null, listening = false;
+export const voiceSupported = () => !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+export async function toggleVoice(onCmd, flash) {
+  if (listening) { listening = false; try { rec?.stop(); } catch (e) { } flash('🎙️ Sprachsteuerung aus', 1200); return false; }
+  if (!voiceSupported()) { toast('Dieser Browser kann keine Sprachsteuerung (Chrome, Edge oder Safari nehmen)', 5000); return false; }
+  const { consent } = await import('./consent.js');
+  if (!(await consent('voice', 1, { title: '🎙️ Sprachsteuerung', html: '<p>Sag während der Fahrt z. B. <b>„Pause“</b>, <b>„schwerer“</b>, <b>„leichter“</b>, <b>„nächstes Intervall“</b>, <b>„Foto“</b>, <b>„Kamera“</b>, <b>„Ride On“</b>, <b>„Musik“</b>.</p><p class="small muted">Die Erkennung macht dein Browser. <b>Chrome und Edge schicken den Ton dafür an Google bzw. Microsoft</b>, Safari je nach Gerät an Apple. IndooRado speichert nichts. Abschalten mit demselben Knopf.</p>' }))) return false;
+  const R = window.SpeechRecognition || window.webkitSpeechRecognition; rec = new R(); rec.lang = 'de-DE'; rec.continuous = true; rec.interimResults = false;
+  rec.onresult = e => { const t = e.results[e.results.length - 1][0].transcript.toLowerCase().trim(); const c = CMDS.find(([re]) => re.test(t)); if (c) { onCmd(c[1]); flash('🎙️ „' + t + '“', 1000); } };
+  rec.onend = () => { if (listening && !document.hidden) { try { rec.start(); } catch (e) { } } };
+  rec.onerror = e => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { listening = false; toast('Mikrofon nicht erlaubt', 4000); } };
+  try { rec.start(); listening = true; flash('🎙️ Sprachsteuerung an – sag z. B. „schwerer“', 2200); } catch (e) { toast(e.message, 4000); }
+  return listening;
+}
+export function stopVoice() { listening = false; try { rec?.stop(); } catch (e) { } }
+
+/* ---------- Plan in den Kalender (.ics) ---------- */
+const DAYS = { 2: [2, 6], 3: [2, 4, 6], 4: [2, 4, 6, 0], 5: [1, 2, 4, 6, 0], 6: [1, 2, 3, 4, 6, 0], 7: [1, 2, 3, 4, 5, 6, 0] };
+export function planIcs(p, done = {}, time = profile.remindAt || '18:00') {
+  const todo = p.all.filter(w => !done[w.id]), days = DAYS[Math.min(7, Math.max(2, p.perWeek))] || DAYS[4];
+  const [hh, mm] = time.split(':').map(Number), out = [], d = new Date(); d.setHours(hh, mm, 0, 0); if (d < Date.now()) d.setDate(d.getDate() + 1);
+  const pad = n => String(n).padStart(2, '0'), fmt = x => `${x.getFullYear()}${pad(x.getMonth() + 1)}${pad(x.getDate())}T${pad(x.getHours())}${pad(x.getMinutes())}00`;
+  for (const w of todo) {
+    while (!days.includes(d.getDay())) d.setDate(d.getDate() + 1);
+    const dur = w.segs.reduce((a, g) => a + g.dur, 0), e = new Date(+d + dur * 1000);
+    out.push(['BEGIN:VEVENT', `UID:${w.id}@indoorado.de`, `DTSTAMP:${fmt(new Date())}`, `DTSTART:${fmt(d)}`, `DTEND:${fmt(e)}`, `SUMMARY:🚴 ${w.name}`, `DESCRIPTION:${(w.desc || '').replace(/[,;\\]/g, ' ').replace(/\n/g, ' ')} – ${location.origin}/`, 'END:VEVENT'].join('\r\n'));
+    d.setDate(d.getDate() + 1);
+  }
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//IndooRado//Trainingsplan//DE', `X-WR-CALNAME:IndooRado · ${p.name}`, ...out, 'END:VCALENDAR'].join('\r\n');
+}
+export function downloadPlanIcs(p, done) { download((p.name.replace(/[^\wäöüÄÖÜß -]+/g, '').trim() || 'plan') + '.ics', planIcs(p, done), 'text/calendar'); }

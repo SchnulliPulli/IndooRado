@@ -360,6 +360,7 @@ async function init() {
   netIndicator();
   await loadState(); await loadClickMap(); await loadPlan();
   import('./tv.js').then(m => m.applyTv()); // Fernseher-Modus, Gamepad, Handy-Fernbedienung
+  import('./comfort.js').then(m => m.scheduleReminders()); // Erinnerungen, App installieren
   { const F = await import('./family.js'); await F.applySeed(); document.body.classList.toggle('kidmode', !!profile.kid); // Familienprofile / Kindermodus
     const fn = F.currentName(); if (fn) { const fc = document.createElement('a'); fc.className = 'chip famchip'; fc.href = '#/profile'; fc.title = 'Familienprofil wechseln'; fc.textContent = (profile.kid ? '🧒 ' : '🚴 ') + fn; const lbx = document.querySelector('.loginbtn'); if (lbx) lbx.before(fc); else document.querySelector('.topbar .ridebtn')?.before(fc); } }
   const { applyAppTheme } = await import('./pages/profile.js'); applyAppTheme();

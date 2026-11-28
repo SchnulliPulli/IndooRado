@@ -1320,3 +1320,5 @@ body.watchtv .tvprof { height: 15vh; }
 .tourtabs { margin-bottom: 6px; }
 .emopick { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 30; display: flex; gap: 6px; padding: 8px; border-radius: 16px; background: var(--hudbg, rgba(0,0,0,.6)); }
 .emopick button { font-size: 28px; width: 48px; height: 48px; border: 0; border-radius: 12px; background: rgba(255,255,255,.08); cursor: pointer; }
+.instcard { gap: 10px; flex-wrap: wrap; align-items: center; }
+.tbtn.on { outline: 2px solid var(--acc, #ff6a3d); }

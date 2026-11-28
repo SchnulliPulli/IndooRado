@@ -145,6 +145,15 @@ export async function render(el) {
     </div>
   </section>`;
   off.push(deviceCards($('#devs', el)));
+  // Einmaliger Hinweis: als App installieren (Vollbild, eigenes Symbol)
+  import('../comfort.js').then(C => {
+    let off = false; try { off = localStorage.getItem('vvInstHide') === '1'; } catch (e) { }
+    if (off || !C.canInstall() || el.querySelector('.instcard')) return;
+    const c = document.createElement('section'); c.className = 'card instcard row between';
+    c.innerHTML = '<div><b>📲 IndooRado als App</b><div class="small muted">Startet im Vollbild mit eigenem Symbol – wie eine richtige App.</div></div><div class="row"><button class="btn sm pri" data-inst>Installieren</button><button class="btn sm ghost" data-insthide aria-label="Ausblenden">✕</button></div>';
+    c.onclick = async e => { if (e.target.closest('[data-insthide]')) { try { localStorage.setItem('vvInstHide', '1'); } catch (er) { } c.remove(); } if (e.target.closest('[data-inst]')) { if (await C.install()) c.remove(); } };
+    el.prepend(c);
+  });
   el.onclick = (e => {
     if (e.target.closest('[data-quick]')) { sessionStorage.setItem('quickStart', '1'); location.hash = '#/ride'; return; }
     const kd = e.target.closest('[data-kid]'); if (kd) { sel.routeId = kd.dataset.kid; sel.workoutId = null; sel.npcs = true; saveSel(); sessionStorage.setItem('kidRide', '10'); location.hash = '#/ride'; return; }

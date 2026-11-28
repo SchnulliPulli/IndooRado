@@ -11,5 +11,5 @@ export async function consent(key, version, { title, html, ok = 'Zustimmen und f
   profile.consents = { ...(profile.consents || {}), [key]: version }; saveProfile(); return true;
 }
 export const revoke = key => { if (profile.consents?.[key]) { const c = { ...profile.consents }; delete c[key]; profile.consents = c; saveProfile(); } };
-export const NAMES = { osm: 'Echte Gebäude (OpenStreetMap)', call: 'Videoanrufe (WebRTC, TURN)', mly: 'Echte Straßenbilder (Mapillary)' };
+export const NAMES = { osm: 'Echte Gebäude (OpenStreetMap)', call: 'Videoanrufe (WebRTC, TURN)', mly: 'Echte Straßenbilder (Mapillary)', voice: 'Sprachsteuerung (Spracherkennung des Browsers)' };
 export { esc };

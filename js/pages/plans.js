@@ -28,7 +28,7 @@ export async function render(el) {
       <p class="small muted">${esc(p.desc)}</p>
       <div class="pweeks">${p.weeks.map((w, i) => `<i style="height:${Math.round(18 + 42 * w.reduce((s, x) => s + stats(x).tss, 0) / Math.max(...p.weeks.map(ww => ww.reduce((s, x) => s + stats(x).tss, 0))))}px" title="Woche ${i + 1}"></i>`).join('')}</div>
       <div class="row between small muted num"><span>${fmtDur(p.dur)} gesamt</span><span>${p.all.length} Einheiten · TSS ${p.tss}</span></div>
-      <div class="row end"><a class="btn sm ghost" href="#/planner/${p.id}">${p.custom ? 'Bearbeiten' : 'Anpassen'}</a><button class="btn sm ghost" data-expplan="${p.id}" title="Plan als Datei speichern">Export</button>${p.custom ? `<button class="btn sm ghost danger" data-delplan="${p.id}">Löschen</button>` : ''}${pr?.p.id === p.id ? '<span class="small" style="color:var(--ok)">Aktiv</span>' : `<button class="btn sm pri" data-start="${p.id}">Plan starten</button>`}</div>
+      <div class="row end"><a class="btn sm ghost" href="#/planner/${p.id}">${p.custom ? 'Bearbeiten' : 'Anpassen'}</a><button class="btn sm ghost" data-expplan="${p.id}" title="Plan als Datei speichern">Export</button>${plan.active?.id === p.id ? `<button class="btn sm ghost" data-ics="${p.id}" title="Einheiten als Termine in deinen Kalender (Google, Apple, Outlook)">📅 Kalender</button>` : ``}${p.custom ? `<button class="btn sm ghost danger" data-delplan="${p.id}">Löschen</button>` : ''}${pr?.p.id === p.id ? '<span class="small" style="color:var(--ok)">Aktiv</span>' : `<button class="btn sm pri" data-start="${p.id}">Plan starten</button>`}</div>
     </article>`).join('')}</section>`;
 
   const fromText = () => { const t = $('#cpText', el).value; if (!t.trim()) throw new Error('Bitte zuerst Text einfügen'); return parsePlanText(t); };
@@ -72,6 +72,7 @@ export async function render(el) {
       if (plan.active) stopPlan();
       startPlan(b.dataset.start); toast('Plan gestartet. Viel Erfolg!'); render(el); window.scrollTo(0, 0);
     }
+    if (b.dataset.ics) { const C = await import('../comfort.js'); C.downloadPlanIcs(getPlan(b.dataset.ics), plan.active?.done || {}); toast('Kalenderdatei gespeichert – öffnen, um die Termine in deinen Kalender zu übernehmen', 5000); return; }
     if (b.dataset.expplan) {
       const p = getPlan(b.dataset.expplan), base = p.name.replace(/[^\wäöüÄÖÜß -]+/g, '').trim() || 'plan';
       const fmt = await dialog({ title: 'Plan exportieren', html: '<p class="muted"><b>FIT (ZIP)</b>: jedes Workout des Plans als FIT-Datei für deinen Radcomputer, nummeriert in Reihenfolge.</p><p class="muted"><b>IndooRado-Datei</b>: der ganze Plan zum Importieren in IndooRado auf einem anderen Gerät.</p>', buttons: [{ label: 'Abbrechen', value: null }, { label: 'IndooRado-Datei', value: 'json' }, { label: 'FIT (ZIP)', value: 'fit', cls: 'pri' }] });

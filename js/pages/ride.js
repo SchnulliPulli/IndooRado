@@ -119,6 +119,7 @@ export async function render(el) {
       <button class="tbtn" id="tFull" title="Vollbild">${ICON.full}<span>Vollbild</span></button>
       <button class="tbtn" id="tCast" title="Fahrt auf dem Fernseher anzeigen (Chromecast, Fernseher mit Browser, AirPlay)"><b class="dots">📡</b><span>Auf Fernseher</span></button>
       <button class="tbtn" id="tWatch" title="Zuschauer-Link: Freunde sehen live zu und feuern an"><b class="dots">📺</b><span id="tWatchL">Zuschauer</span></button>
+      <button class="tbtn" id="tVoice" title="Sprachsteuerung: Pause, schwerer, leichter, nächstes Intervall …"><b class="dots">🎙️</b><span id="tVoiceL">Sprache</span></button>
       <button class="tbtn" id="tEmo" title="Geste an deine Mitfahrer (online)"><b class="dots">🙋</b><span>Geste</span></button>
       <button class="tbtn" id="tPace" title="Pace-Partner: Gruppe mit festem Tempo zum Mitfahren"><b class="dots">🐇</b><span id="tPaceL">Pace-Partner</span></button>
       <button class="tbtn" id="tBuddy" title="Trainingsbuddy, der dich pusht"><b class="dots">🤝</b><span id="tBuddyL">Buddy</span></button>
@@ -352,6 +353,7 @@ function bindUi() {
   $('#tMode', el).onclick = cycleMode;
   $('#tNpc', el).onclick = toggleNpcs;
   $('#tPace', el).onclick = choosePace;
+  $('#tVoice', el).onclick = async () => { const C = await import('../comfort.js'); const on = await C.toggleVoice(c => bus.emit('remoteCmd', c), flash); $('#tVoiceL', el).textContent = on ? 'Sprache an' : 'Sprache'; $('#tVoice', el).classList.toggle('on', on); };
   $('#tEmo', el).onclick = () => {
     if (!S.mp || !S.field.some(n => n.remote)) { flash('Gesten gehen an echte Mitfahrer – gerade ist niemand online auf dieser Strecke', 2200); return; }
     let p = $('#emoPick', el); if (p) { p.remove(); return; }
@@ -1335,7 +1337,7 @@ export function leave() {
   if (!S) return;
   if (window.__watchMod?.W.token) { const M = window.__watchMod; M.W.lastPush = 0; M.pushWatch({ state: 'ended', route: S.route.name, total: Math.round(S.route.total), d: Math.round(S.dist), odo: Math.round(S.odo), t: Math.round(S.t), asc: Math.round(S.asc), p: 0, v: 0, prof: S.route.prof }); }
   if (S.tvTok) import('../tvstream.js').then(T => T.stopSender());
-  physEnv.wind = 0; S.alive = false; S.vbox?.remove(); S.si?.destroy(); S.si = null; if (S.vurl) { const v = $('#rideVid', S.el); v?.pause(); URL.revokeObjectURL(S.vurl); } setTimeout(() => bus.emit('rideEnded'), 1500); S.live?.leave(); window.__presence?.setStatus({ where: 'menu', route: null, routeName: null, kit: null }); sound.silence(); music.stop(); hush(); putLive({ state: 'ended', t: Math.round(S.t), odo: Math.round(S.odo), route: S.route.name }); clearInterval(S.timer); cancelAnimationFrame(S.raf); S.ro?.disconnect();
+  physEnv.wind = 0; import('../comfort.js').then(C => C.stopVoice()); S.alive = false; S.vbox?.remove(); S.si?.destroy(); S.si = null; if (S.vurl) { const v = $('#rideVid', S.el); v?.pause(); URL.revokeObjectURL(S.vurl); } setTimeout(() => bus.emit('rideEnded'), 1500); S.live?.leave(); window.__presence?.setStatus({ where: 'menu', route: null, routeName: null, kit: null }); sound.silence(); music.stop(); hush(); putLive({ state: 'ended', t: Math.round(S.t), odo: Math.round(S.odo), route: S.route.name }); clearInterval(S.timer); cancelAnimationFrame(S.raf); S.ro?.disconnect();
   document.removeEventListener('keydown', S.key); S.offs.forEach(f => f());
   try { S.world.dispose(); } catch (e) { }
   // Speicher freigeben: Streckendaten, Caches der Karte, Testverweis

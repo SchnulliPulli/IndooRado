@@ -27,7 +27,9 @@ const T = [
     <li><b>Sprints und Gipfel</b> mit Bestzeiten, <b>Zieltore</b> am Ende jedes Intervalls, <b>Power-ups</b> (Taste U) und <b>Sammelglocken</b> für Extra-XP.</li>
     <li><b>Geist</b>: deine Bestfahrt auf dieser Strecke als durchsichtiger Fahrer.</li>
     <li><b>Freunde-Geister</b>: in der Auswertung „👻 Als Geist“ teilt eine Fahrt als Datei oder Code. Freunde öffnen sie unter Aktivitäten › Importieren › Geist und fahren dann gegen dich (bis zu fünf Geister gleichzeitig, ohne Puls und Watt).</li>
-    <li><b>Trainingsbuddy</b> (Mehr › Buddy): fährt locker neben dir her und plaudert ein wenig.</li></ul>`],
+    <li><b>Trainingsbuddy</b> (Mehr › Buddy): fährt locker neben dir her und plaudert ein wenig.</li>    <li><b>🐇 Pace-Partner</b> (⋯ in der Fahrt): eine Gruppe mit festem W/kg zum Mitfahren. <b>🏆 Tour de IndooRado</b> (Online › Events): fünf Etappen pro Woche mit gelbem, rotem und grünem Trikot. <b>👑 Bergkönig:</b> Bestzeit je Anstieg, angezeigt am Fuß des Anstiegs.</li>
+    <li><b>🙋 Gesten</b> an echte Mitfahrer, <b>Wind</b> mit Böen (Fahrt &amp; Ton), <b>🎙️ Sprachsteuerung</b>: „Pause“, „schwerer“, „nächstes Intervall“, „Foto“ …</li>
+</ul>`],
   ['training', '🏋️', 'Workouts, Pläne und FTP', `<ul class="tips">
     <li>Workout-Ziele sind Prozent deiner FTP – ändert sich die FTP, passt sich alles an. Jedes Intervall zeigt Kadenz-Ziel und Tipp, ein Countdown piept vor dem Wechsel.</li>
     <li><b>Adaptiv</b>: bricht die Kadenz ein, sinkt der Widerstand kurz; ist der Puls lange am Anschlag, sinkt die Intensität. Mit + und − änderst du die Intensität in 2-%-Schritten.</li>
@@ -37,6 +39,9 @@ const T = [
     <li><b>Empfehlung für heute</b> nach deiner Frische (TSB) und dem Plan.</li>    <li><b>Tagesform</b>: Vor einem Workout fragt die App „Wie fühlst du dich heute?“ – Müde oder Beine schwer senkt die Intensität, Wenig Zeit kürzt das Workout auf 20–60 Minuten (abschaltbar unter Fahrt &amp; Ton).</li>
     <li><b>Export für den Radcomputer</b>: Workout › Export › .fit (Garmin, Wahoo, Hammerhead; Leistung in % FTP). Ganze Pläne als ZIP mit einer FIT-Datei je Einheit.</li>
     <li><b>⏱️ Nach Zeit suchen</b>: Unter Training › Workouts oben deine verfügbare Zeit wählen (20 bis 120 min oder frei). Passende Workouts stehen vorn, andere werden angepasst: ganze Intervall-Wiederholungen fallen weg oder kommen dazu, Ein- und Ausfahren bleiben. Mit „💾 Behalten“ wird die angepasste Fassung ein eigenes Workout.</li>
+    <li><b>🎯 Plan für mein Ziel</b> (Training › Pläne): Ziel, Datum, Stunden pro Woche und Schwerpunkt angeben – die App baut den Plan rückwärts mit Grundlage, Aufbau, Spitze, Erholungswochen und lockerer Woche vor dem Ziel.</li>
+    <li><b>Wie hart war's?</b> Nach jeder Workout-Fahrt kurz einschätzen – der Plan passt die nächsten Einheiten an. <b>🧬 Fahrertyp</b> unter Fortschritt zeigt Stärken und Schwächen. <b>🍌 Ernährung:</b> Erinnerungen bei langen Fahrten, Verbrauch in der Auswertung.</li>
+    <li><b>Spiel-Extras bei Workouts</b> (Power-ups, Werkstatt-Teile, Wind) sind standardmäßig aus, damit Tempo und Strava-Daten echt bleiben. Einschalten unter Fahrt &amp; Ton.</li>
 </ul>`],
   ['strecken', '🗺️', 'Strecken und Baukasten', `<ul class="tips">
     <li>Fast 30 eingebaute Welten von Hügelland bis Weltall, Tiefsee, Lava-Insel, Wolken und Zuckerland. Jede Strecke zeigt ein Vorschaubild.</li>
@@ -87,6 +92,7 @@ const T = [
     <li><b>Live-Ansicht</b>: Läuft auf einem anderen Gerät deines Kontos eine Fahrt, siehst du sie live auf der Startseite. Pro Konto läuft immer nur eine Fahrt gleichzeitig.</li>    <li><b>👨‍👩‍👧 Familienprofile</b>: Unter Einstellungen › Profil mehrere Personen anlegen, jede mit eigenen Fahrten und Fortschritt. Kinderprofile haben sanften Widerstand, kurze bunte Fahrten und keinen Online-Bereich.</li>
     <li><b>📺 Fernseher-Modus</b> (App &amp; Daten): große Schrift, Bedienung mit Pfeiltasten der Fernbedienung. Gamepads gehen immer. Das Handy wird mit demselben Konto in der Handy-Ansicht zur Fernbedienung: Pause, Gänge, Kamera, Ride On, Foto, Musik sowie Workout (Intervall zurück/neu/weiter, Intensität ±2 %) und Beenden mit Speichern.</li>
     <li><b>📡 Auf Fernseher</b> (in der Fahrt unter ⋯, mit Konto): Android und Chrome am PC streamen die große Fahrtanzeige auf Chromecast/Google TV. Fernseher mit Browser (Fire TV, Android TV, Smart-TV): <code>indoorado.de/tv</code> öffnen und den angezeigten Code eingeben. iPhone/iPad: Kontrollzentrum › Bildschirmsynchronisierung zum Apple TV. Der Fernseher zeigt links das Live-Bild deiner Fahrt (3D-Welt bzw. Videofahrt) und rechts die großen Werte; das Bild geht direkt vom Fahrgerät zum Fernseher, am besten im selben WLAN.</li>
+    <li><b>🔔 Erinnerungen</b> (App &amp; Daten): Training des Tages, Serie in Gefahr, Freund fährt los. <b>📅 Kalender:</b> beim aktiven Plan unter Pläne. <b>📲 Als App installieren:</b> Hinweis auf der Startseite oder unter App &amp; Daten.</li>
 </ul>`],
   ['probleme', '🛠️', 'Wenn etwas nicht klappt', `<ul class="tips">
     <li><b>Ruckelt die Fahrt?</b> Die App senkt die Auflösung selbst. Zusätzlich hilft Einstellungen › App & Daten › Grafik „Mittel“ oder „Niedrig“.</li>
