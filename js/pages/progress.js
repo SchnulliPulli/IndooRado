@@ -19,7 +19,7 @@ export async function render(el) {
   for (let i = 11; i >= 0; i--) { const s = new Date(+monday - i * 7 * 864e5), e = +s + 7 * 864e5; const l = rides.filter(r => +new Date(r.date) >= +s && +new Date(r.date) < e); weeks.push({ l: 'KW' + kw(s), h: l.reduce((a, r) => a + r.sum.dur, 0) / 3600, km: l.reduce((a, r) => a + r.sum.dist, 0) / 1000, tss: l.reduce((a, r) => a + r.sum.tss, 0), hl: i === 0 }); }
   const climbRows = Object.entries(progress.climbBest).map(([k, v]) => { const [rid, cid] = k.split(':'); const r = BUILTIN.find(x => x.id === rid); return { route: r?.name || 'Eigene Strecke', name: r?.climbNames?.[+cid] || 'Anstieg ' + (+cid + 1), ...v }; });
   el.innerHTML = `
-  <section class="pagehead"><h1>Fortschritt</h1></section>
+  <section class="pagehead"><h1>Fortschritt</h1><div class="row"><a class="btn sm" href="#/report/week/0">📄 Wochenbericht</a><a class="btn sm" href="#/report/month/0">📄 Monatsbericht</a></div></section>
   <section class="card">${levelBar()}<div style="margin-top:12px">${statTiles([[t.rides, 'Fahrten'], [fmtKm(t.dist), 'km gesamt'], [fmtDur(t.dur), 'Fahrzeit'], [Math.round(t.asc).toLocaleString(document.documentElement.lang), 'Höhenmeter'], [Math.round(t.kj).toLocaleString(document.documentElement.lang), 'kJ'], [t.streak, 'Tage am Stück']])}</div></section>
   <section class="grid2">
     <div class="card" id="lgCard"><h2>🏆 Wochenliga</h2><div class="spinner"></div></div>

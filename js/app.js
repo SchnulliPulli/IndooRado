@@ -18,6 +18,7 @@ const PAGES = {
   avatar: () => import('./pages/avatar.js'),
   legal: () => import('./pages/legal.js'),
   live: () => import('./pages/live.js'),
+  report: () => import('./pages/report.js'),
   watch: () => import('./pages/watch.js'), // Zuschauer-Link (ohne Konto nutzbar)
   tv: () => import('./pages/watch.js').then(m => ({ ...m, render: el => m.renderCode(el) })), // Fernseher: Code eingeben
   events: () => import('./pages/community.js').then(m => ({ ...m, render: el => m.render(el, ['events']) })), clubs: () => import('./pages/community.js').then(m => ({ ...m, render: el => m.render(el, ['clubs']) })),
@@ -49,7 +50,7 @@ const NAV = [
   { k: '', l: 'Start', i: 'home', also: ['companion', 'live'] },
   { k: 'workouts', l: 'Training', i: 'workout', tabs: [['workouts', 'Workouts'], ['plans', 'Trainingspläne']], also: ['editor', 'planner'] },
   { k: 'routes', l: 'Strecken', i: 'route', also: ['builder'] },
-  { k: 'history', l: 'Aktivitäten', s: 'Fahrten', i: 'history', tabs: [['history', 'Verlauf'], ['progress', 'Fortschritt & Saison']], also: ['summary', 'season'] },
+  { k: 'history', l: 'Aktivitäten', s: 'Fahrten', i: 'history', tabs: [['history', 'Verlauf'], ['progress', 'Fortschritt & Saison']], also: ['summary', 'season', 'report'] },
   { k: 'devices', l: 'Geräte', i: 'devices' },
   { k: 'lobby', l: 'Online', i: 'online', tabs: [['lobby', 'Lobby'], ['friends', 'Freunde'], ['community', 'Events & Teams'], ['account', 'Konto'], ['admin', 'Admin']], also: ['players', 'events', 'clubs'] },
   { k: 'profile', l: 'Einstellungen', s: 'Optionen', i: 'profile', tabs: [['profile', 'Profil'], ['avatar', 'Avatar'], ['ridesettings', 'Fahrt & Ton'], ['appsettings', 'App & Daten'], ['help', 'Hilfe']], also: ['sound', 'connect', 'legal'] },
@@ -386,6 +387,7 @@ async function init() {
   await route();
   if (!/^#\/(watch\/|tv\b)/.test(location.hash)) import('./onboard.js').then(m => m.onboarding()).catch(e => console.error(e)); // Zuschauer sehen keine Einführung
   import('./eggs.js').then(m => m.initEggs()).catch(e => console.error(e));
+  setTimeout(() => import('./ridesnap.js').then(m => m.offerResume()).catch(e => console.warn(e)), 1200); // unterbrochene Fahrt?
   reconnectKnown().catch(() => { });
   // Barrierefreiheit: Sprunglink zum Inhalt (ohne den Hash-Router zu stören), Tastenkürzel-Übersicht mit ?
   const sk = document.getElementById('skipLink'); if (sk) sk.onclick = e => { e.preventDefault(); document.getElementById('view')?.focus(); };

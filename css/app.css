@@ -1327,3 +1327,27 @@ body.watchtv .tvprof { height: 15vh; }
 .langgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
 .langgrid .btn{justify-content:flex-start;padding:12px 14px;font-size:1.05em}
 .tvdiag{position:fixed;left:12px;bottom:8px;opacity:.75;font-size:13px;pointer-events:none}
+/* Trainingsbericht */
+.rpdoc{max-width:900px}
+.rphead{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--line,#333);padding-bottom:10px;margin-bottom:12px}
+.rphead h2{margin:2px 0 0}.rpname{text-align:right;font-weight:600;display:flex;flex-direction:column}
+.rptiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.rptile{background:var(--card2,rgba(127,127,127,.08));border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:2px}
+.rptile b{font-size:1.35em}.rptile span{font-size:.85em;opacity:.75}.rptile small{font-size:.8em}
+.rpup{color:#4fd18b}.rpdn{color:#ef4458}
+.rpbars{width:100%;height:auto;display:block}
+.rpzones{display:flex;flex-direction:column;gap:5px}
+.rpz{display:grid;grid-template-columns:130px 1fr 70px;align-items:center;gap:8px;font-size:.9em}
+.rpz i{display:block;height:10px;border-radius:5px;background:linear-gradient(90deg,var(--c) var(--w),rgba(127,127,127,.15) var(--w))}
+.rpz b{text-align:right}
+.rptab{width:100%;border-collapse:collapse;font-size:.92em}.rptab td,.rptab th{padding:5px 6px;border-bottom:1px solid rgba(127,127,127,.18);text-align:left}
+.rplist td.num,.rplist th:nth-child(n+3){text-align:right}
+.rpfoot{margin-top:14px}
+@media (max-width:600px){.rpz{grid-template-columns:96px 1fr 62px}.rplist th:nth-child(5),.rplist td:nth-child(5){display:none}}
+@media print{
+  body.printrep .topbar,body.printrep .nav,body.printrep .subnav,body.printrep .noprint,body.printrep #toasts,body.printrep .netbar,body.printrep .famchip,body.printrep .skip,body.printrep .modal{display:none!important}
+  body.printrep,body.printrep main,body.printrep .view{background:#fff!important;color:#000!important;margin:0!important;padding:0!important}
+  body.printrep .rpdoc{box-shadow:none;border:0;background:#fff;color:#000;max-width:none}
+  body.printrep .rptile{background:#f2f2f2}body.printrep .rpbars rect{fill:#ff6a3d}
+  body.printrep *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}

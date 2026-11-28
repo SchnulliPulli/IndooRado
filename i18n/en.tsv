@@ -2155,3 +2155,46 @@ neuer Versuch …	retrying …
 Weiterleitung fehlt	No relay
 Weiterleitung nicht eingerichtet	Relay not set up
 Weiterleitung: Limit erreicht	Relay: limit reached
+Trainingsbericht	Training report
+Wochenbericht	Weekly report
+Monatsbericht	Monthly report
+Woche	Week
+Monat	Month
+Als PDF / Drucken	PDF / Print
+Teilen	Share
+IndooRado · Trainingsbericht	IndooRado · Training report
+Fahrzeit je Tag	Ride time per day
+Zeit in Leistungszonen	Time in power zones
+Bestwerte im Zeitraum	Bests in this period
+Allzeit-Bestwert	All-time best
+Bestwert # W	Best # W
+Form am Ende	Form at the end
+Längste Fahrt	Longest ride
+Alle Fahrten	All rides
+Datum	Date
+Zeit	Time
+Workouts komplett	Workouts completed
+Vergleich mit dem Zeitraum davor	Compared with the previous period
+In diesem Zeitraum gibt es keine Fahrten.	No rides in this period.
+Erstellt mit IndooRado	Created with IndooRado
+Zusammenfassung kopiert	Summary copied
+Keine Leistungsdaten.	No power data.
+Unterbrochene Fahrt gefunden	Interrupted ride found
+zuletzt gesichert #	last saved #
+Die App wurde während der Fahrt geschlossen (Absturz, Akku, Tab zu). Du kannst an derselben Stelle weiterfahren oder die Fahrt so speichern.	The app was closed during a ride (crash, battery, tab closed). You can continue from the same spot or save the ride as it is.
+Weiterfahren	Continue riding
+So speichern	Save as is
+Verwerfen	Discard
+Fahrt wird fortgesetzt	Resuming ride
+tritt in die Pedale, dann geht es an derselben Stelle weiter.	start pedalling to continue from the same spot.
+Speichern ging nicht	Saving failed
+Aus Link	From link
+Workout oder Plan aus Link	Workout or plan from a link
+Adresse (https://…)	Address (https://…)
+Laden	Load
+Lade …	Loading …
+Nur https-Adressen	https addresses only
+Das ist keine gültige Adresse	That's not a valid address
+Der Server erlaubt das Laden aus anderen Apps nicht (CORS) oder ist nicht erreichbar. Datei herunterladen und über „Importieren“ wählen.	The server doesn't allow loading from other apps (CORS) or can't be reached. Download the file and choose it via “Import”.
+Auf dieser Seite wurden keine Workout-Dateien gefunden. Direkt den Link auf die .zwo-Datei nehmen.	No workout files found on this page. Use the direct link to the .zwo file.
+Geht mit direkten Links auf .zwo, .erg, .mrc, .json, .zip oder .txt sowie mit Seiten, die solche Dateien verlinken. GitHub- und Gist-Links werden automatisch umgewandelt. Die Datei wird direkt von dieser Adresse geladen; manche Seiten erlauben das nicht – dann die Datei herunterladen und über „Importieren“ wählen.	Works with direct links to .zwo, .erg, .mrc, .json, .zip or .txt and with pages linking to such files. GitHub and Gist links are converted automatically. The file is loaded directly from that address; some sites don't allow this – then download the file and choose it via “Import”.

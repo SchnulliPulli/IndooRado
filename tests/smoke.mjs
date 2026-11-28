@@ -3,7 +3,7 @@
 import { createRequire } from 'node:module';
 const { chromium } = createRequire(import.meta.url)('playwright'); // lokal oder global installiert
 const BASE = process.env.BASE || 'http://localhost:8765/';
-const PAGES = ['', 'workouts', 'plans', 'routes', 'builder', 'history', 'progress', 'devices', 'lobby', 'friends', 'community', 'profile', 'avatar', 'ridesettings', 'appsettings', 'help', 'legal/impressum', 'legal/datenschutz'];
+const PAGES = ['', 'report/week/0', 'report/month/0', 'workouts', 'plans', 'routes', 'builder', 'history', 'progress', 'devices', 'lobby', 'friends', 'community', 'profile', 'avatar', 'ridesettings', 'appsettings', 'help', 'legal/impressum', 'legal/datenschutz'];
 const fails = [];
 const check = (ok, what) => { console.log((ok ? '✓ ' : '✗ ') + what); if (!ok) fails.push(what); };
 const b = await chromium.launch();
@@ -46,7 +46,7 @@ for (const vp of [{ width: 1280, height: 800, n: 'Desktop' }, { width: 390, heig
   check(r.got >= 3, `${vp.n}: Saison vergibt Stufen`);
   check(r.ghost, `${vp.n}: Geist übersteht Code-Export und -Import`);
   // Alle Module tatsächlich laden (findet Fehler, die erst beim Ausführen auffallen, z. B. in nachgeladenen Modulen)
-  const bad = await p.evaluate(async () => { const out = []; for (const m of ['tv', 'league', 'family', 'watch', 'video', 'streetimg', 'call', 'inbox', 'fileio', 'export', 'workouts', 'sync', 'pages/live', 'pages/companion', 'pages/watch', 'tvstream', 'livemap', 'stagetour', 'comfort', 'planbuilder', 'intervals', 'online/devices', 'i18n', 'pages/friends', 'pages/account']) { try { await import('./js/' + m + '.js'); } catch (e) { out.push(m + ': ' + e.message); } } return out; });
+  const bad = await p.evaluate(async () => { const out = []; for (const m of ['tv', 'league', 'family', 'watch', 'video', 'streetimg', 'call', 'inbox', 'fileio', 'export', 'workouts', 'sync', 'pages/live', 'pages/companion', 'pages/watch', 'tvstream', 'livemap', 'stagetour', 'comfort', 'planbuilder', 'intervals', 'online/devices', 'i18n', 'ridesnap', 'urlimport', 'pages/report', 'pages/friends', 'pages/account']) { try { await import('./js/' + m + '.js'); } catch (e) { out.push(m + ': ' + e.message); } } return out; });
   check(!bad.length, `${vp.n}: alle Module laden${bad.length ? ': ' + bad.join(' | ') : ''}`);
   check(!errs.length, `${vp.n}: keine JavaScript-Fehler${errs.length ? ': ' + errs.slice(0, 3).join(' | ') : ''}`);
   await p.close();

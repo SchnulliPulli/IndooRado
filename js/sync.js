@@ -7,7 +7,7 @@ import { db, kv } from './db.js';
 import { bus } from './util.js';
 import { PROVIDERS, isOAuth, backend, finishOAuth, fresh } from './cloud.js';
 
-const LOCAL_ONLY_SET = new Set(['sync', 'syncMeta', 'demo', 'strava', 'musicFiles', 'device', 'kvTimes', 'cloudApps', 'videoHandles', 'intervalsIcu']);
+const LOCAL_ONLY_SET = new Set(['sync', 'syncMeta', 'demo', 'strava', 'musicFiles', 'device', 'kvTimes', 'cloudApps', 'videoHandles', 'intervalsIcu', 'rideSnap']);
 // Tresor-Schlüssel bleiben immer nur auf dem Gerät
 const LOCAL_ONLY = { has: k => LOCAL_ONLY_SET.has(k) || String(k).startsWith('vaultKey:') };
 // Listen gelöschter Einträge: werden zwischen den Geräten zusammengeführt, nicht überschrieben

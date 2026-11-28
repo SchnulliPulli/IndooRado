@@ -106,11 +106,11 @@ async function renderTv(el, token) {
       $('#tN', el).textContent = data.name || 'Fahrer'; $('#tR', el).textContent = s.route ? '· ' + s.route : '';
       const st = s.state === 'ended' ? ['beendet', 'off'] : age > 30 ? ['keine Daten', 'off'] : s.state === 'riding' ? ['● LIVE', ''] : ['Pause', 'pause'];
       $('#tSt', el).textContent = st[0]; $('#tSt', el).className = 'tvlive ' + st[1];
-      const zc = s.p && s.ftp ? zoneColorOf(s.p / s.ftp) : '#fff';
+      const zc = +s.p && +s.ftp ? zoneColorOf(+s.p / +s.ftp) : '#fff';
       $('#tBig', el).innerHTML = [[s.p ?? '–', 'Watt', zc], [s.v != null ? String(s.v).replace('.', ',') : '–', 'km/h'], [s.cad ?? '–', 'U/min'], [fmtKm(s.odo || 0), 'km'], [s.asc ?? 0, 'Hm'], [fmtT(s.t || 0), 'Zeit']]
         .map(([v, l, c]) => `<div class="tvt"><b class="num" ${c ? `style="color:${c}"` : ''}>${esc(String(v))}</b><span>${l}</span></div>`).join('');
       const iv = s.iv, ib = $('#tIv', el); ib.hidden = !iv;
-      if (iv) ib.innerHTML = `<span>🏋️ ${esc(s.wo || 'Workout')} · Intervall ${iv.i}/${iv.n}${iv.txt ? ' · ' + esc(iv.txt) : ''}</span><b class="num">${iv.tg ? iv.tg + ' W · ' : ''}noch ${fmtT(iv.left)}</b>`;
+      if (iv) ib.innerHTML = `<span>🏋️ ${esc(s.wo || 'Workout')} · Intervall ${+iv.i || 0}/${+iv.n || 0}${iv.txt ? ' · ' + esc(iv.txt) : ''}</span><b class="num">${+iv.tg ? Math.round(+iv.tg) + ' W · ' : ''}noch ${fmtT(+iv.left || 0)}</b>`;
       draw(el, data);
     } catch (e) { $('#tSt', el).textContent = 'keine Verbindung'; $('#tSt', el).className = 'tvlive off'; }
     finally { busy = false; }

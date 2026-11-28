@@ -15,7 +15,7 @@ export async function render(el) {
     .map(({ w, i }) => i.fits || !i.adaptable ? { ...w, _orig: w, _fit: i.fits ? 'fits' : 'no' } : { ...fitToTime(w, T * 60), id: w.id, _orig: w, _fit: 'adapted', _from: Math.round(i.t / 60) });
   const hidden = T ? all.length - wos.length : 0;
   el.innerHTML = `
-  <section class="pagehead"><h1>Workouts</h1><span class="row"><a class="btn" href="#/editor">+ Neues Workout</a><label class="btn pri" title="Workout-Dateien (.zwo, .erg, .mrc, .json) und Plan-Dateien (.json, .zip, .txt)">Workouts oder Pläne importieren<input type="file" id="wFile" accept=".zwo,.erg,.mrc,.json,.zip,.xml,.txt" multiple hidden></label></span></section>
+  <section class="pagehead"><h1>Workouts</h1><span class="row"><a class="btn" href="#/editor">+ Neues Workout</a><label class="btn pri" title="Workout-Dateien (.zwo, .erg, .mrc, .json) und Plan-Dateien (.json, .zip, .txt)">Workouts oder Pläne importieren<input type="file" id="wFile" accept=".zwo,.erg,.mrc,.json,.zip,.xml,.txt" multiple hidden></label><button class="btn" id="wUrl" title="Workout, Plan oder ZIP über eine Internetadresse laden (z. B. GitHub)">🔗 Aus Link</button></span></section>
   <p class="muted">Import: .zwo-Workouts, .erg und .mrc, IndooRado-Dateien (.json) und ZIP-Archive mit solchen Dateien. Ziele werden aus deiner FTP von ${profile.ftp} W berechnet. Dateien auch per Drag & Drop auf diese Seite ziehen. Alles bleibt im Browser gespeichert. <a href="#/help">Anleitung</a></p>
   <div class="timebar card"><div class="row between"><b>⏱️ Wie viel Zeit hast du?</b>${T ? `<span class="small muted">${wos.filter(w => w._fit === 'fits').length} passen genau, ${wos.filter(w => w._fit === 'adapted').length} angepasst${hidden ? ` · ${hidden} ausgeblendet` : ''}</span>` : ''}</div>
     <div class="row wrap" id="wTime">${[0, 20, 30, 45, 60, 75, 90, 120].map(m => `<button class="chipb ${T === m ? 'on' : ''}" data-t="${m}">${m ? m + ' min' : 'Beliebig'}</button>`).join('')}<label class="small row" style="gap:6px">oder <input class="inp sm" id="wTnum" type="number" min="15" max="240" step="5" inputmode="numeric" value="${T && ![20, 30, 45, 60, 75, 90, 120].includes(T) ? T : ''}" placeholder="min" style="width:80px"></label></div>
@@ -59,5 +59,15 @@ export async function render(el) {
     if (r.workouts.length || plans) { toast(`${r.workouts.length} Workout${r.workouts.length === 1 ? '' : 's'}${plans ? ` und ${plans} Plan${plans > 1 ? 'pläne' : ''}` : ''} importiert`); render(el); }
   };
   $('#wFile', el).onchange = e => load(e.target.files);
+  $('#wUrl', el).onclick = async () => {
+    let url = '';
+    const P = dialog({ title: '🔗 Workout oder Plan aus Link', html: `<label class="f">Adresse (https://…)<input class="inp" id="uIn" type="url" placeholder="https://github.com/…/workout.zwo" autocomplete="off" spellcheck="false"></label>
+      <p class="small muted">Geht mit direkten Links auf .zwo, .erg, .mrc, .json, .zip oder .txt sowie mit Seiten, die solche Dateien verlinken. GitHub- und Gist-Links werden automatisch umgewandelt. Die Datei wird direkt von dieser Adresse geladen; manche Seiten erlauben das nicht – dann die Datei herunterladen und über „Importieren“ wählen.</p>`,
+      buttons: [{ label: 'Abbrechen', value: false }, { label: 'Laden', value: true, cls: 'pri' }] });
+    const inp = document.querySelector('.modal.on #uIn'); if (inp) { inp.oninput = () => { url = inp.value; }; inp.focus(); }
+    if (!(await P) || !url.trim()) return;
+    try { const { filesFromUrl } = await import('../urlimport.js'); await load(await filesFromUrl(url, t => toast(t, 1500))); }
+    catch (e) { toast(e.message, 7000); }
+  };
   el.ondragover = e => e.preventDefault(); el.ondrop = e => { e.preventDefault(); load(e.dataTransfer.files); };
 }

@@ -250,6 +250,15 @@ async function start(el) {
   // Online: echte Fahrer auf derselben Strecke
   const grp = S.group;
   try { S.joinRider = JSON.parse(sessionStorage.getItem('joinRider') || 'null'); } catch (e) { } sessionStorage.removeItem('joinRider');
+  // Unterbrochene Fahrt fortsetzen (Absturz, Akku, Tab zu): Stand übernehmen, pausiert an der alten Stelle
+  if (sessionStorage.getItem('resumeRide')) {
+    sessionStorage.removeItem('resumeRide');
+    const SN = await import('../ridesnap.js'), o = await SN.getSnap();
+    if (o && o.routeId === route.id && !S.race && !S.group && !S.tt) {
+      SN.applySnap(S, o); S.state = 'paused'; S.resumeOnPedal = true;
+      $('#startCard', el).innerHTML = `<b>🔁 Fahrt wird fortgesetzt</b><span>${fmtKm(S.odo)} km · ${fmtT(S.t)} – tritt in die Pedale, dann geht es an derselben Stelle weiter.</span>`;
+    }
+  }
   if (S.joinRider) $('#startCard', el).innerHTML = `<b>🌐 Mitfahren bei ${esc(S.joinRider.name)}</b><span>Sobald die Verbindung steht, springst du direkt hinter ${esc(S.joinRider.name)}.</span><small class="livest" id="liveSt">Live: wird verbunden …</small>`;
   if (grp) { $('#startCard', el).innerHTML = `<b>👥 ${esc(grp.title)}</b><span>Gruppenfahrt: alle starten jetzt mit denselben Einstellungen${grp.isHost ? ' (du bist Gastgeber und bestimmst das Wetter)' : ''}.${S.wo ? ` Gemeinsames Training: <b>${esc(S.wo.name)}</b>, Ziele nach deiner FTP.` : ''} Tritt in die Pedale!</span>`; }
   // Nach einem Neuladen läuft die Anmeldung evtl. noch: kurz darauf warten, dann live beitreten
@@ -1037,7 +1046,7 @@ function step(dt, first) {
       S.vkLast = Math.floor(totD / (vk * 1000)); const ps = S.samples.filter(x => x.p != null), ap = ps.length ? ps.reduce((a, x) => a + x.p, 0) / ps.length : 0;
       say(`Kilometer ${S.vkLast * vk}. Zeit ${fmtT(S.t)}, Schnitt ${Math.round(ap)} W und ${(totD / Math.max(1, S.t) * 3.6).toFixed(1).replace('.', ',')} km/h${live.heart ? ', Puls ' + live.heart : ''}`, 'km');
     }
-    S.samples.push({ ts: Math.round(S.wall), p: Math.round(pw), hr: live.heart, cad: cad != null ? Math.round(cad) : null, v: +S.v.toFixed(2), d: +totD.toFixed(1), e: +e.toFixed(1), la: +R.latAt(S.dist).toFixed(6), lo: +R.lonAt(S.dist).toFixed(6), g: S.mode === 'gear' ? S.gear : null, tg: target != null ? Math.round(target) : null, wt: S.wo ? Math.round(S.wT) : null, gr: +grade.toFixed(1), rd: Math.round(S.dist) });
+    S.samples.push({ ts: Math.round(S.wall), p: Math.round(pw), hr: live.heart, cad: cad != null ? Math.round(cad) : null, v: +S.v.toFixed(2), d: +totD.toFixed(1), e: +e.toFixed(1), la: +R.latAt(S.dist).toFixed(6), lo: +R.lonAt(S.dist).toFixed(6), g: S.mode === 'gear' ? S.gear : null, tg: target != null ? Math.round(target) : null, wt: S.wo ? Math.round(S.wT) : null, gr: +grade.toFixed(1), rd: Math.round(S.dist) }); snapTick();
     const N = S.np; N.buf.push(pw); N.bs += pw; if (N.buf.length > 30) N.bs -= N.buf.shift(); if (N.buf.length === 30) { N.s4 += (N.bs / 30) ** 4; N.n++; }
     if (profile.autoShots) {
       const n = S.samples.length;
@@ -1318,6 +1327,15 @@ async function lockScreen() { try { if ('wakeLock' in navigator) wake = await na
 // Handy/Tablet gesperrt, Bildschirm aus oder App verlassen: Fahrt pausieren und alles verstummen lassen
 // (am Computer läuft die Fahrt im Hintergrund weiter, nur ein minimiertes Fenster schaltet den Ton nicht ab)
 const isMobile = () => matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod|Mobile/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+// Laufende Fahrt regelmäßig lokal sichern, damit sie einen Absturz oder leeren Akku übersteht (ridesnap.js)
+let snapAt = 0;
+function snapTick(force = false) {
+  if (!S?.alive || !S.startWall || (S.demoUsed && !profile.saveDemo)) return;
+  if (!force && Date.now() - snapAt < 15000) return; snapAt = Date.now();
+  import('../ridesnap.js').then(m => m.saveSnap(S)).catch(() => { });
+}
+addEventListener('pagehide', () => snapTick(true));
+document.addEventListener('visibilitychange', () => { if (document.hidden) snapTick(true); });
 function goneAway() {
   if (!S?.alive || !isMobile()) return;
   if (S.state === 'riding' || S.state === 'auto' || S.state === 'ready') {
@@ -1339,6 +1357,7 @@ addEventListener('pageshow', () => { if (document.visibilityState === 'visible')
 
 export function leave() {
   if (!S) return;
+  import('../ridesnap.js').then(m => m.clearSnap()).catch(() => { }); // Fahrt ist beendet, gespeichert oder verworfen
   if (window.__watchMod?.W.token) { const M = window.__watchMod; M.W.lastPush = 0; M.pushWatch({ state: 'ended', route: S.route.name, total: Math.round(S.route.total), d: Math.round(S.dist), odo: Math.round(S.odo), t: Math.round(S.t), asc: Math.round(S.asc), p: 0, v: 0, prof: S.route.prof }); }
   if (S.tvTok) import('../tvstream.js').then(T => T.stopSender());
   physEnv.wind = 0; import('../comfort.js').then(C => C.stopVoice()); S.alive = false; S.vbox?.remove(); S.si?.destroy(); S.si = null; if (S.vurl) { const v = $('#rideVid', S.el); v?.pause(); URL.revokeObjectURL(S.vurl); } setTimeout(() => bus.emit('rideEnded'), 1500); S.live?.leave(); window.__presence?.setStatus({ where: 'menu', route: null, routeName: null, kit: null }); sound.silence(); music.stop(); hush(); putLive({ state: 'ended', t: Math.round(S.t), odo: Math.round(S.odo), route: S.route.name }); clearInterval(S.timer); cancelAnimationFrame(S.raf); S.ro?.disconnect();
